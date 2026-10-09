@@ -7391,6 +7391,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             Misc = window:AddTab("Misc", "settings"),
             Botting = window:AddTab("Botting", "bot"),
             Macros = window:AddTab("Macros", "play"),
+            Cooldowns = window:AddTab("Cooldowns", "clock"),
             Interface = window:AddTab("Interface", "monitor"),
             Config = window:AddTab("Config", "save")
         }
@@ -20184,8 +20185,12 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 local path = "HYDROXIDE_LOCAL/DEPENDENCIES/VanguardTracker.lua"
                 local factory, err = loadstring(readfile(path), "@" .. path)
                 assert(factory, err)
-                renderVanguard = factory()({group = group_ui_right, player = plr,
-                    utility = utility, library = library, options = Options})
+                renderVanguard = factory()({
+                    group = Tabs.Cooldowns:AddLeftGroupbox("Configurar skill"),
+                    appearance = Tabs.Cooldowns:AddRightGroupbox("Painel e aparencia"),
+                    measurement = Tabs.Cooldowns:AddLeftGroupbox("Medicao e controle"),
+                    player = plr, utility = utility, library = library,
+                    options = Options, toggles = Toggles})
             end)
             if not trackerOK then warn("[HXD Vanguard] " .. tostring(trackerError)) end
         end
