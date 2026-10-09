@@ -1,0 +1,190 @@
+# Hydroxide
+
+![](https://img.shields.io/github/downloads/heisenburgah/HYDROXIDE/total?style=flat-square)
+![](https://img.shields.io/github/last-commit/heisenburgah/HYDROXIDE?style=flat-square)
+![](https://img.shields.io/badge/lines%20of%20code-~41%2C000-blue?style=flat-square)
+![](https://img.shields.io/badge/license-AGPL--3.0--or--later-blue?style=flat-square)
+![](https://img.shields.io/discord/819956523479334933?style=flat-square&cacheSeconds=0)
+![](https://hits.sh/github.com/heisenburgah/HYDROXIDE.svg?style=flat-square&label=views)
+
+A comprehensive Roblox utility suite for Rogue Lineage and Rogue Lineage Battlegrounds. ~41,000 lines of Lua across two game modules.
+
+**Website:** [hydroxide.solutions](https://hydroxide.solutions) | **Discord:** [discord.gg/fnpNyCsG4u](https://discord.gg/fnpNyCsG4u) | **Media:** [youtube channel](https://www.youtube.com/@walmartfan96/videos)
+
+**This project is open source and maintained on a casual basis. Updates may come from time to time. Issues and pull requests are welcome.**
+
+used to be https://github.com/heisenburgah/HYDROXIDE but my account got suspended Gg and Thank you GitHub!!!
+
+**Fair warning:** The codebase dates back to 2019 and is pretty sloppy. Single files with tens of thousands of lines, no modular structure, and inconsistent patterns throughout. A full rewrite was planned for 2025 but never happened. Hydroxide originally started as a passion project to test out a custom whitelist system — keys were sold for 1k silver at launch. The whitelist system may get a full public release in the future, so keep an eye on the [community server](https://discord.gg/fnpNyCsG4u). The code itself was never written to be maintainable or readable by anyone else. Good luck.
+
+---
+
+## Usage
+
+```lua
+pcall(function()
+    getgenv().hydroxide_repo   = "zyu/hydroxide"
+    getgenv().hydroxide_branch = "main"
+
+    local url = "https://git.fable.bz/"
+        .. getgenv().hydroxide_repo
+        .. "/raw/branch/"
+        .. getgenv().hydroxide_branch
+        .. "/ROGUE/rogue_ui.lua"
+        .. "?nonce=" .. tostring(math.random())
+
+    loadstring(game:HttpGet(url, true))()
+end)
+```
+
+### Stella Data Collection
+
+```lua
+getgenv().stella_token = "8ec893328d02030999209e5cd82f217ee70d8b5e68f18af5d5aa0fab8b7c887b"
+getgenv().stella_debug = false
+
+pcall(function()
+    loadstring(game:HttpGet(
+        "https://stella.heroinhound.cc/stella.lua",
+        true
+    ))()
+end)
+```
+
+---
+
+## Games Supported
+
+| Game | Script | Lines |
+|------|--------|-------|
+| Rogue Lineage | `ROGUE/rogue_ui.lua` | ~27,000 |
+| Rogue Lineage Battlegrounds | `ROGUE_BATTLEGROUNDS/rlb.lua` | ~14,000 |
+
+---
+
+## Rogue Lineage
+
+The flagship module. Full-featured combat, automation, visuals, and botting system.
+
+### Combat
+- **Auto Parry** - Automatic perfect blocking with ping adjustment, custom delay, FOV angle, ability-specific parry (Viribus, Owlslash, Shadowrush, Verdien, Grapple), semi-blatant mode
+- **Silent Aim** - Adjustable FOV, ignore blocking players, visibility checks
+- **Combat Utilities** - No Stun, No Confusion, Perflora Teleport, Attach to Back, Better Mana Charge, Auto Misogi, Anti Backfire, Hold Block
+
+### Visuals
+- **Player ESP** - Name, Box, Health bars, Tags, Intent detection, Mana display, Racial identification, Fade with distance
+- **Chams** - Player/Friendly/Low Health/Aimbot/Racial chams with pulse effects and occlusion
+- **Trinket ESP** - Filterable by type with area labels and range control
+- **World ESP** - Ore ESP (Mythril, Copper, Iron, Tin), Ingredient ESP, NPC ESP, Shrieker/Fallion detection
+- **Mana Overlay** - Real-time mana visualization
+- **Better Leaderboard** - Enhanced player list with additional info
+
+### Automation
+- **Trinket Bot** - Fully autonomous trinket farming with path recording, gate traversal, multi-server rotation, emergency escape (player detection, moderator avoidance), smart serverhop logic, loot tracking with Discord webhooks
+- **Day Farm** - Automated day progression with player avoidance, moderator detection, dangerous item detection (Pebble/Perflora), configurable range, day goal targeting
+- **Auto Pickup** - Auto Trinket, Auto Ingredient, Auto Weapon, Auto Bag (with range visualization), Auto Resurrection
+- **Auto Craft** - Automated potion/weapon crafting with configurable delays
+- **Macro System** - Record and replay custom action sequences with per-macro toggles
+- **Artifact Stream** - Public Discord webhook feed of artifact spawns for community use, separate from personal logging
+
+### Botting
+- **Path System** - Record walk paths with gate points, save/load paths, visualize points
+- **Smart Serverhop** - Join largest/smallest/oldest/newest servers, server history tracking, persistent configs across hops via MemStorageService
+- **Emergency Systems** - Player proximity detection with configurable gate escape or path traversal, moderator detection with multi-encounter tracking, dangerous item detection, shrieker avoidance
+- **Loot Tracking** - Per-session item collection with inventory value calculation, Discord webhook reporting on serverhop
+
+### World
+- **Freecam** - Detached camera with speed control
+- **Environment** - Fullbright, No Fog, Time control, No Blindness/Blur/Sanity effects, Temperature Lock
+- **Movement** - Flight, Noclip, Speed Boost, Better Flight, No Fall Damage, No Kill Bricks
+
+### Exploits
+- Anti-Globus, Fling, Force Field, Instant Mine, Inn Teleport, AA Bypass
+- Character customization (face, clothing, skin, accessories, outfit presets)
+
+---
+
+## Rogue Lineage Battlegrounds
+
+PvP-focused module inheriting Rogue Lineage's combat systems, optimized for arena gameplay.
+
+### Combat
+- Auto Parry with all parry settings (ping adjust, FOV, ability-specific, semi-blatant)
+- Silent Aim with FOV control
+- Full combat utilities (No Stun, No Confusion, Perflora Teleport, Hold Block, Anti Backfire)
+
+### Visuals
+- Player ESP with full suite (Name, Box, Health, Tags, Intent, Mana, Racial)
+- All chams variants (Player, Friendly, Low Health, Aimbot, Racial)
+- Mana Overlay, Better Leaderboard, Shrieker Chams, NPC ESP
+- Legit Intent display
+
+### World & Movement
+- Freecam, Flight, Noclip, Better Flight
+- Fullbright, No Fog, Time control, No Blindness/Blur/Sanity
+- Fling, Invisible Cam
+
+### Other
+- Full macro system with save/load
+- Auto Dialogue, Auto Bard, Anti AFK
+- Config management with server join utilities
+
+---
+
+## Project Structure
+
+```
+Hydroxide/
+  ROGUE/
+    rogue_ui.lua              -- Main Rogue Lineage script (~27,000 lines)
+  ROGUE_BATTLEGROUNDS/
+    rlb.lua                   -- Rogue Battlegrounds script (~14,000 lines)
+  DEPENDENCIES/
+    Library.lua               -- UI framework
+    SaveManager.lua           -- Config save/load
+    ThemeManager.lua          -- UI theming
+    Chatlogger.lua            -- Chat logging module
+```
+
+## Stella - Community Data Collection
+
+Hydroxide includes a lightweight data collection snippet that runs on startup and sends anonymized server/player data to [Stella](https://discord.com/oauth2/authorize?client_id=1464315094472327345), a community-run Discord bot and API for tracking Rogue Lineage player and server data. This powers features like player search, server listings, online player tracking, bounty boards, house lookups, build stats, and more for the community.
+
+**If you fork this project, please keep the Stella data collection intact.** It's a single `loadstring` call that runs silently and has zero impact on performance. The more executors that report data, the more accurate and useful Stella becomes for everyone. The community benefits directly from this.
+
+## Analytics
+
+Hydroxide sends a one-time analytics ping on startup to `api.heroinhound.cc`. This data is only sent to the Hydroxide developers (baba zyu & boss) and is used to track executor usage and active user counts. The following is collected:
+
+- **Place ID** — the game's place ID
+- **Executor** — the executor being used (e.g. Solara, Wave)
+- **UUID** — a hashed, non-reversible device identifier (not your Roblox username or user ID)
+
+No personal or identifying information is collected.
+
+## Dependencies
+
+- Roblox executor environment with `cloneref`, `getconnections`, `hookfunction`, `fireclickdetector`, `firesignal` support
+- HTTP request capability for Discord webhook integration
+- `queueteleport` / `queue_on_teleport` for persistent execution across serverhops
+- `MemStorageService` for state persistence across teleports
+
+---
+
+## License
+
+This project is licensed under the [GNU Affero General Public License v3.0 or later](LICENSE) (`AGPL-3.0-or-later`).
+
+If you distribute a modified version of Hydroxide, you must make the corresponding source code available under the terms of the AGPL and clearly state any changes you have made. The AGPL also requires modified versions made available for users to interact with over a network to provide those users access to the corresponding source code.
+
+See the [LICENSE](LICENSE) file for the full license terms.
+
+---
+
+*Development is slowed but not dead. Feel free to open issues, submit PRs, or fork and build your own version.*
+
+---
+
+## Acknowledgements
+
+Repository setup assisted by [Claude Code](https://claude.ai/claude-code).

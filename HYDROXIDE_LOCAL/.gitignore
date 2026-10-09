@@ -1,0 +1,18 @@
+*
+!README.md
+!LICENSE
+!.gitignore
+!ROGUE/
+!ROGUE/rogue_ui.lua
+!ROGUE_BATTLEGROUNDS/
+!ROGUE_BATTLEGROUNDS/rlb.lua
+!DEPENDENCIES/
+!DEPENDENCIES/SaveManager.lua
+!DEPENDENCIES/ThemeManager.lua
+!DEPENDENCIES/Chatlogger.lua
+!DEPENDENCIES/Library.lua
+!hello_stella.lua
+# loader.lua is the runtime entry point users fetch by raw URL — it MUST ship.
+# It was missing from this allowlist, which would have published a repo whose
+# advertised loader URL 404s.
+!loader.lua
