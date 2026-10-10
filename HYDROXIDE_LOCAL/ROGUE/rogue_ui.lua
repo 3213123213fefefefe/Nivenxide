@@ -3532,7 +3532,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         })
                     end
                 elseif success2 and isInGroup2 then
-                    local player_ = player:GetRoleInGroup(281365)
+                    local player_rank = player:GetRoleInGroup(281365)
                     if player_rank ~= "Guest" and (library ~= nil and library.Notify) then
                         utility:sound("rbxassetid://2865227039",4)
                         library:Notify({
@@ -4048,7 +4048,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 ZIndex = -10
                             }, "esp")
                         end
-            end
+                    end
                     
                     do
                         esp.highlight = utility:Object("Highlight", {
@@ -20180,6 +20180,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             end
 
             shared.keybinds_window = keybinds_window
+
+            local manaOK, manaError = pcall(function()
+                local factory, err = loadstring(HXD_LOCAL_READ("DEPENDENCIES/CharacterMana.lua"))
+                assert(factory, err)
+                factory()({group = Tabs.Interface:AddLeftGroupbox("Mana ao lado do personagem"),
+                    player = plr, utility = utility, library = library})
+            end)
+            if not manaOK then warn("[Nivenxide Mana] " .. tostring(manaError)) end
 
             local trackerOK, trackerError = pcall(function()
                 local path = "HYDROXIDE_LOCAL/DEPENDENCIES/VanguardTracker.lua"
