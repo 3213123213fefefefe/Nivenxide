@@ -132,8 +132,11 @@ return function(ctx)
         count = 0
         for _, name in ipairs(names) do
             local state = states[name]
+            -- Brandish's fire and normal variants share one skill state. Keep
+            -- accepting IDs indexed from its Tool after learning the first one.
             local matches = state.animation ~= "" and state.animation == id
-                or state.animation == "" and animationOwners[id] and animationOwners[id][name]
+                or (state.animation == "" or name == "Brandish")
+                    and animationOwners[id] and animationOwners[id][name]
             if state.visible and matches then owner = name; count = count + 1 end
         end
         if count ~= 1 then return end -- Never guess when skills share an animation.
