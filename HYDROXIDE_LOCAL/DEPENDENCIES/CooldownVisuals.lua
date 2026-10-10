@@ -150,7 +150,7 @@ return function(ctx)
                 footText.Text = string.format("SEM QUEDA  ~%.1fs", remaining)
             else
                 -- Marker remains authoritative when expiry is unknown or an estimate ends.
-                footText.Text = string.format("SEM QUEDA  ativo · %.1fs", now - protectionSince)
+                footText.Text = "SEM QUEDA  ativo (tempo desconhecido)"
             end
         end
     end
