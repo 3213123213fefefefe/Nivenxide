@@ -35,8 +35,8 @@ Sem marcador, nem o timer estimado do Blade ativa o indicador. Ao remover a
 protecao, o indicador some imediatamente no proximo frame. Duracoes conhecidas
 sao estimadas: TPSafe 4s e NoPotions/Feather Feet 30s conforme o Hydroxide;
 Blade usa a duracao configurada quando o inicio corresponde ao marcador.
-Quando nao ha prazo conhecido, mostra ativo e o tempo observado desde a
-deteccao, sem inventar segundos restantes. Protecao ja presente na injecao tem
+Quando nao ha prazo conhecido, mostra ativo (tempo desconhecido), sem contar
+para cima nem inventar segundos restantes. Protecao ja presente na injecao tem
 inicio desconhecido. Fontes que nao usam NoFall precisam ser identificadas em
 jogo antes de serem adicionadas.
 
