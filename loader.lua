@@ -10,11 +10,12 @@ local ok, err = pcall(function()
     assert(type(readfile) == "function" and type(writefile) == "function"
         and type(isfile) == "function" and type(isfolder) == "function"
         and type(makefolder) == "function", "Executor sem suporte a arquivos locais")
-    local version = "961bf29b2a2ddf1f5ff3ff2b2fd418cac240379c"
+    local version = "2708703722952dc11cec9ff9762f84c8f918ffd5"
     local base = "https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/" .. version .. "/"
     local root = "HYDROXIDE_LOCAL"
     local files = {
         "DEPENDENCIES/Chatlogger.lua",
+        "DEPENDENCIES/CharacterMana.lua",
         "DEPENDENCIES/CooldownVisuals.lua",
         "DEPENDENCIES/Icons.lua",
         "DEPENDENCIES/Library.lua",
