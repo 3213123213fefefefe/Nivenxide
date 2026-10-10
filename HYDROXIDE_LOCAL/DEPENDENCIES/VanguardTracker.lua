@@ -1,8 +1,14 @@
--- Passive, local timers. Tool.Activated is an attempt, not server confirmation.
+-- Passive local timers keyed to skill animation playback, not M1.
+-- Animation playback is observable evidence; it is not server acknowledgement.
 return function(ctx)
     local names = {"Brandish", "Puncture", "Azure Ignition", "Blade Crash"}
     local states, connections, watched = {}, {}, setmetatable({}, {__mode = "k"})
     local selected = names[1]
+    local animationOwners = {}
+    local animatorWatched = setmetatable({}, {__mode = "k"})
+    local function animationId(value)
+        return tostring(value or ""):match("%d+") or ""
+    end
     local effectStart, effectDuration, effectMeasured = nil, 0, false
     local enabled, showIdle, showEffect, restart = true, true, true, false
     local decimals = 1
@@ -28,14 +34,33 @@ return function(ctx)
         ctx.library:Notify(message, 4)
     end
     for _, name in ipairs(names) do
-        states[name] = {duration = 0, visible = true, label = name}
+        states[name] = {duration = 0, visible = true, label = name, animation = ""}
     end
-    local function use(name)
+    local function use(name, observed)
         local state = states[name]
         if not state or not enabled or not state.visible then return end
         local now = os.clock()
-        -- Repeated attempts during the configured cooldown must not restart it.
-        if not restart and state.start and state.duration > 0 and now - state.start < state.duration then return end
+        -- Observed playback overrides the estimate; clicks never call this path.
+        if not observed and not restart and state.start and state.duration > 0 and now - state.start < state.duration then return end
+        if observed then
+            if state.lastSignal and now - state.lastSignal < 0.3 then return end
+            state.lastSignal = now
+            if state.calibrating then
+                if state.firstSignal then
+                    local seconds = math.floor((now - state.firstSignal) * 1000 + 0.5) / 1000
+                    if seconds <= 3600 then
+                        for index, skill in ipairs(names) do
+                            if skill == name then ctx.options["VanguardCD" .. index]:SetValue(tostring(seconds)) end
+                        end
+                        notify(name .. ": intervalo medido " .. seconds .. "s")
+                    else notify("Intervalo longo demais; repita a medicao") end
+                    state.calibrating, state.firstSignal = false, nil
+                else
+                    state.firstSignal = now
+                    notify(name .. ": primeiro uso detectado; aguardando o segundo")
+                end
+            end
+        end
         state.start = now
         state.measured = false
         if name == "Blade Crash" then
@@ -45,23 +70,76 @@ return function(ctx)
     local function watch(tool)
         if not tool:IsA("Tool") or not states[tool.Name] or watched[tool] then return end
         watched[tool] = true
-        connect(tool.Activated, function()
-            if tool.Parent == player.Character then use(tool.Name) end
-        end)
-        connect(tool.Destroying, function()
-            watched[tool] = nil
-        end)
+        local function register(instance)
+            if not instance:IsA("Animation") then return end
+            local function indexAnimation()
+                local id = animationId(instance.AnimationId)
+                if id ~= "" then
+                    animationOwners[id] = animationOwners[id] or {}
+                    animationOwners[id][tool.Name] = true
+                end
+            end
+            indexAnimation()
+            connect(instance:GetPropertyChangedSignal("AnimationId"), indexAnimation)
+        end
+        for _, instance in ipairs(tool:GetDescendants()) do register(instance) end
+        connect(tool.DescendantAdded, register)
+        -- Tool.Activated fires on rejected M1 attempts, so it is deliberately unused.
+        connect(tool.Destroying, function() watched[tool] = nil end)
+    end
+    local function animationPlayed(track)
+        if not enabled or not track.Animation then return end
+        local id = animationId(track.Animation.AnimationId)
+        if id == "" then return end
+        local owner, count
+        count = 0
+        for _, name in ipairs(names) do
+            local state = states[name]
+            local matches = state.animation ~= "" and state.animation == id
+                or state.animation == "" and animationOwners[id] and animationOwners[id][name]
+            if state.visible and matches then owner = name; count = count + 1 end
+        end
+        if count ~= 1 then return end -- Never guess when skills share an animation.
+        if states[owner].animation == "" then
+            for index, name in ipairs(names) do
+                if name == owner then ctx.options["VanguardAnimation" .. index]:SetValue(id) end
+            end
+            print("[Nivenxide] Animacao aprendida: " .. owner .. "=" .. id)
+        end
+        use(owner, true)
+    end
+    local function watchAnimator(instance)
+        if not instance:IsA("Animator") or animatorWatched[instance] then return end
+        animatorWatched[instance] = true
+        return connect(instance.AnimationPlayed, animationPlayed)
     end
     local characterConnections = {}
     local function reset()
-        for _, state in pairs(states) do state.start = nil; state.measured = false end
+        for _, state in pairs(states) do
+            state.start, state.lastSignal, state.firstSignal = nil, nil, nil
+            state.calibrating, state.measured = false, false
+        end
         effectStart, effectMeasured = nil, false
     end
     local function characterAdded(character)
         for _, c in ipairs(characterConnections) do c:Disconnect() end
         characterConnections = {}
         reset()
+        animationOwners = {}
+        local backpack = player:FindFirstChildOfClass("Backpack")
+        if backpack then
+            -- Reindex surviving tools after respawn as well.
+            for _, tool in ipairs(backpack:GetChildren()) do watched[tool] = nil; watch(tool) end
+        end
         for _, tool in ipairs(character:GetChildren()) do watch(tool) end
+        for _, instance in ipairs(character:GetDescendants()) do
+            local connection = watchAnimator(instance)
+            if connection then characterConnections[#characterConnections + 1] = connection end
+        end
+        characterConnections[#characterConnections + 1] = connect(character.DescendantAdded, function(instance)
+            local connection = watchAnimator(instance)
+            if connection then characterConnections[#characterConnections + 1] = connection end
+        end)
         characterConnections[#characterConnections + 1] = connect(character.ChildAdded, watch)
         local humanoid = character:FindFirstChildOfClass("Humanoid")
         if humanoid then
@@ -87,7 +165,8 @@ return function(ctx)
             Callback = function(value)
                 states[skillName].visible = value
                 if not value then
-                    states[skillName].start = nil
+                    states[skillName].start, states[skillName].firstSignal = nil, nil
+                    states[skillName].lastSignal, states[skillName].calibrating = nil, false
                     if skillName == "Blade Crash" then effectStart = nil end
                 end
             end})
@@ -95,6 +174,13 @@ return function(ctx)
             Text = "Nome no painel", Default = skillName, Finished = true,
             Callback = function(value)
                 states[skillName].label = (type(value) == "string" and value ~= "") and value or skillName
+            end})
+        list[#list + 1] = group:AddInput("VanguardAnimation" .. index, {
+            Text = "ID da animacao (vazio = aprender)", Default = "", Finished = true,
+            Callback = function(value)
+                local state = states[skillName]
+                state.animation = animationId(value)
+                state.start, state.lastSignal, state.firstSignal = nil, nil, nil
             end})
         list[#list + 1] = group:AddInput("VanguardCD" .. index, {
             Text = "Cooldown (segundos)", Default = "0", Numeric = true, Finished = true,
@@ -121,7 +207,7 @@ return function(ctx)
         Callback = function(value) showIdle = value end})
     appearance:AddToggle("VanguardShowEffect", {Text = "Mostrar efeito Blade Crash", Default = true,
         Callback = function(value) showEffect = value end})
-    appearance:AddToggle("VanguardRestart", {Text = "Reiniciar timer a cada ativacao", Default = false,
+    appearance:AddToggle("VanguardRestart", {Text = "Reiniciar registro manual durante CD", Default = false,
         Callback = function(value) restart = value end})
     appearance:AddSlider("VanguardDecimals", {Text = "Casas decimais", Default = 1, Min = 0, Max = 2,
         Rounding = 0, Callback = function(value) decimals = math.max(0, math.min(2, math.floor(value))) end})
@@ -134,7 +220,24 @@ return function(ctx)
         notify("Timers no painel Status Effects; arraste-o para posicionar")
     end})
     appearance:AddLabel("Posicao: arraste o painel Status Effects")
-    appearance:AddLabel("Timers estimados a partir do uso local")
+    appearance:AddLabel("Gatilho: animacao da skill; M1 ignorado")
+    appearance:AddLabel("Animacao observada nao confirma aceite do servidor")
+    measurement:AddButton({Text = "Medir intervalo entre dois usos", Func = function()
+        local state = states[selected]
+        if not enabled or not state.visible then notify("Ative o rastreamento desta skill"); return end
+        state.calibrating, state.firstSignal = true, nil
+        notify("Use " .. selected .. " duas vezes; M1 sem animacao sera ignorado")
+    end})
+    measurement:AddButton({Text = "Cancelar medicao automatica", Func = function()
+        states[selected].calibrating, states[selected].firstSignal = false, nil
+    end})
+    measurement:AddButton({Text = "Reaprender animacao da skill", Func = function()
+        for index, name in ipairs(names) do
+            if name == selected then ctx.options["VanguardAnimation" .. index]:SetValue("") end
+        end
+        notify("Use a skill uma vez para aprender sua primeira animacao")
+    end})
+    measurement:AddLabel("Intervalo inclui atraso da proxima tentativa")
     measurement:AddButton({Text = "Registrar uso da skill selecionada", Func = function()
         use(selected)
         notify("Uso registrado: " .. selected)
@@ -186,7 +289,10 @@ return function(ctx)
                     text = string.format("%s CD ~%." .. decimals .. "fs", label, state.duration - elapsed)
                 else text = label .. ": CD estimado encerrado" end
             elseif state.duration > 0 then text = label .. ": aguardando uso" end
-            if state.visible and (showIdle or active) then window:AddItem(text, cooldownColor) end
+            if state.calibrating then
+                text = label .. (state.firstSignal and ": medindo intervalo..." or ": aguardando primeiro uso")
+            end
+            if state.visible and (showIdle or active or state.calibrating) then window:AddItem(text, cooldownColor) end
         end
         if showEffect and states["Blade Crash"].visible and effectStart then
             local elapsed = now - effectStart
