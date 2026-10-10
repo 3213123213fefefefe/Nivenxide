@@ -33,6 +33,7 @@ return function(ctx)
     footText.TextStrokeTransparency = 0.65
     footText.Parent = foot
     local hotbarEnabled, noFallEnabled, showNumbers, opacity = true, true, true, 40
+    local footHeight = 0.15
     local overlays, slots = {}, {}
     local lastScan, observedCharacter, previousProtection, protectionSince, estimate = -10, nil, false, nil, nil
     local destroyed = false
@@ -130,7 +131,16 @@ return function(ctx)
         foot.Enabled = noFallEnabled and active and root ~= nil and true or false
         if foot.Enabled then
             foot.Adornee = root
-            foot.StudsOffsetWorldSpace = Vector3.new(0, -(humanoid and humanoid.HipHeight or 2) - root.Size.Y / 2 + 0.35, 0)
+            local left = character:FindFirstChild("LeftFoot") or character:FindFirstChild("Left Leg")
+            local right = character:FindFirstChild("RightFoot") or character:FindFirstChild("Right Leg")
+            local offset = -(humanoid and humanoid.HipHeight or 2) - root.Size.Y / 2
+            if left or right then
+                local bottom = math.huge
+                if left then bottom = math.min(bottom, left.Position.Y - left.Size.Y / 2) end
+                if right then bottom = math.min(bottom, right.Position.Y - right.Size.Y / 2) end
+                offset = bottom - root.Position.Y
+            end
+            foot.StudsOffsetWorldSpace = Vector3.new(0, offset + footHeight, 0)
             local remaining = estimate and math.max(0, estimate - (now - protectionSince))
             local effectStart, effectDuration = ctx.bladeEffect()
             if not remaining and effectStart and effectDuration > 0 and effectStart >= protectionSince - 1 then
@@ -157,6 +167,10 @@ return function(ctx)
         Callback = function(value) showNumbers = value end})
     group:AddToggle("NivenxideNoFallFeet", {Text = "Indicador sem queda nos pes", Default = true,
         Callback = function(value) noFallEnabled = value end})
+    group:AddSlider("NivenxideNoFallHeight", {Text = "Altura do indicador nos pes", Default = 0.15,
+        Min = -0.5, Max = 1, Rounding = 2,
+        Callback = function(value) footHeight = math.clamp(value, -0.5, 1) end})
+    group:AddLabel("Altura menor = indicador mais embaixo")
     group:AddLabel("NoFall ativo: tempo restante estimado quando conhecido")
     local connection = ctx.utility:Connection(runService.RenderStepped, update)
     local function cleanup()
