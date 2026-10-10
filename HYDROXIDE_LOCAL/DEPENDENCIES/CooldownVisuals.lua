@@ -18,28 +18,51 @@ return function(ctx)
     if oldFoot then oldFoot:Destroy() end
     local foot = Instance.new("BillboardGui")
     foot.Name = "NivenxideNoFallFeet"
-    foot.Size = UDim2.fromOffset(160, 24)
-    foot.AlwaysOnTop = false
+    foot.Size = UDim2.fromScale(3.2, 0.8)
+    foot.AlwaysOnTop = true
     foot.MaxDistance = 100
     foot.Enabled = false
     foot.Parent = playerGui
+    -- Thin white zigzag band below the ankles, matching the user's reference.
+    local points = {{0,0.34},{0.09,0.46},{0.17,0.18},{0.26,0.40},{0.36,0.30},
+        {0.47,0.08},{0.55,0.32},{0.65,0.15},{0.73,0.43},{0.84,0.27},{0.94,0.37},{1,0.12}}
+    for row = 0, 1 do
+        for i = 1, #points - 1 do
+            local a, b = points[i], points[i + 1]
+            local dx, dy = (b[1] - a[1]) * 3.2, (b[2] - a[2]) * 0.8
+            local line = Instance.new("Frame")
+            line.Name = "WhiteBand"
+            line.AnchorPoint = Vector2.new(0.5, 0.5)
+            line.Position = UDim2.fromScale((a[1] + b[1]) / 2, (a[2] + b[2]) / 2 + row * 0.17)
+            line.Size = UDim2.new(math.sqrt(dx * dx + dy * dy) / 3.2, 0, 0, 1)
+            line.Rotation = math.deg(math.atan2(dy, dx))
+            line.BorderSizePixel = 0
+            line.BackgroundColor3 = Color3.fromRGB(255, 255, 255)
+            line.BackgroundTransparency = 0.05
+            line.Active = false
+            line.Parent = foot
+        end
+    end
     local footText = Instance.new("TextLabel")
     footText.BackgroundTransparency = 1
-    footText.Size = UDim2.fromScale(1, 1)
+    footText.Position = UDim2.fromScale(0, 0.70)
+    footText.Size = UDim2.fromScale(1, 0.3)
     footText.Font = Enum.Font.GothamMedium
-    footText.TextSize = 12
-    footText.TextColor3 = Color3.fromRGB(185, 235, 210)
+    footText.TextSize = 10
+    footText.TextColor3 = Color3.fromRGB(255, 255, 255)
     footText.TextTransparency = 0.15
     footText.TextStrokeTransparency = 0.65
     footText.Parent = foot
     local hotbarEnabled, noFallEnabled, showNumbers, opacity = true, true, true, 40
-    local footHeight = 0.15
+    local footHeight = -0.2
+    local showProtectionTimer = true
     local overlays, slots = {}, {}
     local lastScan, observedCharacter, previousProtection, protectionSince, estimate = -10, nil, false, nil, nil
     local destroyed = false
     local function newOverlay(name)
         local container = Instance.new("Frame")
-        container.Name = "CD_" .. name
+        container.Name = "NivenxideCD_" .. name
+        container.ClipsDescendants = true
         container.BackgroundTransparency = 1
         container.BorderSizePixel = 0
         container.Active = false
@@ -98,14 +121,27 @@ return function(ctx)
         local now = os.clock()
         if now - lastScan >= 0.25 then scanHotbar(); lastScan = now end
         for name, overlay in pairs(overlays) do
+            if not overlay.container.Parent then
+                overlay = newOverlay(name)
+                overlays[name] = overlay
+            end
             local state, button = states[name], slots[name]
             local remaining = state.start and math.max(0, state.duration - (now - state.start)) or 0
             local active = hotbarEnabled and ctx.trackingEnabled() and state.visible
                 and state.duration > 0 and remaining > 0 and button and button.Parent and visible(button)
             overlay.container.Visible = active and true or false
             if active then
-                overlay.container.Position = UDim2.fromOffset(button.AbsolutePosition.X, button.AbsolutePosition.Y)
-                overlay.container.Size = UDim2.fromOffset(button.AbsoluteSize.X, button.AbsoluteSize.Y)
+                if overlay.container.Parent ~= button then
+                    local stale = button:FindFirstChild(overlay.container.Name)
+                    if stale and stale ~= overlay.container then stale:Destroy() end
+                    overlay.container.Parent = button
+                end
+                -- Keep the shade INSIDE the slot; leave its decorative border clear.
+                overlay.container.Position = UDim2.fromOffset(4, 4)
+                overlay.container.Size = UDim2.new(1, -8, 1, -8)
+                overlay.container.ZIndex = button.ZIndex + 4
+                overlay.shade.ZIndex = overlay.container.ZIndex
+                overlay.text.ZIndex = overlay.container.ZIndex + 1
                 -- Bottom stays anchored; the top edge descends as cooldown expires.
                 overlay.shade.Size = UDim2.fromScale(1, math.clamp(remaining / state.duration, 0, 1))
                 overlay.text.Visible = showNumbers
@@ -147,10 +183,10 @@ return function(ctx)
                 remaining = math.max(0, effectDuration - (now - effectStart))
             end
             if remaining and remaining > 0 then
-                footText.Text = string.format("SEM QUEDA  ~%.1fs", remaining)
+                footText.Text = showProtectionTimer and string.format("%.1fs", remaining) or ""
             else
                 -- Marker remains authoritative when expiry is unknown or an estimate ends.
-                footText.Text = "SEM QUEDA  ativo (tempo desconhecido)"
+                footText.Text = ""
             end
         end
     end
@@ -159,17 +195,19 @@ return function(ctx)
     group:AddToggle("NivenxideHotbarCooldowns", {Text = "Cooldown sobre a hotbar", Default = true,
         Callback = function(value) hotbarEnabled = value end})
     group:AddSlider("NivenxideHotbarOpacity", {Text = "Opacidade cinza (%)", Default = 40,
-        Min = 30, Max = 50, Rounding = 0, Callback = function(value)
-            opacity = math.clamp(value, 30, 50)
+        Min = 1, Max = 100, Rounding = 0, Callback = function(value)
+            opacity = math.clamp(value, 1, 100)
             for _, overlay in pairs(overlays) do overlay.shade.BackgroundTransparency = 1 - opacity / 100 end
         end})
     group:AddToggle("NivenxideHotbarNumbers", {Text = "Segundos sobre a skill", Default = true,
         Callback = function(value) showNumbers = value end})
-    group:AddToggle("NivenxideNoFallFeet", {Text = "Indicador sem queda nos pes", Default = true,
+    group:AddToggle("NivenxideNoFallFeet", {Text = "Faixa branca de protecao nos pes", Default = true,
         Callback = function(value) noFallEnabled = value end})
-    group:AddSlider("NivenxideNoFallHeight", {Text = "Altura do indicador nos pes", Default = 0.15,
-        Min = -0.5, Max = 1, Rounding = 2,
-        Callback = function(value) footHeight = math.clamp(value, -0.5, 1) end})
+    group:AddToggle("NivenxideNoFallTimer", {Text = "Segundos abaixo da faixa branca", Default = true,
+        Callback = function(value) showProtectionTimer = value end})
+    group:AddSlider("NivenxideNoFallHeight", {Text = "Altura do indicador nos pes", Default = -0.2,
+        Min = -1.5, Max = 1, Rounding = 2,
+        Callback = function(value) footHeight = math.clamp(value, -1.5, 1) end})
     group:AddLabel("Altura menor = indicador mais embaixo")
     group:AddLabel("NoFall ativo: tempo restante estimado quando conhecido")
     local connection = ctx.utility:Connection(runService.RenderStepped, update)
@@ -177,6 +215,7 @@ return function(ctx)
         if destroyed then return end
         destroyed = true
         connection:Disconnect()
+        for _, overlay in pairs(overlays) do overlay.container:Destroy() end
         screen:Destroy()
         foot:Destroy()
     end
