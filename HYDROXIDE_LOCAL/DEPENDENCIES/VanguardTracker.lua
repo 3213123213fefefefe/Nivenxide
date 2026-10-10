@@ -318,7 +318,17 @@ return function(ctx)
     connect(player.CharacterAdded, characterAdded)
     connect(player.CharacterRemoving, reset)
     if player.Character then characterAdded(player.Character) end
-    -- Called by the existing Status Effects update; no extra heartbeat loop.
+    local visualOK, visualError = pcall(function()
+        local path = "HYDROXIDE_LOCAL/DEPENDENCIES/CooldownVisuals.lua"
+        local factory, err = loadstring(readfile(path), "@" .. path)
+        assert(factory, err)
+        factory()({player = player, states = states, group = appearance,
+            utility = ctx.utility, library = ctx.library,
+            trackingEnabled = function() return enabled end,
+            bladeEffect = function() return effectStart, effectDuration end})
+    end)
+    if not visualOK then warn("[Nivenxide Visuals] " .. tostring(visualError)) end
+    -- The legacy Status Effects panel remains available alongside these visuals.
     return function(window)
         if not enabled then return end
         local now = os.clock()
