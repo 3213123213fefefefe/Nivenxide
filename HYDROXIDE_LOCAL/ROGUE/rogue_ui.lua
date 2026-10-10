@@ -600,6 +600,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             inventory_search = false,
             unhide_players = true,
             gate_anti_backfire = false,
+            gelidus_snap_anti_backfire = true,
             streamer_mode = false,
 
             friendly_keybind = "None",
@@ -9977,6 +9978,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Default = cheat_client.config.gate_anti_backfire,
                 Callback = function(value)
                     cheat_client.config.gate_anti_backfire = value
+                end
+            })
+
+            group_misc:AddToggle("gelidus_snap_anti_backfire", {
+                Text = "Snap Gelidus Anti Backfire",
+                Default = cheat_client.config.gelidus_snap_anti_backfire,
+                Callback = function(value)
+                    cheat_client.config.gelidus_snap_anti_backfire = value
                 end
             })
         end
@@ -20182,10 +20191,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             shared.keybinds_window = keybinds_window
 
             local manaOK, manaError = pcall(function()
+                local spellFactory, spellError = loadstring(HXD_LOCAL_READ("DEPENDENCIES/SpellMana.lua"))
+                assert(spellFactory, spellError)
+                cheat_client.spell_mana = spellFactory()({player = plr, spellCosts = cheat_client.spell_cost})
                 local factory, err = loadstring(HXD_LOCAL_READ("DEPENDENCIES/CharacterMana.lua"))
                 assert(factory, err)
                 factory()({group = Tabs.Interface:AddLeftGroupbox("Mana ao lado do personagem"),
-                    player = plr, utility = utility, library = library})
+                    player = plr, utility = utility, library = library,
+                    spellMana = cheat_client.spell_mana})
             end)
             if not manaOK then warn("[Nivenxide Mana] " .. tostring(manaError)) end
 
@@ -21676,6 +21689,13 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 end
                             end
                         end
+                    end
+
+                    if shared and Toggles and Toggles.gelidus_snap_anti_backfire
+                        and Toggles.gelidus_snap_anti_backfire.Value and tostring(Event):match("RightClick")
+                        and cheat_client.spell_mana
+                        and cheat_client.spell_mana.blockGelidusSnap(plr.Character) then
+                        return
                     end
 
                     if shared and Toggles and Toggles.AntiBackfireViribus and Toggles.AntiBackfireViribus.Value and tostring(Event) == "RightClick" then
