@@ -119,3 +119,10 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/3213123213fefefefe/Ni
 O loader fixa uma versao do runtime; novas versoes sao aplicadas quando o loader
 remoto atualiza a referencia. Reentre no servidor antes de recarregar uma versao.
 Nao coloque tokens, senhas ou cookies no repositorio nem no executor.
+
+## Mana ao lado do personagem
+Interface > Mana ao lado do personagem: copia o widget original de StatGui.LeftContainer.Mana
+e sincroniza seu preenchimento, cores e imagens. Ajustes de posicao horizontal/vertical,
+largura, altura, opacidade de 1 a 100 e valor numerico opcional; salvos pelos perfis.
+A copia acompanha o personagem local na tela e desaparece sem personagem, fora da camera,
+na morte ou se a barra original estiver escondida. Restart Script remove e recria a copia.
