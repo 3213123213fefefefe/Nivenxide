@@ -1,5 +1,6 @@
 -- Shared spell windows for the character widget and Gelidus snap guard.
 return function(ctx)
+    local collection = game:GetService("CollectionService")
     local defaults = {Gate = {{75, 83}, {75, 83}}, Gelidus = {{80, 95}, {85, 100}}}
     local function ranges(name, character)
         local spell = (ctx.spellCosts or defaults)[name]
@@ -24,6 +25,11 @@ return function(ctx)
     end
     local function blockGelidusSnap(character)
         if not character or not character:FindFirstChild("Gelidus") then return false end
+        -- RightClick can serve other actions while snap is unavailable. Match
+        -- the existing Viribus guard: do not swallow those clicks in SnapCool.
+        if character:FindFirstChild("SnapCool") or collection:HasTag(character, "SnapCool") then
+            return false
+        end
         local artifacts = character:FindFirstChild("Artifacts")
         if artifacts and artifacts:FindFirstChild("PhilosophersStone") then return false end
         local mana = character:FindFirstChild("Mana")
