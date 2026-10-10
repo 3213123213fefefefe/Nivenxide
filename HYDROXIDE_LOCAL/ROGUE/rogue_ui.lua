@@ -29,9 +29,11 @@ local Services = setmetatable({}, {
 })
 
 local Players = Services.Players
-while not Players.LocalPlayer do task.wait() end
-while not Players.LocalPlayer:FindFirstChildOfClass("Backpack") do task.wait() end
--- Leaderboard widgets initialize independently; do not delay the entire UI.
+repeat task.wait() until Players.LocalPlayer
+repeat task.wait() until Players.LocalPlayer.Backpack
+
+local StarterGui = Services.StarterGui
+repeat task.wait() until StarterGui:FindFirstChild("LeaderboardGui")
 
 pcall(function()
     if getconnections then
