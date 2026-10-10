@@ -340,7 +340,7 @@ return function(ctx)
             if state.start then
                 local elapsed = now - state.start
                 if state.duration == 0 then
-                    text = string.format("%s: %." .. decimals .. "fs desde uso", label, elapsed)
+                    text = label .. ": configure o CD em segundos"
                 elseif elapsed < state.duration then
                     text = string.format("%s CD ~%." .. decimals .. "fs", label, state.duration - elapsed)
                 else text = label .. ": CD estimado encerrado" end
@@ -356,7 +356,7 @@ return function(ctx)
         if showEffect and states["Blade Crash"].visible and effectStart then
             local elapsed = now - effectStart
             local text
-            if effectDuration == 0 then text = string.format("%s efeito: %." .. decimals .. "fs desde uso", states["Blade Crash"].label, elapsed)
+            if effectDuration == 0 then text = states["Blade Crash"].label .. " efeito: duracao desconhecida"
             elseif not effectMeasured and elapsed < effectDuration then
                 text = string.format("%s efeito ~%." .. decimals .. "fs", states["Blade Crash"].label, effectDuration - elapsed)
             end
