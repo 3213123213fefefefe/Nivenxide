@@ -10,7 +10,7 @@ local ok, err = pcall(function()
     assert(type(readfile) == "function" and type(writefile) == "function"
         and type(isfile) == "function" and type(isfolder) == "function"
         and type(makefolder) == "function", "Executor sem suporte a arquivos locais")
-    local version = "2708703722952dc11cec9ff9762f84c8f918ffd5"
+    local version = "363dc42a2072dc4850c378b1d8ea98359473df8d"
     local base = "https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/" .. version .. "/"
     local root = "HYDROXIDE_LOCAL"
     local files = {
@@ -22,6 +22,7 @@ local ok, err = pcall(function()
         "DEPENDENCIES/RAMAccount.lua",
         "DEPENDENCIES/RestartScript.lua",
         "DEPENDENCIES/SaveManager.lua",
+        "DEPENDENCIES/SpellMana.lua",
         "DEPENDENCIES/ThemeManager.lua",
         "DEPENDENCIES/VanguardTracker.lua",
         "ROGUE/rogue_ui.lua",
