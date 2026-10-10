@@ -33,8 +33,19 @@ A medicao inclui seu tempo de reacao. Nao use a medicao caso a ativacao falhe.
 As configuracoes podem ser salvas pelo sistema de perfis existente do Hydroxide.
 
 ## Limites
-Tool.Activated indica uma tentativa local: o servidor pode recusar a habilidade.
+O tracker ignora Tool.Activated/M1 e observa AnimationPlayed no Animator local.
+As IDs sao lidas das animacoes dentro dos Tools identificados no dump do jogo.
+A primeira animacao exclusiva observada de cada skill e aprendida e salva em
+Config. Animacoes compartilhadas entre skills nao sao atribuidas automaticamente.
+O campo ID da animacao permite corrigir manualmente ou reaprender a deteccao.
+Playback de animacao NAO comprova aceite pelo servidor: confirme em jogo se o
+contador permanece parado nos cliques recusados durante cooldown.
 Depois de configurados, os contadores sao ESTIMATIVAS; nao consultam o servidor.
+Em Medicao e controle, Medir intervalo entre dois usos arma a skill selecionada:
+a primeira animacao inicia a medicao; a segunda salva o intervalo (3 decimais).
+Cliques sem a animacao aprendida sao ignorados. O intervalo inclui o atraso da
+proxima tentativa e eventos sao medidos no cliente; nao ha precisao garantida
+no servidor. Duplicatas em menos de 0.3s sao filtradas. Reset/respawn cancela medicao.
 Nao ha deteccao automatica confirmada de fim do efeito. O timer de efeito inicia
 no uso, portanto atrasos de animacao tambem podem exigir ajuste manual.
 O tracker nao aciona skills, nao dispara remotes e nao altera cooldowns.
@@ -47,12 +58,17 @@ Morte (quando Humanoid ja existe), remocao e troca de personagem limpam timers.
 Modulo testado com Lua 5.4 e objetos simulados: tempos desconhecidos, medicao,
 medicao duplicada, cliques repetidos, valor negativo, reset e desativacao,
 selecao de skill, campos visiveis, configuracao separada, nomes, decimais,
-ocultacao de inativos/efeito, reinicio e desativacao individual.
+ocultacao de inativos/efeito, reinicio e desativacao individual, aprendizado de
+animacao, M1 sem animacao ignorado e medicao automatica entre duas animacoes.
 Integracao conferida por inspecao de escopo. Sem teste no Roblox/Potassium.
 O restante do Hydroxide foi preservado, sem validacao dos seus demais recursos.
 
 ## GitHub
 Pacote organizado para envio na raiz de um repositorio novo.
-A instalacao permanece LOCAL: publicar no GitHub nao transforma readfile em
-carregamento HTTP. Para usar, baixe o ZIP do repositorio e extraia os arquivos.
+Loader direto (instala automaticamente e usa cache local nas proximas execucoes):
+```lua
+loadstring(game:HttpGet("https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/main/loader.lua", true))()
+```
+O loader fixa uma versao do runtime; novas versoes sao aplicadas quando o loader
+remoto atualiza a referencia. Reentre no servidor antes de recarregar uma versao.
 Nao coloque tokens, senhas ou cookies no repositorio nem no executor.
