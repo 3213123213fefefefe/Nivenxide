@@ -25,18 +25,21 @@ essas sao as skills da sua classe; os nomes vieram da lista do codigo original.
 ## Indicadores na hotbar e nos pes
 Em Cooldowns > Painel e aparencia > Indicadores no jogo, os novos indicadores
 vem ligados. A cobertura cinza sobre cada skill usa opacidade de 40%, ajustavel
-entre 30 e 50%. Sua borda superior desce ate desaparecer ao fim do cooldown;
+entre 1 e 100%. A cobertura fica como filha do slot, com margem interna de 4px,
+sem cobrir a borda decorativa. Sua borda superior desce ate desaparecer ao fim do cooldown;
 os segundos podem ser ocultados. E necessario configurar/medir o CD da skill.
 As coberturas nao capturam cliques, seguem os slots de BackpackGui/MainFrame
 e funcionam independentemente da janela Status Effects.
-SEM QUEDA aparece discretamente nos pes somente enquanto o personagem tem
+Uma faixa branca fina em zigue-zague aparece abaixo dos pes somente enquanto o personagem tem
 NoFall (instance ou tag), incluindo as fontes que compartilham esse marcador.
 Sem marcador, nem o timer estimado do Blade ativa o indicador. Ao remover a
 protecao, o indicador some imediatamente no proximo frame. Duracoes conhecidas
 sao estimadas: TPSafe 4s e NoPotions/Feather Feet 30s conforme o Hydroxide;
 Blade usa a duracao configurada quando o inicio corresponde ao marcador.
-Quando nao ha prazo conhecido, mostra ativo (tempo desconhecido), sem contar
-para cima nem inventar segundos restantes. Protecao ja presente na injecao tem
+Quando nao ha prazo conhecido, a faixa continua visivel sem numero. Quando ha
+prazo conhecido, mostra somente os segundos abaixo da faixa, sem texto de status.
+A faixa segue a base dos pes/pernas reais em R6 e R15; altura padrao -0.2 stud,
+ajustavel entre -1.5 e 1. Ela fica visivel mesmo proxima do chao. Protecao ja presente na injecao tem
 inicio desconhecido. Fontes que nao usam NoFall precisam ser identificadas em
 jogo antes de serem adicionadas.
 
@@ -89,7 +92,8 @@ animacao, M1 sem animacao ignorado e medicao automatica entre duas animacoes,
 inicio do efeito somente ao parar o voo, evento de parada duplicado,
 reset/desativacao durante voo e selecao explicita da ID de voo.
 Visuais testados com objetos simulados: cobertura/expiracao/opacidade,
-visibilidade da hotbar, NoFall presente/ausente, tempos conhecidos/desconhecidos,
+visibilidade da hotbar, opacidade minima/maxima, preenchimento dentro do slot,
+faixa branca sem texto de status, NoFall presente/ausente, tempos conhecidos/desconhecidos,
 independencia do indicador de protecao e limpeza ao descarregar.
 Integracao conferida por inspecao de escopo. Sem teste no Roblox/Potassium.
 O restante do Hydroxide foi preservado, sem validacao dos seus demais recursos.
