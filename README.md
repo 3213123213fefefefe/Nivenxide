@@ -46,8 +46,16 @@ a primeira animacao inicia a medicao; a segunda salva o intervalo (3 decimais).
 Cliques sem a animacao aprendida sao ignorados. O intervalo inclui o atraso da
 proxima tentativa e eventos sao medidos no cliente; nao ha precisao garantida
 no servidor. Duplicatas em menos de 0.3s sao filtradas. Reset/respawn cancela medicao.
-Nao ha deteccao automatica confirmada de fim do efeito. O timer de efeito inicia
-no uso, portanto atrasos de animacao tambem podem exigir ajuste manual.
+Nao ha deteccao automatica confirmada de fim do efeito. O timer de efeito do Blade Crash inicia no evento Stopped da animacao de voo,
+seja ao executar com M1, cancelar com X ou expirar a preparacao. Durante a
+animacao, o painel mostra preparando (voo). Um mesmo campo de duracao serve
+para o buff do cancelamento e a imunidade de queda da execucao. O painel usa
+um nome generico de efeito, sem inferir qual resultado ocorreu.
+ID animacao de voo vazio aprende a primeira animacao em loop exclusiva do
+Blade Crash. Se ela nao estiver marcada como Looped ou houver outro loop,
+preencha o ID correto; isso ainda exige verificacao em jogo. A ID de voo e
+separada da ID que dispara o cooldown. Morte, reset, desativacao e troca de
+personagem descartam animacoes pendentes.
 O tracker nao aciona skills, nao dispara remotes e nao altera cooldowns.
 Status Effects deve ficar ligado para mostrar os contadores. Desligar apenas
 Status Effects esconde o painel, mas o tracker continua registrando usos.
@@ -59,7 +67,9 @@ Modulo testado com Lua 5.4 e objetos simulados: tempos desconhecidos, medicao,
 medicao duplicada, cliques repetidos, valor negativo, reset e desativacao,
 selecao de skill, campos visiveis, configuracao separada, nomes, decimais,
 ocultacao de inativos/efeito, reinicio e desativacao individual, aprendizado de
-animacao, M1 sem animacao ignorado e medicao automatica entre duas animacoes.
+animacao, M1 sem animacao ignorado e medicao automatica entre duas animacoes,
+inicio do efeito somente ao parar o voo, evento de parada duplicado,
+reset/desativacao durante voo e selecao explicita da ID de voo.
 Integracao conferida por inspecao de escopo. Sem teste no Roblox/Potassium.
 O restante do Hydroxide foi preservado, sem validacao dos seus demais recursos.
 
