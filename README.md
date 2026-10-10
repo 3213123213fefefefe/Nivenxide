@@ -22,6 +22,16 @@ e carregue-o ou configure autoload para recuperar seus ajustes.
 Skills: Brandish, Puncture, Azure Ignition e Blade Crash. Confirme em jogo se
 essas sao as skills da sua classe; os nomes vieram da lista do codigo original.
 
+## Reiniciar sem rejoin
+Em Config > Utility, Restart Script fica logo abaixo de Unload Script.
+O botao busca e compila o loader atual, salva os ajustes em __nivenxide_restart,
+descarrega a sessao atual e executa o loader novamente. A nova sessao restaura
+os ajustes depois do autoload. Falhas de download/compilacao ou salvamento antes
+do unload deixam a sessao atual aberta. Temporizadores em andamento reiniciam;
+NoFall continua dependendo do marcador real presente no personagem.
+Testado com objetos simulados: ordem de preparacao/unload, restauracao pendente,
+protecoes contra cliques duplicados e falhas de rede/compilacao/salvamento.
+
 ## Indicadores na hotbar e nos pes
 Em Cooldowns > Painel e aparencia > Indicadores no jogo, os novos indicadores
 vem ligados. A cobertura cinza sobre cada skill usa opacidade de 40%, ajustavel
