@@ -27,7 +27,62 @@ return function(ctx)
     number.TextColor3 = Color3.fromRGB(255, 255, 255)
     number.TextStrokeTransparency = 0.4
     number.Parent = host
-    local enabled, showNumber, opacity = true, false, 100
+    local enabled, showNumber, opacity = true, false, 70
+    local activeOpacity = opacity
+    local spellMode, showRanges, highlightRanges = "Magia equipada", true, true
+    local spellMana = ctx.spellMana
+    local markers = {}
+    for index, specification in ipairs({
+        {"Gate", false, Color3.fromRGB(255, 205, 80)},
+        {"Gelidus", false, Color3.fromRGB(100, 220, 255)},
+        {"Gelidus", true, Color3.fromRGB(110, 140, 255)}}) do
+        local band = Instance.new("Frame")
+        band.Name = specification[2] and "GelidusSnapRange" or specification[1] .. "CastRange"
+        band.BorderSizePixel = 0
+        band.BackgroundColor3 = specification[3]
+        band.ZIndex = 1000
+        band.Active = false
+        band.Visible = false
+        band.Parent = host
+        local label = Instance.new("TextLabel")
+        label.Name = band.Name .. "Label"
+        label.BackgroundTransparency = 1
+        label.Position = UDim2.new(1, 14, 0, -48 + (index - 1) * 15)
+        label.Size = UDim2.fromOffset(190, 15)
+        label.Font = Enum.Font.GothamMedium
+        label.TextSize = 11
+        label.TextXAlignment = Enum.TextXAlignment.Left
+        label.TextStrokeTransparency = 0.5
+        label.ZIndex = 1000
+        label.Visible = false
+        label.Parent = host
+        markers[index] = {name = specification[1], snap = specification[2],
+            color = specification[3], band = band, label = label}
+    end
+    local function updateRanges(character, mana)
+        local ready = false
+        for index, marker in ipairs(markers) do
+            local equipped = character:FindFirstChild(marker.name)
+            local selected = spellMode == marker.name or spellMode == "Gate + Gelidus"
+                or spellMode == "Magia equipada" and equipped ~= nil
+            local normal, snap
+            if spellMana then normal, snap = spellMana.ranges(marker.name, character) end
+            local range = marker.snap and snap or normal
+            local visible = showRanges and selected and range ~= nil
+            marker.band.Visible, marker.label.Visible = visible, visible
+            if visible then
+                local inRange = mana ~= nil and spellMana.inside(mana.Value, range)
+                ready = ready or inRange
+                marker.band.Position = UDim2.new(1, 3 + (index - 1) * 4, 1 - range[2] / 100, 0)
+                marker.band.Size = UDim2.new(0, 3, (range[2] - range[1]) / 100, 0)
+                marker.band.BackgroundTransparency = inRange and 0.15 or 0.55
+                marker.label.Text = (marker.snap and "Snap " or "") .. marker.name
+                    .. string.format(" %g-%g%%", range[1], range[2])
+                marker.label.TextColor3 = inRange and Color3.fromRGB(140, 255, 160) or marker.color
+            end
+        end
+        activeOpacity = math.min(100, opacity + (highlightRanges and ready and 15 or 0))
+    end
     local x, y, width, height = 75, 0, 18, 160
     local source, copy, pairsToSync, sourceNodes = nil, nil, {}, {}
     local nextScan, closed = 0, false
@@ -71,7 +126,7 @@ return function(ctx)
         end
     end
     local function transparency(a, b, property)
-        b[property] = 1 - (1 - a[property]) * opacity / 100
+        b[property] = 1 - (1 - a[property]) * activeOpacity / 100
     end
     local function sync()
         for _, pair in ipairs(pairsToSync) do
@@ -126,15 +181,16 @@ return function(ctx)
         end
         local point, onScreen = camera:WorldToViewportPoint(root.Position)
         if not onScreen or point.Z <= 0 then return end
+        local mana = character:FindFirstChild("Mana")
+        updateRanges(character, mana)
         sync()
         host.Size = UDim2.fromOffset(width, height)
         host.Position = UDim2.fromOffset(point.X + x, point.Y + y)
         host.Visible = true
-        local mana = character:FindFirstChild("Mana")
         number.Visible = showNumber and mana ~= nil
         number.Text = mana and tostring(math.floor(math.clamp(mana.Value, 0, 100) + 0.5)) or ""
-        number.TextTransparency = 1 - opacity / 100
-        number.TextStrokeTransparency = 1 - 0.6 * opacity / 100
+        number.TextTransparency = 1 - activeOpacity / 100
+        number.TextStrokeTransparency = 1 - 0.6 * activeOpacity / 100
     end
     group:AddToggle("NivenxideCharacterMana", {Text = "Copia da mana ao lado do personagem", Default = true,
         Callback = function(value) enabled = value; if not value then host.Visible = false end end})
@@ -146,10 +202,18 @@ return function(ctx)
         Callback = function(value) width = value end})
     group:AddSlider("NivenxideManaHeight", {Text = "Altura (pixels)", Default = 160, Min = 40, Max = 400, Rounding = 0,
         Callback = function(value) height = value end})
-    group:AddSlider("NivenxideManaOpacity", {Text = "Opacidade (%)", Default = 100, Min = 1, Max = 100, Rounding = 0,
+    group:AddSlider("NivenxideManaOpacity", {Text = "Opacidade fora da faixa (%)", Default = 70, Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) opacity = value end})
     group:AddToggle("NivenxideManaNumber", {Text = "Mostrar valor da mana", Default = false,
         Callback = function(value) showNumber = value end})
+    group:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate e Gelidus", Default = true,
+        Callback = function(value) showRanges = value end})
+    group:AddDropdown("NivenxideManaSpellMode", {Text = "Mostrar faixas", Default = 1,
+        Values = {"Magia equipada", "Gate", "Gelidus", "Gate + Gelidus"},
+        Callback = function(value) spellMode = value end})
+    group:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa (+15)", Default = true,
+        Callback = function(value) highlightRanges = value end})
+    group:AddLabel("Destaque limitado a 100%; valores verdes = mana na faixa")
     group:AddLabel("Horizontal negativo = esquerda; vertical positivo = baixo")
     local connection = ctx.utility:Connection(game:GetService("RunService").RenderStepped, update)
     local function cleanup()
