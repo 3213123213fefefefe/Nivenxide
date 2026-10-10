@@ -126,3 +126,13 @@ e sincroniza seu preenchimento, cores e imagens. Ajustes de posicao horizontal/v
 largura, altura, opacidade de 1 a 100 e valor numerico opcional; salvos pelos perfis.
 A copia acompanha o personagem local na tela e desaparece sem personagem, fora da camera,
 na morte ou se a barra original estiver escondida. Restart Script remove e recria a copia.
+
+### Gate e Gelidus
+A copia de mana mostra faixas de Gate, Gelidus normal e snap Gelidus, selecionadas
+pela magia equipada ou pelo menu Mostrar faixas. Os limites usam a tabela de spells
+do Hydroxide e os mesmos ajustes de ScholarsBoon, WiseCasting e RemTraining.
+Mana dentro de uma faixa visivel: valor verde e opacidade +15 pontos, limitada a 100%.
+Opacidade fora da faixa tem padrao 70%; perfis anteriores preservam o valor salvo.
+Misc > Snap Gelidus Anti Backfire (ligado por padrao) bloqueia RightClick com Gelidus
+equipado fora da faixa de snap, sem alterar cast normal. PhilosophersStone dispensa
+o bloqueio, como no guard de Gate. A faixa base de snap Gelidus e 85-100%.
