@@ -135,6 +135,7 @@ return function(ctx)
             -- Brandish's fire and normal variants share one skill state. Keep
             -- accepting IDs indexed from its Tool after learning the first one.
             local matches = state.animation ~= "" and state.animation == id
+                or name == "Brandish" and id == "14485249284"
                 or (state.animation == "" or name == "Brandish")
                     and animationOwners[id] and animationOwners[id][name]
             if state.visible and matches then owner = name; count = count + 1 end
