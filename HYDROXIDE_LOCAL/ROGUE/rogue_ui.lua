@@ -3532,7 +3532,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         })
                     end
                 elseif success2 and isInGroup2 then
-                    local player_rank = player:GetRoleInGroup(281365)
+                    local player_ = player:GetRoleInGroup(281365)
                     if player_rank ~= "Guest" and (library ~= nil and library.Notify) then
                         utility:sound("rbxassetid://2865227039",4)
                         library:Notify({
@@ -4048,7 +4048,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 ZIndex = -10
                             }, "esp")
                         end
-                    end
+            end
                     
                     do
                         esp.highlight = utility:Object("Highlight", {
@@ -20751,6 +20751,23 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 })
 
 
+                local restartAction
+                local restartOK, restartError = pcall(function()
+                    local path = "HYDROXIDE_LOCAL/DEPENDENCIES/RestartScript.lua"
+                    local factory, err = loadstring(readfile(path), "@" .. path)
+                    assert(factory, err)
+                    restartAction = factory()({
+                        saveManager = shared.SaveManager,
+                        isUnloading = function() return not shared or shared.is_unloading end,
+                        unload = function() utility:Unload() end,
+                        notify = function(message) library:Notify(message, 4) end})
+                end)
+                if restartOK then
+                    UtilityGroup:AddButton({Text = "Restart Script", Func = restartAction})
+                else
+                    warn("[Nivenxide Restart] " .. tostring(restartError))
+                end
+
                 UtilityGroup:AddButton({
                     Text = "Join Discord",
                     Func = function()
@@ -20823,6 +20840,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     if not shared.SaveManager.CurrentConfig or shared.SaveManager.CurrentConfig == "" then
                         shared.SaveManager:LoadAutoloadConfig()
                     end
+                end
+
+                local restartConfig = getgenv().NivenxideRestartConfig
+                if restartConfig then
+                    getgenv().NivenxideRestartConfig = nil
+                    local restored, restoreError = shared.SaveManager:Load(restartConfig)
+                    if restored then library:Notify("Nivenxide reiniciado; ajustes restaurados", 4)
+                    else library:Notify("Falha ao restaurar ajustes: " .. tostring(restoreError), 5) end
                 end
 
                 task.spawn(function()
