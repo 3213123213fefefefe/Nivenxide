@@ -10,6 +10,13 @@ return function(ctx)
         return tostring(value or ""):match("%d+") or ""
     end
     local effectStart, effectDuration, effectMeasured = nil, 0, false
+    local flightAnimation, flightTrack, flightConnection = "", nil, nil
+    local flightGeneration = 0
+    local function cancelFlight()
+        flightGeneration = flightGeneration + 1
+        if flightConnection then flightConnection:Disconnect(); flightConnection = nil end
+        flightTrack = nil
+    end
     local enabled, showIdle, showEffect, restart = true, true, true, false
     local decimals = 1
     local cooldownColor = Color3.fromRGB(110, 190, 255)
@@ -63,9 +70,8 @@ return function(ctx)
         end
         state.start = now
         state.measured = false
-        if name == "Blade Crash" then
-            effectStart, effectMeasured = now, false
-        end
+        -- Blade effect has its own trigger: the flight animation stopping.
+        -- Starting or manually registering the skill never starts that effect.
     end
     local function watch(tool)
         if not tool:IsA("Tool") or not states[tool.Name] or watched[tool] then return end
@@ -87,10 +93,41 @@ return function(ctx)
         -- Tool.Activated fires on rejected M1 attempts, so it is deliberately unused.
         connect(tool.Destroying, function() watched[tool] = nil end)
     end
+    local function watchFlight(track, id)
+        if not states["Blade Crash"].visible then return end
+        local owners = animationOwners[id]
+        local belongsToBlade = owners and owners["Blade Crash"]
+        local unique = belongsToBlade
+        if owners then
+            for name in pairs(owners) do if name ~= "Blade Crash" then unique = false end end
+        end
+        -- With no verified flight ID, only learn a looped animation exclusive
+        -- to Blade Crash. Never substitute the first launch/attack animation.
+        local matches = flightAnimation ~= "" and id == flightAnimation
+            or flightAnimation == "" and unique and track.Looped
+        if not matches or flightTrack == track then return end
+        if flightAnimation == "" then
+            ctx.options.VanguardBladeFlightAnimation:SetValue(id)
+            print("[Nivenxide] Animacao de voo aprendida: " .. id)
+        end
+        cancelFlight()
+        flightTrack = track
+        effectStart, effectMeasured = nil, false
+        local generation, character = flightGeneration, player.Character
+        flightConnection = connect(track.Stopped, function()
+            if flightGeneration ~= generation then return end
+            cancelFlight()
+            if not enabled or not states["Blade Crash"].visible or player.Character ~= character then return end
+            local humanoid = character and character:FindFirstChildOfClass("Humanoid")
+            if humanoid and humanoid.Health <= 0 then return end
+            effectStart, effectMeasured = os.clock(), false
+        end)
+    end
     local function animationPlayed(track)
         if not enabled or not track.Animation then return end
         local id = animationId(track.Animation.AnimationId)
         if id == "" then return end
+        watchFlight(track, id)
         local owner, count
         count = 0
         for _, name in ipairs(names) do
@@ -115,6 +152,7 @@ return function(ctx)
     end
     local characterConnections = {}
     local function reset()
+        cancelFlight()
         for _, state in pairs(states) do
             state.start, state.lastSignal, state.firstSignal = nil, nil, nil
             state.calibrating, state.measured = false, false
@@ -167,7 +205,7 @@ return function(ctx)
                 if not value then
                     states[skillName].start, states[skillName].firstSignal = nil, nil
                     states[skillName].lastSignal, states[skillName].calibrating = nil, false
-                    if skillName == "Blade Crash" then effectStart = nil end
+                    if skillName == "Blade Crash" then cancelFlight(); effectStart = nil end
                 end
             end})
         list[#list + 1] = group:AddInput("VanguardLabel" .. index, {
@@ -192,8 +230,15 @@ return function(ctx)
             end})
     end
     local bladeControls = controls["Blade Crash"]
+    bladeControls[#bladeControls + 1] = group:AddInput("VanguardBladeFlightAnimation", {
+        Text = "ID animacao de voo (vazio = auto loop)", Default = "", Finished = true,
+        Callback = function(value)
+            cancelFlight()
+            flightAnimation = animationId(value)
+            effectStart, effectMeasured = nil, false
+        end})
     bladeControls[#bladeControls + 1] = group:AddInput("VanguardBladeEffect", {
-        Text = "Duracao do efeito (segundos)", Default = "0", Numeric = true, Finished = true,
+        Text = "Duracao buff/imunidade (segundos)", Default = "0", Numeric = true, Finished = true,
         Callback = function(value)
             local seconds = tonumber(value)
             if seconds and seconds >= 0 and seconds <= 3600 then effectDuration = seconds
@@ -238,6 +283,7 @@ return function(ctx)
         notify("Use a skill uma vez para aprender sua primeira animacao")
     end})
     measurement:AddLabel("Intervalo inclui atraso da proxima tentativa")
+    measurement:AddLabel("Blade: efeito comeca quando a animacao de voo para")
     measurement:AddButton({Text = "Registrar uso da skill selecionada", Func = function()
         use(selected)
         notify("Uso registrado: " .. selected)
@@ -255,7 +301,7 @@ return function(ctx)
         notify(selected .. ": CD medido " .. seconds .. "s")
     end})
     measurement:AddButton({Text = "Efeito Blade Crash acabou: medir", Func = function()
-        if not enabled or not effectStart then notify("Use Blade Crash primeiro"); return end
+        if not enabled or not effectStart then notify("Aguarde a animacao de voo do Blade Crash terminar"); return end
         if effectMeasured then notify("Use Blade Crash novamente para medir"); return end
         local seconds = math.floor((os.clock() - effectStart) * 10 + 0.5) / 10
         if seconds > 3600 then notify("Medicao longa demais; registre novo uso"); return end
@@ -293,6 +339,9 @@ return function(ctx)
                 text = label .. (state.firstSignal and ": medindo intervalo..." or ": aguardando primeiro uso")
             end
             if state.visible and (showIdle or active or state.calibrating) then window:AddItem(text, cooldownColor) end
+        end
+        if showEffect and states["Blade Crash"].visible and flightTrack then
+            window:AddItem(states["Blade Crash"].label .. ": preparando (voo)", effectColor)
         end
         if showEffect and states["Blade Crash"].visible and effectStart then
             local elapsed = now - effectStart
