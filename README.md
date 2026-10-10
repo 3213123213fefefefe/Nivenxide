@@ -68,7 +68,8 @@ O tracker ignora Tool.Activated/M1 e observa AnimationPlayed no Animator local.
 As IDs sao lidas das animacoes dentro dos Tools identificados no dump do jogo.
 A primeira animacao exclusiva observada de cada skill e aprendida e salva em
 Config. Brandish aceita tambem as outras IDs de animacao do seu Tool (normal
-e com fogo), usando o mesmo cooldown e a mesma medicao. Animacoes compartilhadas entre skills nao sao atribuidas automaticamente.
+e com fogo), usando o mesmo cooldown e a mesma medicao. A variante com fogo
+tambem reconhece a ID 14485249284 capturada em jogo, mesmo fora do Tool. Animacoes compartilhadas entre skills nao sao atribuidas automaticamente.
 O campo ID da animacao permite corrigir manualmente ou reaprender a deteccao.
 Playback de animacao NAO comprova aceite pelo servidor: confirme em jogo se o
 contador permanece parado nos cliques recusados durante cooldown.
