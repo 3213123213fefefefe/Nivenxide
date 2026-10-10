@@ -134,5 +134,6 @@ do Hydroxide e os mesmos ajustes de ScholarsBoon, WiseCasting e RemTraining.
 Mana dentro de uma faixa visivel: valor verde e opacidade +15 pontos, limitada a 100%.
 Opacidade fora da faixa tem padrao 70%; perfis anteriores preservam o valor salvo.
 Misc > Snap Gelidus Anti Backfire (ligado por padrao) bloqueia RightClick com Gelidus
-equipado fora da faixa de snap, sem alterar cast normal. PhilosophersStone dispensa
+equipado fora da faixa de snap, sem alterar cast normal. Durante SnapCool (tag
+ou marcador no personagem), o M2 passa normalmente, seguindo a excecao do guard de Viribus. PhilosophersStone dispensa
 o bloqueio, como no guard de Gate. A faixa base de snap Gelidus e 85-100%.
