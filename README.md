@@ -137,3 +137,15 @@ Misc > Snap Gelidus Anti Backfire (ligado por padrao) bloqueia RightClick com Ge
 equipado fora da faixa de snap, sem alterar cast normal. Durante SnapCool (tag
 ou marcador no personagem), o M2 passa normalmente, seguindo a excecao do guard de Viribus. PhilosophersStone dispensa
 o bloqueio, como no guard de Gate. A faixa base de snap Gelidus e 85-100%.
+
+## Carregamento rapido
+O loader compara versoes por arquivo e reutiliza o cache local: atualizacoes baixam
+apenas arquivos alterados/ausentes/truncados, com ate quatro downloads simultaneos.
+A instalacao anterior valida migra sem baixar novamente os arquivos iguais.
+Downloads terminam antes de gravar; escrita interrompida invalida o cache para reparo.
+A inicializacao nao espera pelo LeaderboardGui, que nao e requisito da interface.
+Para abrir somente a copia ja instalada, sem verificar atualizacoes no GitHub:
+```lua
+loadstring(readfile("HYDROXIDE_LOCAL/start.lua"))()
+```
+Restart Script continua verificando atualizacoes. O console mostra tempo de preparo do cache.
