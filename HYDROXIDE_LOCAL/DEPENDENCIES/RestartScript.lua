@@ -19,6 +19,9 @@ return function(ctx)
                 ctx.unload()
                 task.wait(0.6) -- Let pending cleanup tasks finish before a new session.
                 env.NivenxideForceUpdate = true
+                -- The runtime may keep loader() alive until its next unload.
+                -- Release the restart lock before handing over to the new session.
+                env.NivenxideRestarting = false
                 loader()
             end)
             env.NivenxideRestarting = false
