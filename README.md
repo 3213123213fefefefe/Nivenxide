@@ -157,3 +157,10 @@ Acima mira limite superior +5; abaixo mira limite inferior -5. Uma janela de 1 p
 para o lado de fora da faixa permite observar mana por frame, mantendo a margem.
 Com ajuste ligado, carrega ou espera decaimento natural; timeout interrompe a sequencia.
 Nao tenta se nao existe faixa calculada valida, nem com PhilosophersStone.
+
+## Aliados pelo Tab
+Clique com botao esquerdo em um nome no leaderboard e use Marcar como aliado
+ou Remover aliado no painel de informacoes. O titulo continua alternando aliado
+como antes. Usa a lista existente por UserId e salva em HYDROXIDE/friends.json.
+Textos de Player ESP recebem verde suave quando is_friendly reconhece o aliado;
+as cores originais voltam ao remover. Barras de mana/vida preservam suas cores.
