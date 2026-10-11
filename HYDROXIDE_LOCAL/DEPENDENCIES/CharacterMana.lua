@@ -52,16 +52,32 @@ return function(ctx)
     snapStatus.TextXAlignment = Enum.TextXAlignment.Left
     snapStatus.ZIndex = 1010
     snapStatus.Parent = screen
+    local showSnapTimer = true
+    local pendingGelidus, snapEffectSeen = nil, false
     local showSnap, snapX, snapY, snapOpacity, snapSize = true, 8, 0, 70, 10
     local snapDurations, snapStarted, snapCharacter, snapOwner, lastEquipped = {}, nil, nil, nil, nil
+    local spellMana = ctx.spellMana
     local collection = game:GetService("CollectionService")
+    local input = game:GetService("UserInputService")
+    local inputConnection = ctx.utility:Connection(input.InputBegan, function(event)
+        if event.UserInputType ~= Enum.UserInputType.MouseButton2 or input:GetFocusedTextBox() then return end
+        local character = player.Character
+        local tool = character and character:FindFirstChildOfClass("Tool")
+        local mana = character and character:FindFirstChild("Mana")
+        if not tool or tool.Name ~= "Gelidus" or not mana or snapStarted then return end
+        if character:FindFirstChild("SnapCool") or collection:HasTag(character, "SnapCool") then return end
+        local window
+        if spellMana then local normal; normal, window = spellMana.ranges("Gelidus", character) end
+        if window and (mana.Value < window[1] or mana.Value > window[2]) then return end
+        -- A request alone is not a cast: wait for a mana decrease before displaying it.
+        pendingGelidus = {character = character, time = os.clock(), mana = mana.Value}
+    end)
     local enabled, showNumber, opacity = true, false, 70
     local activeOpacity = opacity
     local readyOpacityBoost = 15
     local rangeOpacity, boundaryOpacity = 35, 85
     local viribusSnapMin, viribusSnapMax = 55, 70
     local spellMode, showRanges, highlightRanges = "Magia equipada", true, true
-    local spellMana = ctx.spellMana
     local fixedDetails = {}
     local fixedLines, showFixed50, showFixed20 = {}, true, true
     for _, percent in ipairs({50, 20}) do
@@ -255,18 +271,29 @@ return function(ctx)
         local character = player.Character
         if character ~= snapCharacter then
             snapCharacter, snapStarted, snapOwner, lastEquipped = character, nil, nil, nil
+            pendingGelidus, snapEffectSeen = nil, false
         end
         local tool = character and character:FindFirstChildOfClass("Tool")
         if tool then lastEquipped = tool.Name end
         local cooling = character ~= nil and (character:FindFirstChild("SnapCool") ~= nil
             or collection:HasTag(character, "SnapCool"))
+        if pendingGelidus then
+            local mana = character and character:FindFirstChild("Mana")
+            if character ~= pendingGelidus.character or os.clock() - pendingGelidus.time > 1 then
+                pendingGelidus = nil
+            elseif mana and mana.Value < pendingGelidus.mana - 0.5 then
+                snapStarted, snapOwner = pendingGelidus.time, "Gelidus"
+                snapEffectSeen, pendingGelidus = cooling, nil
+            end
+        end
         if cooling then
+            snapEffectSeen = true
             if not snapStarted then
                 snapStarted = os.clock()
                 snapOwner = tool and tool.Name or lastEquipped
             end
-        else
-            snapStarted, snapOwner = nil, nil
+        elseif snapEffectSeen or (snapStarted and os.clock() - snapStarted >= (snapDurations[snapOwner] or 8)) then
+            snapStarted, snapOwner, snapEffectSeen = nil, nil, false
         end
         local root = character and character:FindFirstChild("HumanoidRootPart")
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
@@ -277,10 +304,11 @@ return function(ctx)
         intent.Visible = showIntent and tool ~= nil
         intent.Text = tool and tool.Name or ""
         intent.Position = UDim2.fromOffset(point.X + intentX, point.Y + intentY)
-        snapStatus.Visible = showSnap and cooling
+        local snapActive = cooling or snapStarted ~= nil
+        snapStatus.Visible = showSnap and snapActive
         local duration = snapOwner and snapDurations[snapOwner]
         local remaining = snapStarted and duration and math.max(0, duration - (os.clock() - snapStarted)) or 0
-        snapStatus.Text = cooling and (remaining > 0 and string.format("Snap CD · ~%.1fs", remaining) or "Snap CD") or ""
+        snapStatus.Text = snapActive and (showSnapTimer and remaining > 0 and string.format("Snap CD · ~%.1fs", remaining) or "Snap CD") or ""
         snapStatus.TextColor3 = Color3.fromRGB(225, 225, 225)
         snapStatus.Position = UDim2.fromOffset(point.X + x + width / 2 + snapX, point.Y + y + snapY)
         snapStatus.TextSize = snapSize
@@ -358,6 +386,8 @@ return function(ctx)
         Callback = function(value) intentY = value end})
     snapGroup:AddToggle("NivenxideManaSnapStatus", {Text = "Status de SnapCool ao lado da mana", Default = true,
         Callback = function(value) showSnap = value end})
+    snapGroup:AddToggle("NivenxideManaSnapTimer", {Text = "Mostrar tempo restante", Default = true,
+        Callback = function(value) showSnapTimer = value end})
     local snapSpells = spellMana and spellMana.spellNames and spellMana.spellNames() or {"Gate", "Gelidus", "Viribus"}
     local snapControls, selectedSnapSpell = {}, "Gate"
     local function selectSnapSpell(name)
@@ -383,7 +413,7 @@ return function(ctx)
             end})
     end
     selectSnapSpell(selectedSnapSpell)
-    snapGroup:AddLabel("Contagem estimada pela spell equipada ao iniciar SnapCool")
+    snapGroup:AddLabel("Gelidus: clique direito + gasto de mana; outros: inicio de SnapCool")
     snapGroup:AddSlider("NivenxideManaSnapX", {Text = "SnapCool: posicao horizontal", Default = 8, Min = -300, Max = 300, Rounding = 0,
         Callback = function(value) snapX = value end})
     snapGroup:AddSlider("NivenxideManaSnapY", {Text = "SnapCool: posicao vertical", Default = 0, Min = -300, Max = 300, Rounding = 0,
@@ -399,6 +429,7 @@ return function(ctx)
         if closed then return end
         closed = true
         connection:Disconnect()
+        inputConnection:Disconnect()
         screen:Destroy()
     end
     ctx.library:OnUnload(cleanup)
