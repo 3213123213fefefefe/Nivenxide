@@ -252,23 +252,8 @@ return function(ctx)
     group:AddLabel("Salve os tempos em Config > Save config")
     appearance:AddToggle("VanguardTimers", {Text = "Ativar rastreamento", Default = true,
         Callback = function(value) enabled = value; if not value then reset() end end})
-    appearance:AddToggle("VanguardShowIdle", {Text = "Mostrar skills sem CD ativo", Default = true,
-        Callback = function(value) showIdle = value end})
-    appearance:AddToggle("VanguardShowEffect", {Text = "Mostrar efeito Blade Crash", Default = true,
-        Callback = function(value) showEffect = value end})
     appearance:AddToggle("VanguardRestart", {Text = "Reiniciar registro manual durante CD", Default = false,
         Callback = function(value) restart = value end})
-    appearance:AddSlider("VanguardDecimals", {Text = "Casas decimais", Default = 1, Min = 0, Max = 2,
-        Rounding = 0, Callback = function(value) decimals = math.max(0, math.min(2, math.floor(value))) end})
-    appearance:AddLabel("Cor dos cooldowns"):AddColorPicker("VanguardCooldownColor", {
-        Default = cooldownColor, Title = "Cooldowns", Callback = function(value) cooldownColor = value end})
-    appearance:AddLabel("Cor do efeito"):AddColorPicker("VanguardEffectColor", {
-        Default = effectColor, Title = "Blade Crash", Callback = function(value) effectColor = value end})
-    appearance:AddButton({Text = "Mostrar painel de timers", Func = function()
-        if ctx.toggles and ctx.toggles.StatusEffects then ctx.toggles.StatusEffects:SetValue(true) end
-        notify("Timers no painel Status Effects; arraste-o para posicionar")
-    end})
-    appearance:AddLabel("Posicao: arraste o painel Status Effects")
     appearance:AddLabel("Gatilho: animacao da skill; M1 ignorado")
     appearance:AddLabel("Animacao observada nao confirma aceite do servidor")
     measurement:AddButton({Text = "Medir intervalo entre dois usos", Func = function()
@@ -332,39 +317,7 @@ return function(ctx)
             bladeEffect = function() return effectStart, effectDuration end})
     end)
     if not visualOK then warn("[Nivenxide Visuals] " .. tostring(visualError)) end
-    -- The legacy Status Effects panel remains available alongside these visuals.
-    return function(window)
-        if not enabled then return end
-        local now = os.clock()
-        for _, name in ipairs(names) do
-            local state = states[name]
-            local label = state.label
-            local active = state.start and (state.duration == 0 or now - state.start < state.duration)
-            local text = label .. ": CD desconhecido"
-            if state.start then
-                local elapsed = now - state.start
-                if state.duration == 0 then
-                    text = label .. ": configure o CD em segundos"
-                elseif elapsed < state.duration then
-                    text = string.format("%s CD ~%." .. decimals .. "fs", label, state.duration - elapsed)
-                else text = label .. ": CD estimado encerrado" end
-            elseif state.duration > 0 then text = label .. ": aguardando uso" end
-            if state.calibrating then
-                text = label .. (state.firstSignal and ": medindo intervalo..." or ": aguardando primeiro uso")
-            end
-            if state.visible and (showIdle or active or state.calibrating) then window:AddItem(text, cooldownColor) end
-        end
-        if showEffect and states["Blade Crash"].visible and flightTrack then
-            window:AddItem(states["Blade Crash"].label .. ": preparando (voo)", effectColor)
-        end
-        if showEffect and states["Blade Crash"].visible and effectStart then
-            local elapsed = now - effectStart
-            local text
-            if effectDuration == 0 then text = states["Blade Crash"].label .. " efeito: duracao desconhecida"
-            elseif not effectMeasured and elapsed < effectDuration then
-                text = string.format("%s efeito ~%." .. decimals .. "fs", states["Blade Crash"].label, effectDuration - elapsed)
-            end
-            if text then window:AddItem(text, effectColor) end
-        end
-    end
+    -- Hotbar overlays and the character effect indicator render independently.
+    -- Keep the caller contract without adding duplicate Status Effects entries.
+    return function() end
 end
