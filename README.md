@@ -148,3 +148,15 @@ Mana alta, falta de mana com ajuste desligado, timeout, stun, desequipamento, mo
 respawn ou cancelamento interrompem a sequencia e encerram o carregamento iniciado.
 Telorum: base normal 80-90%, snap 75-85%. Verificacao local de mana nao confirma
 que o servidor aceitou o cast nem que a magia estava fora do cooldown normal.
+
+### Modo Backfire nos macros
+Tipo de cast tambem aceita Backfire (cast normal deliberadamente fora da faixa).
+Auto: Viribus e Armis usam acima do limite normal ajustado, conforme regra informada
+pelo usuario; demais usam abaixo. Lado pode ser alterado por etapa (Auto/Abaixo/Acima).
+Acima: alvo comeca no limite superior + margem (padrao 0.1 ponto percentual).
+Abaixo: alvo minimo configuravel (padrao 1%). Uma janela de ate 1 ponto acima do alvo
+permite observar a mana a cada frame, sempre fora da faixa normal. Com ajuste ligado,
+carrega se baixa ou desliga carregamento e espera decaimento natural se alta; timeout
+aborta as proximas etapas. Nunca forca backfire quando nao existe faixa calculada
+fora de 0-100%, nem com PhilosophersStone. Minimo real de ativacao/backfire deve
+ser confirmado em jogo por magia; pode ser corrigido nos controles por etapa.
