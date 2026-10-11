@@ -45,23 +45,7 @@ return function(ctx)
         line.Active = false
         line.Parent = host
         fixedDetails[#fixedDetails + 1] = line
-        for _, detail in ipairs({
-            {0, 0, 0, 4}, {1, 0, 0, 4}, {0.5, 0, 0, 3},
-            {0.5, -3, -3, 2}, {0.5, 3, -3, 2},
-            {0.5, -3, 3, 2}, {0.5, 3, 3, 2}}) do
-            local diamond = Instance.new("Frame")
-            diamond.Name = "FixedMana" .. percent .. "Ornament"
-            diamond.BorderSizePixel = 0
-            diamond.AnchorPoint = Vector2.new(0.5, 0.5)
-            diamond.Position = UDim2.new(detail[1], detail[2], 0.5, detail[3])
-            diamond.Size = UDim2.fromOffset(detail[4], detail[4])
-            diamond.Rotation = 45
-            diamond.BackgroundColor3 = Color3.fromRGB(35, 25, 36)
-            diamond.ZIndex = 1004
-            diamond.Active = false
-            diamond.Parent = line
-            fixedDetails[#fixedDetails + 1] = diamond
-        end
+
     end
     local markers = {}
     for index, specification in ipairs({
@@ -93,29 +77,8 @@ return function(ctx)
             edge.Parent = band
             edges[#edges + 1] = edge
         end
-        local ornaments = {}
-        if specification[1] == "Gate" or specification[1] == "Viribus" then
-            -- Small dark diamonds reproduce the reference's central motif and side ticks.
-            for _, detail in ipairs({
-                {0, 0, 0.5, 0, 4}, {1, 0, 0.5, 0, 4},
-                {0.5, 0, 0.5, 0, 3},
-                {0.5, -3, 0.5, -3, 2}, {0.5, 3, 0.5, -3, 2},
-                {0.5, -3, 0.5, 3, 2}, {0.5, 3, 0.5, 3, 2}}) do
-                local diamond = Instance.new("Frame")
-                diamond.Name = specification[1] .. "Ornament"
-                diamond.BorderSizePixel = 0
-                diamond.AnchorPoint = Vector2.new(0.5, 0.5)
-                diamond.Position = UDim2.new(detail[1], detail[2], detail[3], detail[4])
-                diamond.Size = UDim2.fromOffset(detail[5], detail[5])
-                diamond.Rotation = 45
-                diamond.ZIndex = 1002
-                diamond.Active = false
-                diamond.Parent = band
-                ornaments[#ornaments + 1] = diamond
-            end
-        end
         markers[index] = {name = specification[1], snap = specification[2],
-            color = specification[3], band = band, edges = edges, ornaments = ornaments}
+            color = specification[3], band = band, edges = edges}
     end
     local function updateRanges(character, mana)
         -- Fixed reference ticks remain visible regardless of spell/range selection.
@@ -146,11 +109,7 @@ return function(ctx)
                     edge.BackgroundColor3 = inRange and Color3.fromRGB(140, 255, 160)
                         or Color3.fromRGB(35, 25, 36)
                 end
-                for _, diamond in ipairs(marker.ornaments) do
-                    diamond.BackgroundTransparency = 1 - boundaryOpacity / 100
-                    diamond.BackgroundColor3 = inRange and Color3.fromRGB(140, 255, 160)
-                        or Color3.fromRGB(35, 25, 36)
-                end
+
             end
         end
         activeOpacity = math.min(100, opacity + (highlightRanges and ready and 15 or 0))
