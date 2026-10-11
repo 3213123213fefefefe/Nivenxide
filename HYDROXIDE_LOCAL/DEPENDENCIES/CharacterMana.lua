@@ -18,6 +18,14 @@ return function(ctx)
     host.AnchorPoint = Vector2.new(0.5, 0.5)
     host.Visible = false
     host.Parent = screen
+    local readyBorder = Instance.new("UIStroke")
+    readyBorder.Name = "SpellReadyBorder"
+    readyBorder.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
+    readyBorder.Thickness = 1.5
+    readyBorder.Color = Color3.fromRGB(190, 145, 255)
+    readyBorder.Enabled = false
+    readyBorder.Parent = host
+    local showReadyBorder = true
     local number = Instance.new("TextLabel")
     number.Name = "ManaAmount"
     number.BackgroundTransparency = 1
@@ -193,6 +201,8 @@ return function(ctx)
             end
         end
         activeOpacity = math.min(100, opacity + (highlightRanges and ready and readyOpacityBoost or 0))
+        readyBorder.Enabled = showReadyBorder and highlightRanges and ready
+        readyBorder.Transparency = 1 - activeOpacity / 100
     end
     local x, y, width, height = 75, 0, 18, 160
     local source, copy, pairsToSync, sourceNodes = nil, nil, {}, {}
@@ -375,6 +385,11 @@ return function(ctx)
         Callback = function(value) showFixed50 = value end})
     rangesGroup:AddToggle("NivenxideManaFixed20", {Text = "Mostrar marca de 20%", Default = true,
         Callback = function(value) showFixed20 = value end})
+    rangesGroup:AddToggle("NivenxideManaReadyBorder", {Text = "Mudar contorno na % certa", Default = true,
+        Callback = function(value) showReadyBorder = value; if not value then readyBorder.Enabled = false end end})
+    rangesGroup:AddLabel("Cor do contorno na % certa"):AddColorPicker("NivenxideManaReadyBorderColor", {
+        Default = Color3.fromRGB(190, 145, 255),
+        Callback = function(value) readyBorder.Color = value end})
     rangesGroup:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate, Gelidus e snap Viribus", Default = true,
         Callback = function(value) showRanges = value end})
     rangesGroup:AddDropdown("NivenxideManaSpellMode", {Text = "Mostrar faixas", Default = 1,
