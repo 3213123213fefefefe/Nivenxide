@@ -29,6 +29,7 @@ return function(ctx)
     number.Parent = host
     local enabled, showNumber, opacity = true, false, 70
     local activeOpacity = opacity
+    local rangeOpacity, boundaryOpacity = 35, 85
     local spellMode, showRanges, highlightRanges = "Magia equipada", true, true
     local spellMana = ctx.spellMana
     local markers = {}
@@ -79,8 +80,10 @@ return function(ctx)
                 ready = ready or inRange
                 marker.band.Position = UDim2.new(0, 2, 1 - range[2] / 100, 0)
                 marker.band.Size = UDim2.new(1, -4, (range[2] - range[1]) / 100, 0)
-                marker.band.BackgroundTransparency = inRange and 0.78 or 0.92
+                marker.band.BackgroundTransparency = 1 - math.min(100,
+                    rangeOpacity + (highlightRanges and inRange and 15 or 0)) / 100
                 for _, edge in ipairs(marker.edges) do
+                    edge.BackgroundTransparency = 1 - boundaryOpacity / 100
                     edge.BackgroundColor3 = inRange and Color3.fromRGB(140, 255, 160)
                         or Color3.fromRGB(35, 25, 36)
                 end
@@ -207,8 +210,12 @@ return function(ctx)
         Callback = function(value) width = value end})
     group:AddSlider("NivenxideManaHeight", {Text = "Altura (pixels)", Default = 160, Min = 40, Max = 400, Rounding = 0,
         Callback = function(value) height = value end})
-    group:AddSlider("NivenxideManaOpacity", {Text = "Opacidade fora da faixa (%)", Default = 70, Min = 1, Max = 100, Rounding = 0,
+    group:AddSlider("NivenxideManaOpacity", {Text = "Opacidade da barra (%)", Default = 70, Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) opacity = value end})
+    group:AddSlider("NivenxideManaRangeOpacity", {Text = "Opacidade das faixas (%)", Default = 35, Min = 1, Max = 100, Rounding = 0,
+        Callback = function(value) rangeOpacity = value end})
+    group:AddSlider("NivenxideManaBoundaryOpacity", {Text = "Opacidade das linhas (%)", Default = 85, Min = 1, Max = 100, Rounding = 0,
+        Callback = function(value) boundaryOpacity = value end})
     group:AddToggle("NivenxideManaNumber", {Text = "Mostrar valor da mana", Default = false,
         Callback = function(value) showNumber = value end})
     group:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate e Gelidus", Default = true,
