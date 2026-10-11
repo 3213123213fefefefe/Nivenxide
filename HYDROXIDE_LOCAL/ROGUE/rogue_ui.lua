@@ -18989,7 +18989,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
             local current_spell_name, current_spell_mode = "Telorum", "Normal"
             local current_spell_adjust, current_spell_timeout = true, 3
-            local current_backfire_side, current_backfire_minimum, current_backfire_margin = "Auto", 1, 0.1
+            local current_backfire_side, current_backfire_minimum, current_backfire_margin = "Auto", 1, 5
             local current_action_type = "Equip Tool"
             local current_tool_name = ""
             local current_wait_dur = 0.15
@@ -19022,10 +19022,10 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 Callback = function(value) current_spell_timeout = value end})
             group_builder:AddDropdown("MacroBackfireSide", {Text = "Backfire: lado da faixa", Default = "Auto", Values = {"Auto", "Abaixo", "Acima"},
                 Callback = function(value) current_backfire_side = value end})
-            group_builder:AddSlider("MacroBackfireMinimum", {Text = "Backfire abaixo: mana minima (%)", Default = 1, Min = 0.1, Max = 20, Rounding = 1,
+            group_builder:AddSlider("MacroBackfireMinimum", {Text = "Backfire: minimo permitido (%)", Default = 1, Min = 0.1, Max = 20, Rounding = 1,
                 Callback = function(value) current_backfire_minimum = value end})
-            group_builder:AddSlider("MacroBackfireMargin", {Text = "Backfire: margem fora da faixa (%)", Default = 0.1, Min = 0.1, Max = 5, Rounding = 1,
-                Callback = function(value) current_backfire_margin = value end})
+            group_builder:AddSlider("MacroBackfireMargin", {Text = "Backfire: margem fora da faixa (%)", Default = 5, Min = 5, Max = 20, Rounding = 1,
+                Callback = function(value) current_backfire_margin = math.clamp(value, 5, 20) end})
             group_builder:AddLabel("Auto: Viribus/Armis acima; outras abaixo (ajustavel)")
             group_builder:AddLabel("Backfire alto: aguarda mana diminuir; timeout interrompe")
             group_builder:AddLabel("Normal/Snap: mana alta interrompe; ajuste falhou: interrompe")
