@@ -20406,6 +20406,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             do
                 local smartManaFactory = function(ctx)
     local enabled, busy, closed = false, false, false
+    local gateExtra = 2
     local mode, timeout, waitDecay, notify = "Corrigir e castar", 1.5, false, false
     local spells = {Gate = {normal = true, snap = true}, Gelidus = {normal = true, snap = true},
         Viribus = {normal = true, snap = true}, Armis = {normal = true, snap = true},
@@ -20417,6 +20418,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         Values = {"Corrigir e castar", "Somente bloquear"}, Callback = function(value) mode = value end})
     group:AddSlider("NivenxideSmartManaTimeout", {Text = "Tempo maximo para ajustar (s)", Default = 1.5,
         Min = 0.2, Max = 5, Rounding = 1, Callback = function(value) timeout = value end})
+    group:AddSlider("NivenxideSmartManaGateExtra", {Text = "Gate: mana extra acima do minimo (%)", Default = 2,
+        Min = 0, Max = 5, Rounding = 1, Callback = function(value) gateExtra = value end})
     group:AddToggle("NivenxideSmartManaDecay", {Text = "Esperar mana baixar se estiver alta", Default = false,
         Callback = function(value) waitDecay = value end})
     group:AddToggle("NivenxideSmartManaNotify", {Text = "Avisar quando o cast for bloqueado", Default = false,
@@ -20469,17 +20472,22 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local range = window()
             if not range then return false, "Faixa de mana indisponivel" end
             local function inside() return mana.Value >= range[1] and mana.Value <= range[2] end
-            if not inside() then
+            local function belowTarget()
+                local target = range[1]
+                if tool.Name == "Gate" then target = math.min(range[1] + gateExtra, (range[1] + range[2]) / 2) end
+                return mana.Value < target
+            end
+            if not inside() or (mode == "Corrigir e castar" and belowTarget()) then
                 if mode == "Somente bloquear" then return false, "Cast bloqueado: mana fora da faixa" end
                 if mana.Value > range[2] and not waitDecay then return false, "Cast bloqueado: mana acima da faixa" end
                 local deadline = ctx.clock() + timeout
-                while not inside() do
+                while not inside() or belowTarget() do
                     if not valid() or cooling() then return false, "Ajuste cancelado" end
                     if ctx.clock() >= deadline then return false, "Cast bloqueado: tempo limite do ajuste" end
                     if ctx.blocked(character) then return false, "Cast bloqueado: nao pode carregar/castar agora" end
                     range = window()
                     if not range then return false, "Faixa de mana indisponivel" end
-                    if mana.Value < range[1] then
+                    if belowTarget() then
                         if not ctx.canCharge() then return false, "Cast bloqueado: controle de mana ainda nao detectado" end
                         if not charged then charged = true; ctx.charge() end
                     else
