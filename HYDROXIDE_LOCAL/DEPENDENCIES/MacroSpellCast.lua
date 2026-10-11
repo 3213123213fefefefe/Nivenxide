@@ -25,14 +25,15 @@ return function(ctx)
                 if side == "Auto" then
                     side = (action.spell == "Viribus" or action.spell == "Armis") and "Acima" or "Abaixo"
                 end
-                local margin = math.clamp(tonumber(action.backfireMargin) or 0.1, 0.1, 5)
+                local margin = math.clamp(tonumber(action.backfireMargin) or 5, 5, 20)
                 if side == "Acima" then
                     local minimum = normal[2] + margin
                     if minimum > 100 then return end
                     return {minimum, math.min(100, minimum + 1)}
                 end
-                local minimum = math.clamp(tonumber(action.backfireMinimum) or 1, 0.1, 20)
-                local maximum = math.min(minimum + 1, normal[1] - margin)
+                local floor = math.clamp(tonumber(action.backfireMinimum) or 1, 0.1, 20)
+                local maximum = normal[1] - margin
+                local minimum = math.max(floor, maximum - 1)
                 if maximum < minimum then return end
                 return {minimum, maximum}
             end
