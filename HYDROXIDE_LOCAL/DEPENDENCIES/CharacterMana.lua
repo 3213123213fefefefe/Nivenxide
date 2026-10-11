@@ -51,7 +51,8 @@ return function(ctx)
     snapStatus.TextXAlignment = Enum.TextXAlignment.Left
     snapStatus.ZIndex = 1010
     snapStatus.Parent = host
-    local showSnap, showSnapReady, snapX, snapY, snapOpacity, snapSize = true, true, 8, 0, 85, 12
+    local showSnap, snapX, snapY, snapOpacity, snapSize = true, 8, 0, 70, 10
+    local snapDuration, snapStarted, snapCharacter = 8, nil, nil
     local collection = game:GetService("CollectionService")
     local enabled, showNumber, opacity = true, false, 70
     local activeOpacity = opacity
@@ -250,6 +251,16 @@ return function(ctx)
         intent.Visible = false
         if closed then return end
         local character = player.Character
+        if character ~= snapCharacter then
+            snapCharacter, snapStarted = character, nil
+        end
+        local cooling = character ~= nil and (character:FindFirstChild("SnapCool") ~= nil
+            or collection:HasTag(character, "SnapCool"))
+        if cooling then
+            snapStarted = snapStarted or os.clock()
+        else
+            snapStarted = nil
+        end
         local root = character and character:FindFirstChild("HumanoidRootPart")
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local camera = workspace.CurrentCamera
@@ -279,10 +290,10 @@ return function(ctx)
             parent = parent.Parent
         end
         local mana = character:FindFirstChild("Mana")
-        local cooling = character:FindFirstChild("SnapCool") ~= nil or collection:HasTag(character, "SnapCool")
-        snapStatus.Visible = showSnap and (cooling or showSnapReady)
-        snapStatus.Text = cooling and "Snap CD" or "Snap pronto"
-        snapStatus.TextColor3 = cooling and Color3.fromRGB(255, 150, 120) or Color3.fromRGB(255, 255, 255)
+        snapStatus.Visible = showSnap and cooling
+        local remaining = snapStarted and math.max(0, snapDuration - (os.clock() - snapStarted)) or 0
+        snapStatus.Text = cooling and (remaining > 0 and string.format("Snap CD · ~%.1fs", remaining) or "Snap CD") or ""
+        snapStatus.TextColor3 = Color3.fromRGB(225, 225, 225)
         snapStatus.Position = UDim2.new(1, snapX, 0.5, snapY)
         snapStatus.TextSize = snapSize
         snapStatus.TextTransparency = 1 - snapOpacity / 100
@@ -340,15 +351,15 @@ return function(ctx)
         Callback = function(value) intentY = value end})
     group:AddToggle("NivenxideManaSnapStatus", {Text = "Status de SnapCool ao lado da mana", Default = true,
         Callback = function(value) showSnap = value end})
-    group:AddToggle("NivenxideManaSnapReady", {Text = "Mostrar quando snap esta pronto", Default = true,
-        Callback = function(value) showSnapReady = value end})
+    group:AddSlider("NivenxideManaSnapDuration", {Text = "Duracao estimada do Snap CD (s)", Default = 8, Min = 1, Max = 60, Rounding = 1,
+        Callback = function(value) snapDuration = value end})
     group:AddSlider("NivenxideManaSnapX", {Text = "SnapCool: posicao horizontal", Default = 8, Min = -300, Max = 300, Rounding = 0,
         Callback = function(value) snapX = value end})
     group:AddSlider("NivenxideManaSnapY", {Text = "SnapCool: posicao vertical", Default = 0, Min = -300, Max = 300, Rounding = 0,
         Callback = function(value) snapY = value end})
-    group:AddSlider("NivenxideManaSnapOpacity", {Text = "SnapCool: opacidade (%)", Default = 85, Min = 1, Max = 100, Rounding = 0,
+    group:AddSlider("NivenxideManaSnapOpacity", {Text = "SnapCool: opacidade (%)", Default = 70, Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) snapOpacity = value end})
-    group:AddSlider("NivenxideManaSnapSize", {Text = "SnapCool: tamanho do texto", Default = 12, Min = 8, Max = 24, Rounding = 0,
+    group:AddSlider("NivenxideManaSnapSize", {Text = "SnapCool: tamanho do texto", Default = 10, Min = 8, Max = 24, Rounding = 0,
         Callback = function(value) snapSize = value end})
     group:AddLabel("Linhas dentro da barra; destaque de opacidade limitado a 100%")
     group:AddLabel("Horizontal negativo = esquerda; vertical positivo = baixo")
