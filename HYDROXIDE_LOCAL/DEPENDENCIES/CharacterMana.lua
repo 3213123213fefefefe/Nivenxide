@@ -1,6 +1,7 @@
 -- Read-only copy of the game's own mana widget, projected beside the local character.
 return function(ctx)
     local player, group = ctx.player, ctx.group
+    local rangesGroup, intentGroup, snapGroup = ctx.rangesGroup or group, ctx.intentGroup or group, ctx.snapGroup or group
     local gui = assert(player:FindFirstChildOfClass("PlayerGui"), "PlayerGui indisponivel")
     local old = gui:FindFirstChild("NivenxideCharacterMana")
     if old then old:Destroy() end
@@ -50,7 +51,7 @@ return function(ctx)
     snapStatus.TextStrokeTransparency = 0.35
     snapStatus.TextXAlignment = Enum.TextXAlignment.Left
     snapStatus.ZIndex = 1010
-    snapStatus.Parent = host
+    snapStatus.Parent = screen
     local showSnap, snapX, snapY, snapOpacity, snapSize = true, 8, 0, 70, 10
     local snapDurations, snapStarted, snapCharacter, snapOwner, lastEquipped = {}, nil, nil, nil, nil
     local collection = game:GetService("CollectionService")
@@ -249,6 +250,7 @@ return function(ctx)
     local function update()
         host.Visible = false
         intent.Visible = false
+        snapStatus.Visible = false
         if closed then return end
         local character = player.Character
         if character ~= snapCharacter then
@@ -275,6 +277,15 @@ return function(ctx)
         intent.Visible = showIntent and tool ~= nil
         intent.Text = tool and tool.Name or ""
         intent.Position = UDim2.fromOffset(point.X + intentX, point.Y + intentY)
+        snapStatus.Visible = showSnap and cooling
+        local duration = snapOwner and snapDurations[snapOwner]
+        local remaining = snapStarted and duration and math.max(0, duration - (os.clock() - snapStarted)) or 0
+        snapStatus.Text = cooling and (remaining > 0 and string.format("Snap CD · ~%.1fs", remaining) or "Snap CD") or ""
+        snapStatus.TextColor3 = Color3.fromRGB(225, 225, 225)
+        snapStatus.Position = UDim2.fromOffset(point.X + x + width / 2 + snapX, point.Y + y + snapY)
+        snapStatus.TextSize = snapSize
+        snapStatus.TextTransparency = 1 - snapOpacity / 100
+        snapStatus.TextStrokeTransparency = 1 - 0.65 * snapOpacity / 100
         if not enabled then return end
         if os.clock() >= nextScan then
             nextScan = os.clock() + 0.5
@@ -294,15 +305,6 @@ return function(ctx)
             parent = parent.Parent
         end
         local mana = character:FindFirstChild("Mana")
-        snapStatus.Visible = showSnap and cooling
-        local duration = snapOwner and snapDurations[snapOwner]
-        local remaining = snapStarted and duration and math.max(0, duration - (os.clock() - snapStarted)) or 0
-        snapStatus.Text = cooling and (remaining > 0 and string.format("Snap CD · ~%.1fs", remaining) or "Snap CD") or ""
-        snapStatus.TextColor3 = Color3.fromRGB(225, 225, 225)
-        snapStatus.Position = UDim2.new(1, snapX, 0.5, snapY)
-        snapStatus.TextSize = snapSize
-        snapStatus.TextTransparency = 1 - snapOpacity / 100
-        snapStatus.TextStrokeTransparency = 1 - 0.65 * snapOpacity / 100
         updateRanges(character, mana)
         sync()
         host.Size = UDim2.fromOffset(width, height)
@@ -325,36 +327,36 @@ return function(ctx)
         Callback = function(value) height = value end})
     group:AddSlider("NivenxideManaOpacity", {Text = "Opacidade da barra (%)", Default = 70, Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) opacity = value end})
-    group:AddSlider("NivenxideManaRangeOpacity", {Text = "Opacidade das faixas (%)", Default = 35, Min = 1, Max = 100, Rounding = 0,
+    rangesGroup:AddSlider("NivenxideManaRangeOpacity", {Text = "Opacidade das faixas (%)", Default = 35, Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) rangeOpacity = value end})
-    group:AddSlider("NivenxideManaBoundaryOpacity", {Text = "Opacidade das linhas (%)", Default = 85, Min = 1, Max = 100, Rounding = 0,
+    rangesGroup:AddSlider("NivenxideManaBoundaryOpacity", {Text = "Opacidade das linhas (%)", Default = 85, Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) boundaryOpacity = value end})
     group:AddToggle("NivenxideManaNumber", {Text = "Mostrar valor da mana", Default = false,
         Callback = function(value) showNumber = value end})
-    group:AddToggle("NivenxideManaFixed50", {Text = "Mostrar marca de 50%", Default = true,
+    rangesGroup:AddToggle("NivenxideManaFixed50", {Text = "Mostrar marca de 50%", Default = true,
         Callback = function(value) showFixed50 = value end})
-    group:AddToggle("NivenxideManaFixed20", {Text = "Mostrar marca de 20%", Default = true,
+    rangesGroup:AddToggle("NivenxideManaFixed20", {Text = "Mostrar marca de 20%", Default = true,
         Callback = function(value) showFixed20 = value end})
-    group:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate, Gelidus e snap Viribus", Default = true,
+    rangesGroup:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate, Gelidus e snap Viribus", Default = true,
         Callback = function(value) showRanges = value end})
-    group:AddDropdown("NivenxideManaSpellMode", {Text = "Mostrar faixas", Default = 1,
+    rangesGroup:AddDropdown("NivenxideManaSpellMode", {Text = "Mostrar faixas", Default = 1,
         Values = {"Magia equipada", "Gate", "Gelidus", "Gate + Gelidus", "Snap Viribus", "Todas", "Snap Viribus + Snap Gate"},
         Callback = function(value) spellMode = value end})
-    group:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa", Default = true,
+    rangesGroup:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa", Default = true,
         Callback = function(value) highlightRanges = value end})
-    group:AddSlider("NivenxideManaReadyOpacityBoost", {Text = "Aumento de opacidade na faixa certa (%)", Default = 15, Min = 0, Max = 100, Rounding = 0,
+    rangesGroup:AddSlider("NivenxideManaReadyOpacityBoost", {Text = "Aumento de opacidade na faixa certa (%)", Default = 15, Min = 0, Max = 100, Rounding = 0,
         Callback = function(value) readyOpacityBoost = value end})
-    group:AddSlider("NivenxideManaViribusSnapMin", {Text = "Inicio da marcacao snap Viribus (%)", Default = 55, Min = 0, Max = 100, Rounding = 0,
+    rangesGroup:AddSlider("NivenxideManaViribusSnapMin", {Text = "Inicio da marcacao snap Viribus (%)", Default = 55, Min = 0, Max = 100, Rounding = 0,
         Callback = function(value) viribusSnapMin = value end})
-    group:AddSlider("NivenxideManaViribusSnapMax", {Text = "Fim da marcacao snap Viribus (%)", Default = 70, Min = 0, Max = 100, Rounding = 0,
+    rangesGroup:AddSlider("NivenxideManaViribusSnapMax", {Text = "Fim da marcacao snap Viribus (%)", Default = 70, Min = 0, Max = 100, Rounding = 0,
         Callback = function(value) viribusSnapMax = value end})
-    group:AddToggle("NivenxideSelfIntent", {Text = "Item equipado abaixo do personagem", Default = true,
+    intentGroup:AddToggle("NivenxideSelfIntent", {Text = "Item equipado abaixo do personagem", Default = true,
         Callback = function(value) showIntent = value; if not value then intent.Visible = false end end})
-    group:AddSlider("NivenxideSelfIntentX", {Text = "Item equipado: posicao horizontal", Default = 0, Min = -400, Max = 400, Rounding = 0,
+    intentGroup:AddSlider("NivenxideSelfIntentX", {Text = "Item equipado: posicao horizontal", Default = 0, Min = -400, Max = 400, Rounding = 0,
         Callback = function(value) intentX = value end})
-    group:AddSlider("NivenxideSelfIntentY", {Text = "Item equipado: posicao vertical", Default = 100, Min = -300, Max = 400, Rounding = 0,
+    intentGroup:AddSlider("NivenxideSelfIntentY", {Text = "Item equipado: posicao vertical", Default = 100, Min = -300, Max = 400, Rounding = 0,
         Callback = function(value) intentY = value end})
-    group:AddToggle("NivenxideManaSnapStatus", {Text = "Status de SnapCool ao lado da mana", Default = true,
+    snapGroup:AddToggle("NivenxideManaSnapStatus", {Text = "Status de SnapCool ao lado da mana", Default = true,
         Callback = function(value) showSnap = value end})
     local snapSpells = spellMana and spellMana.spellNames and spellMana.spellNames() or {"Gate", "Gelidus", "Viribus"}
     local snapControls, selectedSnapSpell = {}, "Gate"
@@ -364,26 +366,26 @@ return function(ctx)
             if control.SetVisible then control:SetVisible(spell == name) end
         end
     end
-    group:AddDropdown("NivenxideManaSnapConfigSpell", {Text = "Configurar CD de snap da spell", Default = "Gate",
+    snapGroup:AddDropdown("NivenxideManaSnapConfigSpell", {Text = "Configurar CD de snap da spell", Default = "Gate",
         Values = snapSpells, Callback = selectSnapSpell})
     for _, name in ipairs(snapSpells) do
         local spell = name
         snapDurations[spell] = 8
-        snapControls[spell] = group:AddSlider("NivenxideManaSnapCD_" .. spell, {
+        snapControls[spell] = snapGroup:AddSlider("NivenxideManaSnapCD_" .. spell, {
             Text = "Snap " .. spell .. ": CD estimado (s)", Default = 8, Min = 0.1, Max = 120, Rounding = 1,
             Callback = function(value) snapDurations[spell] = value end})
     end
     selectSnapSpell(selectedSnapSpell)
-    group:AddLabel("Contagem estimada pela spell equipada ao iniciar SnapCool")
-    group:AddSlider("NivenxideManaSnapX", {Text = "SnapCool: posicao horizontal", Default = 8, Min = -300, Max = 300, Rounding = 0,
+    snapGroup:AddLabel("Contagem estimada pela spell equipada ao iniciar SnapCool")
+    snapGroup:AddSlider("NivenxideManaSnapX", {Text = "SnapCool: posicao horizontal", Default = 8, Min = -300, Max = 300, Rounding = 0,
         Callback = function(value) snapX = value end})
-    group:AddSlider("NivenxideManaSnapY", {Text = "SnapCool: posicao vertical", Default = 0, Min = -300, Max = 300, Rounding = 0,
+    snapGroup:AddSlider("NivenxideManaSnapY", {Text = "SnapCool: posicao vertical", Default = 0, Min = -300, Max = 300, Rounding = 0,
         Callback = function(value) snapY = value end})
-    group:AddSlider("NivenxideManaSnapOpacity", {Text = "SnapCool: opacidade (%)", Default = 70, Min = 1, Max = 100, Rounding = 0,
+    snapGroup:AddSlider("NivenxideManaSnapOpacity", {Text = "SnapCool: opacidade (%)", Default = 70, Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) snapOpacity = value end})
-    group:AddSlider("NivenxideManaSnapSize", {Text = "SnapCool: tamanho do texto", Default = 10, Min = 8, Max = 24, Rounding = 0,
+    snapGroup:AddSlider("NivenxideManaSnapSize", {Text = "SnapCool: tamanho do texto", Default = 10, Min = 8, Max = 24, Rounding = 0,
         Callback = function(value) snapSize = value end})
-    group:AddLabel("Linhas dentro da barra; destaque de opacidade limitado a 100%")
+    rangesGroup:AddLabel("Linhas dentro da barra; destaque de opacidade limitado a 100%")
     group:AddLabel("Horizontal negativo = esquerda; vertical positivo = baixo")
     local connection = ctx.utility:Connection(game:GetService("RunService").RenderStepped, update)
     local function cleanup()
