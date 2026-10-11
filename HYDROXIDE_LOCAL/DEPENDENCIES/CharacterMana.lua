@@ -89,12 +89,16 @@ return function(ctx)
         for _, marker in ipairs(markers) do
             local equipped = character:FindFirstChild(marker.name)
             local selected = spellMode == marker.name or spellMode == "Todas"
+                or spellMode == "Snap Viribus + Snap Gate" and (marker.name == "Viribus" or marker.name == "Gate")
                 or spellMode == "Snap Viribus" and marker.name == "Viribus"
                 or spellMode == "Gate + Gelidus" and (marker.name == "Gate" or marker.name == "Gelidus")
                 or spellMode == "Magia equipada" and equipped ~= nil
             local normal, snap
             if spellMana then normal, snap = spellMana.ranges(marker.name, character) end
             local range = marker.snap and snap or normal
+            if spellMode == "Snap Viribus + Snap Gate" and marker.name == "Gate" then
+                range = snap
+            end
             local visible = showRanges and selected and range ~= nil
             marker.band.Visible = visible
             if visible then
@@ -243,7 +247,7 @@ return function(ctx)
     group:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate, Gelidus e snap Viribus", Default = true,
         Callback = function(value) showRanges = value end})
     group:AddDropdown("NivenxideManaSpellMode", {Text = "Mostrar faixas", Default = 1,
-        Values = {"Magia equipada", "Gate", "Gelidus", "Gate + Gelidus", "Snap Viribus", "Todas"},
+        Values = {"Magia equipada", "Gate", "Gelidus", "Gate + Gelidus", "Snap Viribus", "Todas", "Snap Viribus + Snap Gate"},
         Callback = function(value) spellMode = value end})
     group:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa (+15)", Default = true,
         Callback = function(value) highlightRanges = value end})
