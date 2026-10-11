@@ -30,6 +30,7 @@ return function(ctx)
     local enabled, showNumber, opacity = true, false, 70
     local activeOpacity = opacity
     local rangeOpacity, boundaryOpacity = 35, 85
+    local viribusSnapMin, viribusSnapMax = 55, 70
     local spellMode, showRanges, highlightRanges = "Magia equipada", true, true
     local spellMana = ctx.spellMana
     local fixedDetails = {}
@@ -115,6 +116,12 @@ return function(ctx)
             local normal, snap
             if spellMana then normal, snap = spellMana.ranges(marker.name, character) end
             local range = marker.snap and snap or normal
+            if marker.name == "Viribus" and marker.snap and range then
+                -- Visual calibration from the reference; spell casting rules stay unchanged.
+                local bonus = math.max(0, 60 - range[1])
+                range = {math.max(0, math.min(viribusSnapMin, viribusSnapMax) - bonus),
+                    math.min(100, math.max(viribusSnapMin, viribusSnapMax) + bonus)}
+            end
             if spellMode == "Snap Viribus + Snap Gate" and marker.name == "Gate" then
                 range = snap
             end
@@ -270,6 +277,10 @@ return function(ctx)
         Callback = function(value) spellMode = value end})
     group:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa (+15)", Default = true,
         Callback = function(value) highlightRanges = value end})
+    group:AddSlider("NivenxideManaViribusSnapMin", {Text = "Inicio da marcacao snap Viribus (%)", Default = 55, Min = 0, Max = 100, Rounding = 0,
+        Callback = function(value) viribusSnapMin = value end})
+    group:AddSlider("NivenxideManaViribusSnapMax", {Text = "Fim da marcacao snap Viribus (%)", Default = 70, Min = 0, Max = 100, Rounding = 0,
+        Callback = function(value) viribusSnapMax = value end})
     group:AddLabel("Linhas dentro da barra; destaque de opacidade limitado a 100%")
     group:AddLabel("Horizontal negativo = esquerda; vertical positivo = baixo")
     local connection = ctx.utility:Connection(game:GetService("RunService").RenderStepped, update)
