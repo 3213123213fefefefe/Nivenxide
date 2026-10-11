@@ -45,6 +45,25 @@ return function(ctx)
         line.Active = false
         line.Parent = host
         fixedDetails[#fixedDetails + 1] = line
+        if percent == 50 then
+            for _, detail in ipairs({
+                {0, 0, 0, 3}, {1, 0, 0, 3}, {0.5, 0, 0, 2},
+                {0.5, -3, -3, 2}, {0.5, 3, -3, 2},
+                {0.5, -3, 3, 2}, {0.5, 3, 3, 2}}) do
+                local ornament = Instance.new("Frame")
+                ornament.Name = "MiddleManaDecoration"
+                ornament.BorderSizePixel = 0
+                ornament.AnchorPoint = Vector2.new(0.5, 0.5)
+                ornament.Position = UDim2.new(detail[1], detail[2], 0.5, detail[3])
+                ornament.Size = UDim2.fromOffset(detail[4], detail[4])
+                ornament.Rotation = 45
+                ornament.BackgroundColor3 = Color3.fromRGB(35, 25, 36)
+                ornament.ZIndex = 1004
+                ornament.Active = false
+                ornament.Parent = line
+                fixedDetails[#fixedDetails + 1] = ornament
+            end
+        end
 
     end
     local markers = {}
