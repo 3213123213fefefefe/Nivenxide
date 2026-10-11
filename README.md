@@ -137,3 +137,14 @@ Misc > Snap Gelidus Anti Backfire (ligado por padrao) bloqueia RightClick com Ge
 equipado fora da faixa de snap, sem alterar cast normal. Durante SnapCool (tag
 ou marcador no personagem), o M2 passa normalmente, seguindo a excecao do guard de Viribus. PhilosophersStone dispensa
 o bloqueio, como no guard de Gate. A faixa base de snap Gelidus e 85-100%.
+
+## Cast de magia com checagem de mana nos macros
+Macros > Macro Builder > Action Type: Cast Spell (Mana Check). Selecione magia,
+Normal/Snap, Carregar mana se estiver abaixo e limite de ajuste. Add Action salva
+esses valores na etapa; Add Equipped usa a magia equipada. Coloque a etapa antes
+das demais para condicionar a sequencia inteira. A etapa equipa, verifica e tenta
+castar na faixa ajustada pelos bonus; nunca roda em paralelo com as etapas seguintes.
+Mana alta, falta de mana com ajuste desligado, timeout, stun, desequipamento, morte,
+respawn ou cancelamento interrompem a sequencia e encerram o carregamento iniciado.
+Telorum: base normal 80-90%, snap 75-85%. Verificacao local de mana nao confirma
+que o servidor aceitou o cast nem que a magia estava fora do cooldown normal.
