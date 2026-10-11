@@ -374,7 +374,7 @@ return function(ctx)
         snapControls[spell] = snapGroup:AddInput("NivenxideManaSnapCD_" .. spell, {
             Text = "Snap " .. spell .. ": CD estimado (s)", Default = "8", Finished = true,
             Callback = function(value)
-                local seconds = tonumber(tostring(value):gsub(",", "."))
+                local seconds = tonumber((tostring(value):gsub(",", ".")))
                 if seconds and seconds >= 0.1 and seconds <= 120 then
                     snapDurations[spell] = seconds
                 else
