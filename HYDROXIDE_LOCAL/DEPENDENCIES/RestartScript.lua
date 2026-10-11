@@ -8,7 +8,7 @@ return function(ctx)
         task.spawn(function()
             local ok, err = pcall(function()
                 local url = "https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/main/loader.lua"
-                    .. "?restart=" .. tostring(os.time())
+                    .. "?restart=" .. tostring(os.time()) .. "-" .. tostring(math.floor(os.clock() * 1000))
                 local source = game:HttpGet(url, true)
                 local loader, compileError = loadstring(source, "@NivenxideRestartLoader")
                 assert(loader, compileError)
@@ -18,6 +18,7 @@ return function(ctx)
                 env.NivenxideRestartConfig = config
                 ctx.unload()
                 task.wait(0.6) -- Let pending cleanup tasks finish before a new session.
+                env.NivenxideForceUpdate = true
                 loader()
             end)
             env.NivenxideRestarting = false
