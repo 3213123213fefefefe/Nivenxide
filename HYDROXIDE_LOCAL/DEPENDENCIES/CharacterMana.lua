@@ -371,9 +371,16 @@ return function(ctx)
     for _, name in ipairs(snapSpells) do
         local spell = name
         snapDurations[spell] = 8
-        snapControls[spell] = snapGroup:AddSlider("NivenxideManaSnapCD_" .. spell, {
-            Text = "Snap " .. spell .. ": CD estimado (s)", Default = 8, Min = 0.1, Max = 120, Rounding = 1,
-            Callback = function(value) snapDurations[spell] = value end})
+        snapControls[spell] = snapGroup:AddInput("NivenxideManaSnapCD_" .. spell, {
+            Text = "Snap " .. spell .. ": CD estimado (s)", Default = "8", Finished = true,
+            Callback = function(value)
+                local seconds = tonumber(tostring(value):gsub(",", "."))
+                if seconds and seconds >= 0.1 and seconds <= 120 then
+                    snapDurations[spell] = seconds
+                else
+                    ctx.library:Notify("Digite um CD entre 0.1 e 120 segundos", 4)
+                end
+            end})
     end
     selectSnapSpell(selectedSnapSpell)
     snapGroup:AddLabel("Contagem estimada pela spell equipada ao iniciar SnapCool")
