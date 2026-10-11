@@ -150,13 +150,10 @@ Telorum: base normal 80-90%, snap 75-85%. Verificacao local de mana nao confirma
 que o servidor aceitou o cast nem que a magia estava fora do cooldown normal.
 
 ### Modo Backfire nos macros
-Tipo de cast tambem aceita Backfire (cast normal deliberadamente fora da faixa).
-Auto: Viribus e Armis usam acima do limite normal ajustado, conforme regra informada
-pelo usuario; demais usam abaixo. Lado pode ser alterado por etapa (Auto/Abaixo/Acima).
-Acima: alvo comeca no limite superior + margem (padrao 0.1 ponto percentual).
-Abaixo: alvo minimo configuravel (padrao 1%). Uma janela de ate 1 ponto acima do alvo
-permite observar a mana a cada frame, sempre fora da faixa normal. Com ajuste ligado,
-carrega se baixa ou desliga carregamento e espera decaimento natural se alta; timeout
-aborta as proximas etapas. Nunca forca backfire quando nao existe faixa calculada
-fora de 0-100%, nem com PhilosophersStone. Minimo real de ativacao/backfire deve
-ser confirmado em jogo por magia; pode ser corrigido nos controles por etapa.
+Backfire usa cast normal fora da faixa: Auto escolhe acima para Viribus/Armis e
+abaixo para outras magias, com lado ajustavel. A margem minima e padrao passou
+para 5 pontos percentuais; etapas antigas com margem menor tambem usam pelo menos 5.
+Acima mira limite superior +5; abaixo mira limite inferior -5. Uma janela de 1 ponto
+para o lado de fora da faixa permite observar mana por frame, mantendo a margem.
+Com ajuste ligado, carrega ou espera decaimento natural; timeout interrompe a sequencia.
+Nao tenta se nao existe faixa calculada valida, nem com PhilosophersStone.
