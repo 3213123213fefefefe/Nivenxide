@@ -20403,6 +20403,134 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
             shared.keybinds_window = keybinds_window
 
+            do
+                local smartManaFactory = function(ctx)
+    local enabled, busy, closed = false, false, false
+    local mode, timeout, waitDecay, notify = "Corrigir e castar", 1.5, false, false
+    local spells = {Gate = {normal = true, snap = true}, Gelidus = {normal = true, snap = true},
+        Viribus = {normal = true, snap = true}, Armis = {normal = true, snap = true},
+        Telorum = {normal = true, snap = true}, Ignis = {normal = true, snap = true}}
+    local group = ctx.group
+    group:AddToggle("NivenxideSmartMana", {Text = "Ajustar mana antes de castar", Default = false,
+        Callback = function(value) enabled = value end})
+    group:AddDropdown("NivenxideSmartManaMode", {Text = "Fora da faixa correta", Default = 1,
+        Values = {"Corrigir e castar", "Somente bloquear"}, Callback = function(value) mode = value end})
+    group:AddSlider("NivenxideSmartManaTimeout", {Text = "Tempo maximo para ajustar (s)", Default = 1.5,
+        Min = 0.2, Max = 5, Rounding = 1, Callback = function(value) timeout = value end})
+    group:AddToggle("NivenxideSmartManaDecay", {Text = "Esperar mana baixar se estiver alta", Default = false,
+        Callback = function(value) waitDecay = value end})
+    group:AddToggle("NivenxideSmartManaNotify", {Text = "Avisar quando o cast for bloqueado", Default = false,
+        Callback = function(value) notify = value end})
+    for _, name in ipairs({"Gate", "Gelidus", "Viribus", "Armis", "Telorum", "Ignis"}) do
+        local spell = name
+        group:AddToggle("NivenxideSmartManaM1_" .. spell, {Text = spell .. ": M1", Default = true,
+            Callback = function(value) spells[spell].normal = value end})
+        group:AddToggle("NivenxideSmartManaSnap_" .. spell, {Text = spell .. ": snap", Default = true,
+            Callback = function(value) spells[spell].snap = value end})
+    end
+    group:AddLabel("Se necessario, carregue mana uma vez para detectar o controle do jogo.")
+    local nextNotice = 0
+    local function message(reason)
+        if notify and not closed and ctx.clock() >= nextNotice then
+            nextNotice = ctx.clock() + 2
+            pcall(ctx.notify, reason)
+        end
+    end
+    ctx.onUnload(function() closed = true end)
+    return function(snap, cast)
+        if not enabled or closed then return false end
+        local character = ctx.player.Character
+        local tool = character and character:FindFirstChildOfClass("Tool")
+        local options = tool and spells[tool.Name]
+        if not options or not options[snap and "snap" or "normal"] then return false end
+        -- One request at a time. Repeated clicks do not queue extra casts.
+        if busy then return true end
+        busy = true
+        local charged = false
+        local function stop()
+            if charged then charged = false; ctx.stopCharge() end
+        end
+        local ok, passed, reason = pcall(function()
+            local mana = character:FindFirstChild("Mana")
+            local hum = character:FindFirstChildOfClass("Humanoid")
+            local function valid()
+                return enabled and not closed and ctx.active() and ctx.player.Character == character
+                    and hum and hum.Health > 0 and tool.Parent == character
+                    and options[snap and "snap" or "normal"]
+            end
+            local function window()
+                local normal, snapRange = ctx.ranges(tool.Name, character)
+                if snap then return snapRange end
+                return normal
+            end
+            local function cooling() return snap and ctx.snapCooldown(character) end
+            if not mana or not valid() then return false, "Cast cancelado: personagem ou mana indisponivel" end
+            if cooling() then return false, "Snap em cooldown" end
+            local range = window()
+            if not range then return false, "Faixa de mana indisponivel" end
+            local function inside() return mana.Value >= range[1] and mana.Value <= range[2] end
+            if not inside() then
+                if mode == "Somente bloquear" then return false, "Cast bloqueado: mana fora da faixa" end
+                if mana.Value > range[2] and not waitDecay then return false, "Cast bloqueado: mana acima da faixa" end
+                local deadline = ctx.clock() + timeout
+                while not inside() do
+                    if not valid() or cooling() then return false, "Ajuste cancelado" end
+                    if ctx.clock() >= deadline then return false, "Cast bloqueado: tempo limite do ajuste" end
+                    if ctx.blocked(character) then return false, "Cast bloqueado: nao pode carregar/castar agora" end
+                    range = window()
+                    if not range then return false, "Faixa de mana indisponivel" end
+                    if mana.Value < range[1] then
+                        if not ctx.canCharge() then return false, "Cast bloqueado: controle de mana ainda nao detectado" end
+                        if not charged then charged = true; ctx.charge() end
+                    else
+                        stop()
+                        if not waitDecay then return false, "Cast bloqueado: mana passou da faixa" end
+                    end
+                    ctx.wait()
+                end
+                stop()
+                ctx.wait() -- Let the local mana value settle after stopping charge.
+                range = window()
+            end
+            if not valid() or cooling() or ctx.blocked(character) or not range or not inside() then
+                return false, "Cast bloqueado: mana ou personagem mudou durante o ajuste"
+            end
+            cast()
+            return true
+        end)
+        local cleaned = pcall(stop)
+        busy = false
+        if not ok then message("Ajuste de mana falhou: " .. tostring(passed))
+        elseif not cleaned then message("Falha ao encerrar carregamento de mana")
+        elseif not passed then message(reason or "Cast bloqueado") end
+        return true
+    end
+end
+
+                cheat_client.smart_mana = smartManaFactory({
+                    group = Tabs.Combat:AddRightGroupbox("Ajuste de mana para cast"), player = plr,
+                    clock = os.clock, wait = task.wait,
+                    active = function() return shared and not shared.is_unloading end,
+                    ranges = function(name, character)
+                        if cheat_client.spell_mana then return cheat_client.spell_mana.ranges(name, character) end
+                    end,
+                    snapCooldown = function(character)
+                        return cs:HasTag(character, "SnapCool") or FindFirstChild(character, "SnapCool") ~= nil
+                    end,
+                    blocked = function(character)
+                        for _, name in ipairs({"Grabbed", "Climbing", "ClimbCoolDown", "ManaStop", "SpellBlocking", "ActiveCast", "Stun"}) do
+                            if FindFirstChild(character, name) then return true end
+                        end
+                        return cs:HasTag(character, "Knocked") or cs:HasTag(character, "Unconscious")
+                    end,
+                    canCharge = function() return mana_remote ~= nil end,
+                    charge = function() utility:charge_mana() end,
+                    stopCharge = function() utility:decharge_mana() end,
+                    notify = function(reason) library:Notify(reason, 3) end,
+                    onUnload = function(callback) library:OnUnload(callback) end
+                })
+            end
+
             local manaOK, manaError = pcall(function()
                 local spellFactory, spellError = loadstring(HXD_LOCAL_READ("DEPENDENCIES/SpellMana.lua"))
                 assert(spellFactory, spellError)
@@ -21885,6 +22013,14 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         end
                     end
                     
+                    if shared and not shared.is_unloading and remotes_folder and Event.Parent == remotes_folder
+                        and (Event.Name == "LeftClick" or Event.Name == "RightClick") and cheat_client.smart_mana then
+                        local castArgs = table.pack(...)
+                        if cheat_client.smart_mana(Event.Name == "RightClick", function()
+                            old_remote(Event, table.unpack(castArgs, 1, castArgs.n))
+                        end) then return end
+                    end
+
                 	if shared and Toggles and Toggles.gate_anti_backfire and Toggles.gate_anti_backfire.Value and tostring(Event):match("RightClick") then
                         if plr.Character then
                             if FindFirstChild(plr.Character, 'Gate') then
