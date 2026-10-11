@@ -78,8 +78,8 @@ return function(ctx)
             if visible then
                 local inRange = mana ~= nil and spellMana.inside(mana.Value, range)
                 ready = ready or inRange
-                marker.band.Position = UDim2.new(0, 2, 1 - range[2] / 100, 0)
-                marker.band.Size = UDim2.new(1, -4, (range[2] - range[1]) / 100, 0)
+                marker.band.Position = UDim2.new(0, 0, 1 - range[2] / 100, 0)
+                marker.band.Size = UDim2.new(1, 0, (range[2] - range[1]) / 100, 0)
                 marker.band.BackgroundTransparency = 1 - math.min(100,
                     rangeOpacity + (highlightRanges and inRange and 15 or 0)) / 100
                 for _, edge in ipairs(marker.edges) do
