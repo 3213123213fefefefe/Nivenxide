@@ -1720,8 +1720,106 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
     end
     
     do
+        -- Drawing has four fixed fonts; rounded ESP text uses a compatible TextLabel wrapper.
+        local roundedFonts = {FredokaOne = Enum.Font.FredokaOne, Gotham = Enum.Font.Gotham, GothamBold = Enum.Font.GothamBold}
+        local roundedGui, roundedLabels = nil, 0
+        local textService = game:GetService("TextService")
+        local function createEspText(native)
+            local values = {}
+            for _, key in ipairs({"Text", "Size", "Font", "Position", "Color", "Visible", "Center", "Outline", "OutlineColor", "Transparency", "ZIndex"}) do
+                values[key] = native[key]
+            end
+            local label, removed, measured = nil, false, nil
+            local function bounds()
+                if not measured then
+                    measured = textService:GetTextSize(values.Text or "", values.Size or 13,
+                        roundedFonts[values.Font], Vector2.new(100000, 100000))
+                end
+                return measured
+            end
+            local function layout()
+                local size = bounds()
+                local position = values.Position or Vector2.new(0, 0)
+                label.AnchorPoint = Vector2.new(values.Center and 0.5 or 0, 0)
+                label.Position = UDim2.fromOffset(position.X, position.Y)
+                label.Size = UDim2.fromOffset(math.max(1, size.X + 2), math.max(1, size.Y))
+            end
+            local function apply(key)
+                if not label then return end
+                if key == "Text" then label.Text = values.Text or ""
+                elseif key == "Size" then label.TextSize = values.Size or 13
+                elseif key == "Font" then label.Font = roundedFonts[values.Font]
+                elseif key == "Color" then label.TextColor3 = values.Color
+                elseif key == "Visible" then label.Visible = values.Visible == true
+                elseif key == "OutlineColor" then label.TextStrokeColor3 = values.OutlineColor
+                elseif key == "ZIndex" then label.ZIndex = math.max(1, (values.ZIndex or 0) + 100) end
+                if key == "Transparency" or key == "Outline" then
+                    label.TextTransparency = 1 - (values.Transparency or 1)
+                    label.TextStrokeTransparency = values.Outline and label.TextTransparency or 1
+                end
+                if key == "Text" or key == "Size" or key == "Font" then measured = nil end
+                if key == "Text" or key == "Size" or key == "Font" or key == "Center" or key == "Position" then layout() end
+            end
+            local function ensureLabel()
+                if label then return end
+                if not roundedGui then
+                    roundedGui = Instance.new("ScreenGui")
+                    roundedGui.Name = "NivenxideRoundedESP"
+                    roundedGui.IgnoreGuiInset = true
+                    roundedGui.ResetOnSpawn = false
+                    roundedGui.DisplayOrder = 900
+                    roundedGui.Parent = plr:FindFirstChildOfClass("PlayerGui")
+                end
+                label = Instance.new("TextLabel")
+                label.Name = "ESPText"
+                label.BackgroundTransparency = 1
+                label.BorderSizePixel = 0
+                label.TextXAlignment = Enum.TextXAlignment.Left
+                label.TextYAlignment = Enum.TextYAlignment.Top
+                label.Parent = roundedGui
+                roundedLabels = roundedLabels + 1
+                for _, key in ipairs({"Text", "Size", "Font", "Color", "Visible", "OutlineColor", "Transparency", "Outline", "ZIndex"}) do apply(key) end
+            end
+            local function remove()
+                if removed then return end
+                removed = true
+                native:Remove()
+                if label then
+                    label:Destroy()
+                    roundedLabels = roundedLabels - 1
+                    if roundedLabels == 0 and roundedGui then roundedGui:Destroy(); roundedGui = nil end
+                end
+            end
+            return setmetatable({}, {
+                __index = function(_, key)
+                    if key == "Remove" or key == "Destroy" then return remove end
+                    if key == "TextBounds" and roundedFonts[values.Font] then return bounds() end
+                    if values[key] ~= nil then return values[key] end
+                    return native[key]
+                end,
+                __newindex = function(_, key, value)
+                    if removed then return end
+                    values[key] = value
+                    if roundedFonts[values.Font] then
+                        native.Visible = false
+                        ensureLabel()
+                        if key == "Font" then
+                            for _, property in ipairs({"Text", "Size", "Font", "Color", "Visible", "OutlineColor", "Transparency", "Outline", "ZIndex", "Position", "Center"}) do apply(property) end
+                        else apply(key) end
+                    else
+                        if label then label.Visible = false end
+                        if key == "Font" then
+                            -- Restore all state after switching back from a rounded font.
+                            for property, stored in pairs(values) do native[property] = stored end
+                        else native[key] = value end
+                    end
+                end
+            })
+        end
+
         function utility:Create(instanceType, instanceProperties, container)
             local instance = Drawing.new(instanceType)
+            if instanceType == "Text" and container == "esp" then instance = createEspText(instance) end
             local parent
             if instanceProperties["Parent"] or instanceProperties["parent"] then
                 parent = instanceProperties["Parent"] or instanceProperties["parent"]
@@ -7703,10 +7801,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local group_player = Tabs.Visuals:AddLeftGroupbox("Player ESP")
             local group_chams = Tabs.Visuals:AddRightGroupbox("Chams")
             Tabs.Interface:AddLeftGroupbox("Fonte do ESP de players"):AddDropdown("NivenxidePlayerEspFont", {Text = "Fonte do ESP", Default = 1,
-                Values = {"UI", "System", "Plex", "Monospace"},
+                Values = {"UI", "System", "Plex", "Monospace", "Fredoka One", "Gotham", "Gotham Bold"},
                 Callback = function(value)
                     local fallback = {UI = 0, System = 1, Plex = 2, Monospace = 3}
-                    local selectedFont = (Drawing.Fonts and Drawing.Fonts[value]) or fallback[value] or font
+                    local rounded = {["Fredoka One"] = "FredokaOne", Gotham = "Gotham", ["Gotham Bold"] = "GothamBold"}
+                    local selectedFont = rounded[value] or (Drawing.Fonts and Drawing.Fonts[value]) or fallback[value] or font
                     cheat_client.player_esp_font = selectedFont
                     for _, esp in pairs(cheat_client.player_esp_objects or {}) do
                         for _, name in ipairs({"name", "intent", "health_text", "mana_text", "status_effects", "racial", "racial_number", "observe_status"}) do
@@ -8019,10 +8118,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local group_ingredient_esp = Tabs.Visuals:AddRightGroupbox("Ingredient ESP")
             local group_ore_esp = Tabs.Visuals:AddLeftGroupbox("Ore ESP")
             Tabs.Interface:AddLeftGroupbox("Fonte do ESP de trinkets"):AddDropdown("NivenxideTrinketEspFont", {Text = "Fonte do ESP", Default = 1,
-                Values = {"UI", "System", "Plex", "Monospace"},
+                Values = {"UI", "System", "Plex", "Monospace", "Fredoka One", "Gotham", "Gotham Bold"},
                 Callback = function(value)
                     local fallback = {UI = 0, System = 1, Plex = 2, Monospace = 3}
-                    local selectedFont = (Drawing.Fonts and Drawing.Fonts[value]) or fallback[value] or font
+                    local rounded = {["Fredoka One"] = "FredokaOne", Gotham = "Gotham", ["Gotham Bold"] = "GothamBold"}
+                    local selectedFont = rounded[value] or (Drawing.Fonts and Drawing.Fonts[value]) or fallback[value] or font
                     cheat_client.trinket_esp_font = selectedFont
                     for _, esp in pairs(cheat_client.trinket_esp_objects or {}) do
                         for _, name in ipairs({"main_text"}) do
