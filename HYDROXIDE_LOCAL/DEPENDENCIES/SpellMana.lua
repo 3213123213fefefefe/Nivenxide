@@ -38,5 +38,11 @@ return function(ctx)
         local _, snap = ranges("Gelidus", character)
         return snap ~= nil and not inside(mana.Value, snap)
     end
-    return {ranges = ranges, inside = inside, blockGelidusSnap = blockGelidusSnap}
+    local function spellNames()
+        local names = {}
+        for name in pairs(ctx.spellCosts or defaults) do names[#names + 1] = name end
+        table.sort(names)
+        return names
+    end
+    return {ranges = ranges, inside = inside, blockGelidusSnap = blockGelidusSnap, spellNames = spellNames}
 end
