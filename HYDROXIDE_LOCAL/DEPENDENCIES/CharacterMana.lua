@@ -32,6 +32,37 @@ return function(ctx)
     local rangeOpacity, boundaryOpacity = 35, 85
     local spellMode, showRanges, highlightRanges = "Magia equipada", true, true
     local spellMana = ctx.spellMana
+    local fixedDetails = {}
+    for _, percent in ipairs({50, 25}) do
+        local line = Instance.new("Frame")
+        line.Name = "FixedMana" .. percent
+        line.BorderSizePixel = 0
+        line.AnchorPoint = Vector2.new(0, 0.5)
+        line.Position = UDim2.fromScale(0, 1 - percent / 100)
+        line.Size = UDim2.new(1, 0, 0, 1)
+        line.BackgroundColor3 = Color3.fromRGB(35, 25, 36)
+        line.ZIndex = 1003
+        line.Active = false
+        line.Parent = host
+        fixedDetails[#fixedDetails + 1] = line
+        for _, detail in ipairs({
+            {0, 0, 0, 4}, {1, 0, 0, 4}, {0.5, 0, 0, 3},
+            {0.5, -3, -3, 2}, {0.5, 3, -3, 2},
+            {0.5, -3, 3, 2}, {0.5, 3, 3, 2}}) do
+            local diamond = Instance.new("Frame")
+            diamond.Name = "FixedMana" .. percent .. "Ornament"
+            diamond.BorderSizePixel = 0
+            diamond.AnchorPoint = Vector2.new(0.5, 0.5)
+            diamond.Position = UDim2.new(detail[1], detail[2], 0.5, detail[3])
+            diamond.Size = UDim2.fromOffset(detail[4], detail[4])
+            diamond.Rotation = 45
+            diamond.BackgroundColor3 = Color3.fromRGB(35, 25, 36)
+            diamond.ZIndex = 1004
+            diamond.Active = false
+            diamond.Parent = line
+            fixedDetails[#fixedDetails + 1] = diamond
+        end
+    end
     local markers = {}
     for index, specification in ipairs({
         {"Gate", false, Color3.fromRGB(82, 48, 77)},
@@ -87,6 +118,10 @@ return function(ctx)
             color = specification[3], band = band, edges = edges, ornaments = ornaments}
     end
     local function updateRanges(character, mana)
+        -- Fixed reference ticks remain visible regardless of spell/range selection.
+        for _, detail in ipairs(fixedDetails) do
+            detail.BackgroundTransparency = 1 - boundaryOpacity / 100
+        end
         local ready = false
         for _, marker in ipairs(markers) do
             local equipped = character:FindFirstChild(marker.name)
