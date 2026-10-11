@@ -10,7 +10,7 @@ local ok, err = pcall(function()
     assert(type(readfile) == "function" and type(writefile) == "function"
         and type(isfile) == "function" and type(isfolder) == "function"
         and type(makefolder) == "function", "Executor sem suporte a arquivos locais")
-    local version = "c9e9d91ed15f472eb1d8b0a7394be065e5cafc75"
+    local version = "d328370c19cb3585429910eddcb6415e1d97ebe2"
     local base = "https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/" .. version .. "/"
     local root = "HYDROXIDE_LOCAL"
     local files = {
@@ -74,6 +74,8 @@ local ok, err = pcall(function()
     local path = root .. "/start.lua"
     local fn, compileError = loadstring(readfile(path), "@" .. path)
     assert(fn, compileError)
+    -- Installation is complete; the runtime can stay alive until unloaded.
+    env.NivenxideLoading = false
     fn()
 end)
 env.NivenxideLoading = false
