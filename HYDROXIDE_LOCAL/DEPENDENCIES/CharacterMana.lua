@@ -118,7 +118,7 @@ return function(ctx)
     end
     local markers = {}
     for index, specification in ipairs({
-        {"Gate", false, Color3.fromRGB(82, 48, 77)},
+        {"Gate", false, Color3.fromRGB(145, 65, 205)},
         {"Gelidus", false, Color3.fromRGB(100, 220, 255)},
         {"Gelidus", true, Color3.fromRGB(110, 140, 255)},
         {"Viribus", true, Color3.fromRGB(180, 90, 95)}}) do
