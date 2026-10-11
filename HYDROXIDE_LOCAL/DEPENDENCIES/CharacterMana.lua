@@ -21,13 +21,15 @@ return function(ctx)
     local number = Instance.new("TextLabel")
     number.Name = "ManaAmount"
     number.BackgroundTransparency = 1
-    number.Position = UDim2.new(0.5, -35, 1, 4)
+    number.AnchorPoint = Vector2.new(0.5, 0)
+    number.Visible = false
     number.Size = UDim2.fromOffset(70, 18)
     number.Font = Enum.Font.GothamMedium
     number.TextSize = 12
     number.TextColor3 = Color3.fromRGB(255, 255, 255)
     number.TextStrokeTransparency = 0.4
-    number.Parent = host
+    number.Parent = screen
+    local numberX, numberY, numberOpacity = 75, 84, 70
     local intent = Instance.new("TextLabel")
     intent.Name = "SelfEquippedItem"
     intent.BackgroundTransparency = 1
@@ -265,6 +267,7 @@ return function(ctx)
     end
     local function update()
         host.Visible = false
+        number.Visible = false
         intent.Visible = false
         snapStatus.Visible = false
         if closed then return end
@@ -314,6 +317,12 @@ return function(ctx)
         snapStatus.TextSize = snapSize
         snapStatus.TextTransparency = 1 - snapOpacity / 100
         snapStatus.TextStrokeTransparency = 1 - 0.65 * snapOpacity / 100
+        local mana = character:FindFirstChild("Mana")
+        number.Visible = showNumber and mana ~= nil
+        number.Text = mana and (tostring(math.floor(math.clamp(mana.Value, 0, 100) + 0.5)) .. "%") or ""
+        number.Position = UDim2.fromOffset(point.X + numberX, point.Y + numberY)
+        number.TextTransparency = 1 - numberOpacity / 100
+        number.TextStrokeTransparency = 1 - 0.6 * numberOpacity / 100
         if not enabled then return end
         if os.clock() >= nextScan then
             nextScan = os.clock() + 0.5
@@ -332,16 +341,11 @@ return function(ctx)
             if parent:IsA("ScreenGui") and not parent.Enabled then return end
             parent = parent.Parent
         end
-        local mana = character:FindFirstChild("Mana")
         updateRanges(character, mana)
         sync()
         host.Size = UDim2.fromOffset(width, height)
         host.Position = UDim2.fromOffset(point.X + x, point.Y + y)
         host.Visible = true
-        number.Visible = showNumber and mana ~= nil
-        number.Text = mana and tostring(math.floor(math.clamp(mana.Value, 0, 100) + 0.5)) or ""
-        number.TextTransparency = 1 - activeOpacity / 100
-        number.TextStrokeTransparency = 1 - 0.6 * activeOpacity / 100
     end
     group:AddToggle("NivenxideCharacterMana", {Text = "Copia da mana ao lado do personagem", Default = true,
         Callback = function(value) enabled = value; if not value then host.Visible = false end end})
@@ -359,8 +363,14 @@ return function(ctx)
         Callback = function(value) rangeOpacity = value end})
     rangesGroup:AddSlider("NivenxideManaBoundaryOpacity", {Text = "Opacidade das linhas (%)", Default = 85, Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) boundaryOpacity = value end})
-    group:AddToggle("NivenxideManaNumber", {Text = "Mostrar valor da mana", Default = false,
-        Callback = function(value) showNumber = value end})
+    group:AddToggle("NivenxideManaNumber", {Text = "Mostrar % da mana (independente da barra)", Default = false,
+        Callback = function(value) showNumber = value; if not value then number.Visible = false end end})
+    group:AddSlider("NivenxideManaNumberX", {Text = "% da mana: posicao horizontal", Default = 75, Min = -400, Max = 400, Rounding = 0,
+        Callback = function(value) numberX = value end})
+    group:AddSlider("NivenxideManaNumberY", {Text = "% da mana: posicao vertical", Default = 84, Min = -300, Max = 400, Rounding = 0,
+        Callback = function(value) numberY = value end})
+    group:AddSlider("NivenxideManaNumberOpacity", {Text = "% da mana: opacidade (%)", Default = 70, Min = 1, Max = 100, Rounding = 0,
+        Callback = function(value) numberOpacity = value end})
     rangesGroup:AddToggle("NivenxideManaFixed50", {Text = "Mostrar marca de 50%", Default = true,
         Callback = function(value) showFixed50 = value end})
     rangesGroup:AddToggle("NivenxideManaFixed20", {Text = "Mostrar marca de 20%", Default = true,
