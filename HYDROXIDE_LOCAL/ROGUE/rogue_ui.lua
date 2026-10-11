@@ -18498,6 +18498,10 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     return is_stunned() or FindFirstChild(char, "ManaStop") or FindFirstChild(char, "SpellBlocking")
                         or FindFirstChild(char, "ActiveCast") or cs:HasTag(char, "Knocked") or cs:HasTag(char, "Unconscious")
                 end,
+                noBackfire = function(char)
+                    local artifacts = FindFirstChild(char, "Artifacts")
+                    return artifacts and FindFirstChild(artifacts, "PhilosophersStone") ~= nil
+                end,
                 charge = function() utility:charge_mana() end,
                 stopCharge = function() utility:decharge_mana() end,
                 cast = function(snap, char)
@@ -18985,6 +18989,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
 
             local current_spell_name, current_spell_mode = "Telorum", "Normal"
             local current_spell_adjust, current_spell_timeout = true, 3
+            local current_backfire_side, current_backfire_minimum, current_backfire_margin = "Auto", 1, 0.1
             local current_action_type = "Equip Tool"
             local current_tool_name = ""
             local current_wait_dur = 0.15
@@ -19009,13 +19014,21 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             table.sort(macro_spells)
             group_builder:AddDropdown("MacroManaSpell", {Text = "Magia para cast na faixa", Default = "Telorum", Values = macro_spells,
                 Callback = function(value) current_spell_name = value end})
-            group_builder:AddDropdown("MacroManaCastMode", {Text = "Tipo de cast", Default = "Normal", Values = {"Normal", "Snap"},
+            group_builder:AddDropdown("MacroManaCastMode", {Text = "Tipo de cast", Default = "Normal", Values = {"Normal", "Snap", "Backfire"},
                 Callback = function(value) current_spell_mode = value end})
             group_builder:AddToggle("MacroManaAutoCharge", {Text = "Carregar mana se estiver abaixo", Default = true,
                 Callback = function(value) current_spell_adjust = value end})
             group_builder:AddSlider("MacroManaTimeout", {Text = "Limite do ajuste de mana (s)", Default = 3, Min = 0.2, Max = 10, Rounding = 1,
                 Callback = function(value) current_spell_timeout = value end})
-            group_builder:AddLabel("Mana acima da faixa ou ajuste falhou: interrompe o macro")
+            group_builder:AddDropdown("MacroBackfireSide", {Text = "Backfire: lado da faixa", Default = "Auto", Values = {"Auto", "Abaixo", "Acima"},
+                Callback = function(value) current_backfire_side = value end})
+            group_builder:AddSlider("MacroBackfireMinimum", {Text = "Backfire abaixo: mana minima (%)", Default = 1, Min = 0.1, Max = 20, Rounding = 1,
+                Callback = function(value) current_backfire_minimum = value end})
+            group_builder:AddSlider("MacroBackfireMargin", {Text = "Backfire: margem fora da faixa (%)", Default = 0.1, Min = 0.1, Max = 5, Rounding = 1,
+                Callback = function(value) current_backfire_margin = value end})
+            group_builder:AddLabel("Auto: Viribus/Armis acima; outras abaixo (ajustavel)")
+            group_builder:AddLabel("Backfire alto: aguarda mana diminuir; timeout interrompe")
+            group_builder:AddLabel("Normal/Snap: mana alta interrompe; ajuste falhou: interrompe")
 
             local script_dropdown = group_builder:AddDropdown("MacroScriptFile", {
                 Text = "Script File",
@@ -19060,7 +19073,9 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         local tool = plr.Character and plr.Character:FindFirstChildOfClass("Tool")
                         if not tool or not cheat_client.spell_cost[tool.Name] then library:Notify("Equipe uma magia cadastrada!"); return end
                         action = {type = "castspell", spell = tool.Name, mode = current_spell_mode,
-                            adjustMana = current_spell_adjust, timeout = current_spell_timeout}
+                            adjustMana = current_spell_adjust, timeout = current_spell_timeout,
+                            backfireSide = current_backfire_side, backfireMinimum = current_backfire_minimum,
+                            backfireMargin = current_backfire_margin}
                     elseif current_action_type == "Unequip" then
                         action = {type = "unequip"}
                     elseif current_action_type == "Wait" then
@@ -19184,7 +19199,9 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         action = {type = "equip", tool = current_tool_name}
                     elseif current_action_type == "Cast Spell (Mana Check)" then
                         action = {type = "castspell", spell = current_spell_name, mode = current_spell_mode,
-                            adjustMana = current_spell_adjust, timeout = current_spell_timeout}
+                            adjustMana = current_spell_adjust, timeout = current_spell_timeout,
+                            backfireSide = current_backfire_side, backfireMinimum = current_backfire_minimum,
+                            backfireMargin = current_backfire_margin}
                     elseif current_action_type == "Unequip" then
                         action = {type = "unequip"}
                     elseif current_action_type == "Wait" then
