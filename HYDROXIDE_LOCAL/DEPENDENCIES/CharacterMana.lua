@@ -33,7 +33,7 @@ return function(ctx)
     local spellMode, showRanges, highlightRanges = "Magia equipada", true, true
     local spellMana = ctx.spellMana
     local fixedDetails = {}
-    for _, percent in ipairs({50, 25}) do
+    for _, percent in ipairs({50, 20}) do
         local line = Instance.new("Frame")
         line.Name = "FixedMana" .. percent
         line.BorderSizePixel = 0
