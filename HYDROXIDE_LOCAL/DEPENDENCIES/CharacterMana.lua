@@ -36,9 +36,10 @@ return function(ctx)
     for index, specification in ipairs({
         {"Gate", false, Color3.fromRGB(82, 48, 77)},
         {"Gelidus", false, Color3.fromRGB(100, 220, 255)},
-        {"Gelidus", true, Color3.fromRGB(110, 140, 255)}}) do
+        {"Gelidus", true, Color3.fromRGB(110, 140, 255)},
+        {"Viribus", true, Color3.fromRGB(180, 90, 95)}}) do
         local band = Instance.new("Frame")
-        band.Name = specification[2] and "GelidusSnapRange" or specification[1] .. "CastRange"
+        band.Name = specification[1] .. (specification[2] and "SnapRange" or "CastRange")
         band.BorderSizePixel = 0
         band.BackgroundColor3 = specification[3]
         band.ZIndex = 1000
@@ -62,7 +63,7 @@ return function(ctx)
             edges[#edges + 1] = edge
         end
         local ornaments = {}
-        if specification[1] == "Gate" then
+        if specification[1] == "Gate" or specification[1] == "Viribus" then
             -- Small dark diamonds reproduce the reference's central motif and side ticks.
             for _, detail in ipairs({
                 {0, 0, 0.5, 0, 4}, {1, 0, 0.5, 0, 4},
@@ -70,7 +71,7 @@ return function(ctx)
                 {0.5, -3, 0.5, -3, 2}, {0.5, 3, 0.5, -3, 2},
                 {0.5, -3, 0.5, 3, 2}, {0.5, 3, 0.5, 3, 2}}) do
                 local diamond = Instance.new("Frame")
-                diamond.Name = "GateOrnament"
+                diamond.Name = specification[1] .. "Ornament"
                 diamond.BorderSizePixel = 0
                 diamond.AnchorPoint = Vector2.new(0.5, 0.5)
                 diamond.Position = UDim2.new(detail[1], detail[2], detail[3], detail[4])
@@ -89,7 +90,9 @@ return function(ctx)
         local ready = false
         for _, marker in ipairs(markers) do
             local equipped = character:FindFirstChild(marker.name)
-            local selected = spellMode == marker.name or spellMode == "Gate + Gelidus"
+            local selected = spellMode == marker.name or spellMode == "Todas"
+                or spellMode == "Snap Viribus" and marker.name == "Viribus"
+                or spellMode == "Gate + Gelidus" and (marker.name == "Gate" or marker.name == "Gelidus")
                 or spellMode == "Magia equipada" and equipped ~= nil
             local normal, snap
             if spellMana then normal, snap = spellMana.ranges(marker.name, character) end
@@ -244,10 +247,10 @@ return function(ctx)
         Callback = function(value) boundaryOpacity = value end})
     group:AddToggle("NivenxideManaNumber", {Text = "Mostrar valor da mana", Default = false,
         Callback = function(value) showNumber = value end})
-    group:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate e Gelidus", Default = true,
+    group:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate, Gelidus e snap Viribus", Default = true,
         Callback = function(value) showRanges = value end})
     group:AddDropdown("NivenxideManaSpellMode", {Text = "Mostrar faixas", Default = 1,
-        Values = {"Magia equipada", "Gate", "Gelidus", "Gate + Gelidus"},
+        Values = {"Magia equipada", "Gate", "Gelidus", "Gate + Gelidus", "Snap Viribus", "Todas"},
         Callback = function(value) spellMode = value end})
     group:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa (+15)", Default = true,
         Callback = function(value) highlightRanges = value end})
