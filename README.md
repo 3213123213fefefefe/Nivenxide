@@ -129,9 +129,10 @@ na morte ou se a barra original estiver escondida. Restart Script remove e recri
 
 ### Gate e Gelidus
 A copia de mana mostra faixas de Gate, Gelidus normal e snap Gelidus, selecionadas
-pela magia equipada ou pelo menu Mostrar faixas. Os limites usam a tabela de spells
+pela magia equipada ou pelo menu Mostrar faixas. As marcacoes ficam dentro da barra,
+com linhas horizontais nos limites da faixa e sem legendas externas. Os limites usam a tabela de spells
 do Hydroxide e os mesmos ajustes de ScholarsBoon, WiseCasting e RemTraining.
-Mana dentro de uma faixa visivel: valor verde e opacidade +15 pontos, limitada a 100%.
+Mana dentro de uma faixa visivel: linhas verdes e opacidade +15 pontos, limitada a 100%.
 Opacidade fora da faixa tem padrao 70%; perfis anteriores preservam o valor salvo.
 Misc > Snap Gelidus Anti Backfire (ligado por padrao) bloqueia RightClick com Gelidus
 equipado fora da faixa de snap, sem alterar cast normal. Durante SnapCool (tag
