@@ -106,8 +106,7 @@ return function(ctx)
                     rangeOpacity + (highlightRanges and inRange and 15 or 0)) / 100
                 for _, edge in ipairs(marker.edges) do
                     edge.BackgroundTransparency = 1 - boundaryOpacity / 100
-                    edge.BackgroundColor3 = inRange and Color3.fromRGB(140, 255, 160)
-                        or Color3.fromRGB(35, 25, 36)
+                    edge.BackgroundColor3 = Color3.fromRGB(35, 25, 36)
                 end
 
             end
@@ -248,7 +247,7 @@ return function(ctx)
         Callback = function(value) spellMode = value end})
     group:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa (+15)", Default = true,
         Callback = function(value) highlightRanges = value end})
-    group:AddLabel("Linhas dentro da barra; verde = mana na faixa; destaque limitado a 100%")
+    group:AddLabel("Linhas dentro da barra; destaque de opacidade limitado a 100%")
     group:AddLabel("Horizontal negativo = esquerda; vertical positivo = baixo")
     local connection = ctx.utility:Connection(game:GetService("RunService").RenderStepped, update)
     local function cleanup()
