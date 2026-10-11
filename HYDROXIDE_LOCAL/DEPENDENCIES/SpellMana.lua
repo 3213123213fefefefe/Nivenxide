@@ -1,7 +1,8 @@
 -- Shared spell windows for the character widget and Gelidus snap guard.
 return function(ctx)
     local collection = game:GetService("CollectionService")
-    local defaults = {Gate = {{75, 83}, {75, 83}}, Gelidus = {{80, 95}, {85, 100}}}
+    local defaults = {Gate = {{75, 83}, {75, 83}}, Gelidus = {{80, 95}, {85, 100}},
+        Viribus = {{23, 35}, {60, 70}}}
     local function ranges(name, character)
         local spell = (ctx.spellCosts or defaults)[name]
         if not spell or not character then return end
