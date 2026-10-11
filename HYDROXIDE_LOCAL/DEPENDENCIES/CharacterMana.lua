@@ -27,13 +27,41 @@ return function(ctx)
     number.TextColor3 = Color3.fromRGB(255, 255, 255)
     number.TextStrokeTransparency = 0.4
     number.Parent = host
+    local intent = Instance.new("TextLabel")
+    intent.Name = "SelfEquippedItem"
+    intent.BackgroundTransparency = 1
+    intent.AnchorPoint = Vector2.new(0.5, 0)
+    intent.Size = UDim2.fromOffset(240, 22)
+    intent.Font = Enum.Font.GothamMedium
+    intent.TextSize = 13
+    intent.TextColor3 = Color3.fromRGB(255, 255, 255)
+    intent.TextStrokeTransparency = 0.35
+    intent.Visible = false
+    intent.Parent = screen
+    local showIntent, intentX, intentY = true, 0, 100
+    local snapStatus = Instance.new("TextLabel")
+    snapStatus.Name = "LocalSnapCooldown"
+    snapStatus.BackgroundTransparency = 1
+    snapStatus.AnchorPoint = Vector2.new(0, 0.5)
+    snapStatus.Size = UDim2.fromOffset(120, 22)
+    snapStatus.Font = Enum.Font.GothamMedium
+    snapStatus.TextSize = 12
+    snapStatus.TextColor3 = Color3.fromRGB(255, 255, 255)
+    snapStatus.TextStrokeTransparency = 0.35
+    snapStatus.TextXAlignment = Enum.TextXAlignment.Left
+    snapStatus.ZIndex = 1010
+    snapStatus.Parent = host
+    local showSnap, showSnapReady, snapX, snapY, snapOpacity, snapSize = true, true, 8, 0, 85, 12
+    local collection = game:GetService("CollectionService")
     local enabled, showNumber, opacity = true, false, 70
     local activeOpacity = opacity
+    local readyOpacityBoost = 15
     local rangeOpacity, boundaryOpacity = 35, 85
     local viribusSnapMin, viribusSnapMax = 55, 70
     local spellMode, showRanges, highlightRanges = "Magia equipada", true, true
     local spellMana = ctx.spellMana
     local fixedDetails = {}
+    local fixedLines, showFixed50, showFixed20 = {}, true, true
     for _, percent in ipairs({50, 20}) do
         local line = Instance.new("Frame")
         line.Name = "FixedMana" .. percent
@@ -45,6 +73,7 @@ return function(ctx)
         line.ZIndex = 1003
         line.Active = false
         line.Parent = host
+        fixedLines[percent] = line
         fixedDetails[#fixedDetails + 1] = line
         if percent == 50 then
             for _, detail in ipairs({
@@ -101,6 +130,8 @@ return function(ctx)
             color = specification[3], band = band, edges = edges}
     end
     local function updateRanges(character, mana)
+        fixedLines[50].Visible = showFixed50
+        fixedLines[20].Visible = showFixed20
         -- Fixed reference ticks remain visible regardless of spell/range selection.
         for _, detail in ipairs(fixedDetails) do
             detail.BackgroundTransparency = 1 - boundaryOpacity / 100
@@ -133,7 +164,7 @@ return function(ctx)
                 marker.band.Position = UDim2.new(0, 0, 1 - range[2] / 100, 0)
                 marker.band.Size = UDim2.new(1, 0, (range[2] - range[1]) / 100, 0)
                 marker.band.BackgroundTransparency = 1 - math.min(100,
-                    rangeOpacity + (highlightRanges and inRange and 15 or 0)) / 100
+                    rangeOpacity + (highlightRanges and inRange and readyOpacityBoost or 0)) / 100
                 for _, edge in ipairs(marker.edges) do
                     edge.BackgroundTransparency = 1 - boundaryOpacity / 100
                     edge.BackgroundColor3 = Color3.fromRGB(35, 25, 36)
@@ -141,7 +172,7 @@ return function(ctx)
 
             end
         end
-        activeOpacity = math.min(100, opacity + (highlightRanges and ready and 15 or 0))
+        activeOpacity = math.min(100, opacity + (highlightRanges and ready and readyOpacityBoost or 0))
     end
     local x, y, width, height = 75, 0, 18, 160
     local source, copy, pairsToSync, sourceNodes = nil, nil, {}, {}
@@ -216,12 +247,20 @@ return function(ctx)
     end
     local function update()
         host.Visible = false
-        if closed or not enabled then return end
+        intent.Visible = false
+        if closed then return end
         local character = player.Character
         local root = character and character:FindFirstChild("HumanoidRootPart")
         local humanoid = character and character:FindFirstChildOfClass("Humanoid")
         local camera = workspace.CurrentCamera
         if not root or not camera or (humanoid and humanoid.Health <= 0) then return end
+        local point, onScreen = camera:WorldToViewportPoint(root.Position)
+        if not onScreen or point.Z <= 0 then return end
+        local tool = character:FindFirstChildOfClass("Tool")
+        intent.Visible = showIntent and tool ~= nil
+        intent.Text = tool and tool.Name or ""
+        intent.Position = UDim2.fromOffset(point.X + intentX, point.Y + intentY)
+        if not enabled then return end
         if os.clock() >= nextScan then
             nextScan = os.clock() + 0.5
             local stats = gui:FindFirstChild("StatGui")
@@ -239,9 +278,15 @@ return function(ctx)
             if parent:IsA("ScreenGui") and not parent.Enabled then return end
             parent = parent.Parent
         end
-        local point, onScreen = camera:WorldToViewportPoint(root.Position)
-        if not onScreen or point.Z <= 0 then return end
         local mana = character:FindFirstChild("Mana")
+        local cooling = character:FindFirstChild("SnapCool") ~= nil or collection:HasTag(character, "SnapCool")
+        snapStatus.Visible = showSnap and (cooling or showSnapReady)
+        snapStatus.Text = cooling and "Snap CD" or "Snap pronto"
+        snapStatus.TextColor3 = cooling and Color3.fromRGB(255, 150, 120) or Color3.fromRGB(255, 255, 255)
+        snapStatus.Position = UDim2.new(1, snapX, 0.5, snapY)
+        snapStatus.TextSize = snapSize
+        snapStatus.TextTransparency = 1 - snapOpacity / 100
+        snapStatus.TextStrokeTransparency = 1 - 0.65 * snapOpacity / 100
         updateRanges(character, mana)
         sync()
         host.Size = UDim2.fromOffset(width, height)
@@ -270,17 +315,41 @@ return function(ctx)
         Callback = function(value) boundaryOpacity = value end})
     group:AddToggle("NivenxideManaNumber", {Text = "Mostrar valor da mana", Default = false,
         Callback = function(value) showNumber = value end})
+    group:AddToggle("NivenxideManaFixed50", {Text = "Mostrar marca de 50%", Default = true,
+        Callback = function(value) showFixed50 = value end})
+    group:AddToggle("NivenxideManaFixed20", {Text = "Mostrar marca de 20%", Default = true,
+        Callback = function(value) showFixed20 = value end})
     group:AddToggle("NivenxideManaSpellRanges", {Text = "Faixas de Gate, Gelidus e snap Viribus", Default = true,
         Callback = function(value) showRanges = value end})
     group:AddDropdown("NivenxideManaSpellMode", {Text = "Mostrar faixas", Default = 1,
         Values = {"Magia equipada", "Gate", "Gelidus", "Gate + Gelidus", "Snap Viribus", "Todas", "Snap Viribus + Snap Gate"},
         Callback = function(value) spellMode = value end})
-    group:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa (+15)", Default = true,
+    group:AddToggle("NivenxideManaRangeHighlight", {Text = "Mais opacidade na faixa certa", Default = true,
         Callback = function(value) highlightRanges = value end})
+    group:AddSlider("NivenxideManaReadyOpacityBoost", {Text = "Aumento de opacidade na faixa certa (%)", Default = 15, Min = 0, Max = 100, Rounding = 0,
+        Callback = function(value) readyOpacityBoost = value end})
     group:AddSlider("NivenxideManaViribusSnapMin", {Text = "Inicio da marcacao snap Viribus (%)", Default = 55, Min = 0, Max = 100, Rounding = 0,
         Callback = function(value) viribusSnapMin = value end})
     group:AddSlider("NivenxideManaViribusSnapMax", {Text = "Fim da marcacao snap Viribus (%)", Default = 70, Min = 0, Max = 100, Rounding = 0,
         Callback = function(value) viribusSnapMax = value end})
+    group:AddToggle("NivenxideSelfIntent", {Text = "Item equipado abaixo do personagem", Default = true,
+        Callback = function(value) showIntent = value; if not value then intent.Visible = false end end})
+    group:AddSlider("NivenxideSelfIntentX", {Text = "Item equipado: posicao horizontal", Default = 0, Min = -400, Max = 400, Rounding = 0,
+        Callback = function(value) intentX = value end})
+    group:AddSlider("NivenxideSelfIntentY", {Text = "Item equipado: posicao vertical", Default = 100, Min = -300, Max = 400, Rounding = 0,
+        Callback = function(value) intentY = value end})
+    group:AddToggle("NivenxideManaSnapStatus", {Text = "Status de SnapCool ao lado da mana", Default = true,
+        Callback = function(value) showSnap = value end})
+    group:AddToggle("NivenxideManaSnapReady", {Text = "Mostrar quando snap esta pronto", Default = true,
+        Callback = function(value) showSnapReady = value end})
+    group:AddSlider("NivenxideManaSnapX", {Text = "SnapCool: posicao horizontal", Default = 8, Min = -300, Max = 300, Rounding = 0,
+        Callback = function(value) snapX = value end})
+    group:AddSlider("NivenxideManaSnapY", {Text = "SnapCool: posicao vertical", Default = 0, Min = -300, Max = 300, Rounding = 0,
+        Callback = function(value) snapY = value end})
+    group:AddSlider("NivenxideManaSnapOpacity", {Text = "SnapCool: opacidade (%)", Default = 85, Min = 1, Max = 100, Rounding = 0,
+        Callback = function(value) snapOpacity = value end})
+    group:AddSlider("NivenxideManaSnapSize", {Text = "SnapCool: tamanho do texto", Default = 12, Min = 8, Max = 24, Rounding = 0,
+        Callback = function(value) snapSize = value end})
     group:AddLabel("Linhas dentro da barra; destaque de opacidade limitado a 100%")
     group:AddLabel("Horizontal negativo = esquerda; vertical positivo = baixo")
     local connection = ctx.utility:Connection(game:GetService("RunService").RenderStepped, update)
