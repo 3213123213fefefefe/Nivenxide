@@ -18480,11 +18480,44 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end
             end
 
+            local spellCastFactory, spellCastError = loadstring(HXD_LOCAL_READ("DEPENDENCIES/MacroSpellCast.lua"))
+            assert(spellCastFactory, spellCastError)
+            local castSpellWithMana = spellCastFactory()({
+                player = plr, findTool = find_tool, clock = os.clock, wait = task.wait,
+                range = function(name, char, snap)
+                    if not cheat_client.spell_mana then return end
+                    local normalRange, snapRange = cheat_client.spell_mana.ranges(name, char)
+                    if snap then return snapRange end
+                    return normalRange
+                end,
+                cancelled = function(name)
+                    return macro_system.stopping or not macro_system.is_running[name] or not shared or shared.is_unloading
+                end,
+                snapCooldown = function(char) return cs:HasTag(char, "SnapCool") or FindFirstChild(char, "SnapCool") ~= nil end,
+                blocked = function(char)
+                    return is_stunned() or FindFirstChild(char, "ManaStop") or FindFirstChild(char, "SpellBlocking")
+                        or FindFirstChild(char, "ActiveCast") or cs:HasTag(char, "Knocked") or cs:HasTag(char, "Unconscious")
+                end,
+                charge = function() utility:charge_mana() end,
+                stopCharge = function() utility:decharge_mana() end,
+                cast = function(snap, char)
+                    local handler = FindFirstChild(char, "CharacterHandler")
+                    local remotes = handler and FindFirstChild(handler, "Remotes")
+                    if not remotes or not FindFirstChild(remotes, snap and "RightClick" or "LeftClick") then return false end
+                    if snap then utility:RightClick() else utility:LeftClick() end
+                    return true
+                end
+            })
+
             local active_nostun_conns = {}
-            local function run_action(action)
-                if macro_system.stopping then return end
+            local function run_action(action, macro_name)
+                if macro_system.stopping then return false end
                 local char = plr.Character
-                if action.type == "equip" then
+                if action.type == "castspell" then
+                    local passed, reason = castSpellWithMana(action, macro_name)
+                    if not passed then library:Notify(reason or "Cast cancelado; macro interrompido") end
+                    return passed
+                elseif action.type == "equip" then
                     local tool = find_tool(action.tool)
                     if tool and char then
                         local hum = char:FindFirstChildOfClass("Humanoid")
@@ -18675,10 +18708,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 macro_system.is_running[name] = true
 
                 for _, action in ipairs(actions) do
+                    if macro_system.stopping or not macro_system.is_running[name] then break end
                     if action.type == "loopclick" or action.type == "chargeuntil" then
-                        task.spawn(run_action, action)
+                        task.spawn(run_action, action, name)
                     else
-                        run_action(action)
+                        if run_action(action, name) == false then break end
                     end
                 end
 
@@ -18716,6 +18750,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     elseif a.type == "activate" then text = i .. ". Activate"
                     elseif a.type == "charge" then text = i .. ". Charge Mana"
                     elseif a.type == "stopcharge" then text = i .. ". Stop Charge"
+                    elseif a.type == "castspell" then text = i .. ". Cast na faixa: " .. (a.spell or "?") .. " (" .. (a.mode or "Normal") .. ")"
                     elseif a.type == "chargeuntil" then text = i .. ". Charge Until: " .. (a.amount or 50)
                     elseif a.type == "nostun" then text = string.format("%d. No Stun: %.2fs", i, a.duration or 0.2)
                     elseif a.type == "punch" then text = i .. ". Punch"
@@ -18948,6 +18983,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local group_builder = Tabs.Macros:AddLeftGroupbox("Macro Builder")
             local group_config = Tabs.Macros:AddRightGroupbox("Macro Config")
 
+            local current_spell_name, current_spell_mode = "Telorum", "Normal"
+            local current_spell_adjust, current_spell_timeout = true, 3
             local current_action_type = "Equip Tool"
             local current_tool_name = ""
             local current_wait_dur = 0.15
@@ -18963,9 +19000,22 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             group_builder:AddDropdown("MacroActionType", {
                 Text = "Action Type",
                 Default = "Equip Tool",
-                Values = {"Equip Tool", "Unequip", "Wait", "Activate", "Punch", "Heavy Punch", "Charge Mana", "Stop Charge", "Charge Until", "No Stun", "Wait Stun", "BufferAction", "LoopClick", "LeftClick", "RightClick", "Key Click", "Key Press", "Key Release", "Keybind", "Execute Code"},
+                Values = {"Equip Tool", "Cast Spell (Mana Check)", "Unequip", "Wait", "Activate", "Punch", "Heavy Punch", "Charge Mana", "Stop Charge", "Charge Until", "No Stun", "Wait Stun", "BufferAction", "LoopClick", "LeftClick", "RightClick", "Key Click", "Key Press", "Key Release", "Keybind", "Execute Code"},
                 Callback = function(v) current_action_type = v end
             })
+
+            local macro_spells = {}
+            for name in pairs(cheat_client.spell_cost) do macro_spells[#macro_spells + 1] = name end
+            table.sort(macro_spells)
+            group_builder:AddDropdown("MacroManaSpell", {Text = "Magia para cast na faixa", Default = "Telorum", Values = macro_spells,
+                Callback = function(value) current_spell_name = value end})
+            group_builder:AddDropdown("MacroManaCastMode", {Text = "Tipo de cast", Default = "Normal", Values = {"Normal", "Snap"},
+                Callback = function(value) current_spell_mode = value end})
+            group_builder:AddToggle("MacroManaAutoCharge", {Text = "Carregar mana se estiver abaixo", Default = true,
+                Callback = function(value) current_spell_adjust = value end})
+            group_builder:AddSlider("MacroManaTimeout", {Text = "Limite do ajuste de mana (s)", Default = 3, Min = 0.2, Max = 10, Rounding = 1,
+                Callback = function(value) current_spell_timeout = value end})
+            group_builder:AddLabel("Mana acima da faixa ou ajuste falhou: interrompe o macro")
 
             local script_dropdown = group_builder:AddDropdown("MacroScriptFile", {
                 Text = "Script File",
@@ -19006,6 +19056,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                 return
                             end
                         end
+                    elseif current_action_type == "Cast Spell (Mana Check)" then
+                        local tool = plr.Character and plr.Character:FindFirstChildOfClass("Tool")
+                        if not tool or not cheat_client.spell_cost[tool.Name] then library:Notify("Equipe uma magia cadastrada!"); return end
+                        action = {type = "castspell", spell = tool.Name, mode = current_spell_mode,
+                            adjustMana = current_spell_adjust, timeout = current_spell_timeout}
                     elseif current_action_type == "Unequip" then
                         action = {type = "unequip"}
                     elseif current_action_type == "Wait" then
@@ -19127,6 +19182,9 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     if current_action_type == "Equip Tool" then
                         if current_tool_name == "" then library:Notify("Enter a tool name!") return end
                         action = {type = "equip", tool = current_tool_name}
+                    elseif current_action_type == "Cast Spell (Mana Check)" then
+                        action = {type = "castspell", spell = current_spell_name, mode = current_spell_mode,
+                            adjustMana = current_spell_adjust, timeout = current_spell_timeout}
                     elseif current_action_type == "Unequip" then
                         action = {type = "unequip"}
                     elseif current_action_type == "Wait" then
