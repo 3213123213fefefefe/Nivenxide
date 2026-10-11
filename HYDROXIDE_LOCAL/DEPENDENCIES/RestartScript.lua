@@ -1,12 +1,14 @@
 -- Prepare replacement first; unload only once it can be compiled and settings saved.
 return function(ctx)
+    local restarting = false
     return function()
         local env = getgenv()
-        if env.NivenxideRestarting or ctx.isUnloading() then return end
+        if restarting or ctx.isUnloading() then return end
+        restarting = true
         env.NivenxideRestarting = true
-        ctx.notify("Preparando reinicio do Nivenxide...")
         task.spawn(function()
             local ok, err = pcall(function()
+                pcall(ctx.notify, "Preparando reinicio do Nivenxide...")
                 local url = "https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/main/loader.lua"
                     .. "?restart=" .. tostring(os.time()) .. "-" .. tostring(math.floor(os.clock() * 1000))
                 local source = game:HttpGet(url, true)
@@ -19,11 +21,21 @@ return function(ctx)
                 ctx.unload()
                 task.wait(0.6) -- Let pending cleanup tasks finish before a new session.
                 env.NivenxideForceUpdate = true
-                -- The runtime may keep loader() alive until its next unload.
-                -- Release the restart lock before handing over to the new session.
+                env.NivenxideLoading = false
+                -- The old restart worker must finish before a new runtime starts.
                 env.NivenxideRestarting = false
-                loader()
+                restarting = false
+                task.defer(function()
+                    local loaded, loadError = pcall(loader)
+                    if not loaded then
+                        env.NivenxideLoading = false
+                        env.NivenxideRestarting = false
+                        env.NivenxideRestartConfig = nil
+                        warn("[Nivenxide Restart] Falha ao carregar nova sessao: " .. tostring(loadError))
+                    end
+                end)
             end)
+            restarting = false
             env.NivenxideRestarting = false
             if not ok then
                 warn("[Nivenxide Restart] " .. tostring(err))
