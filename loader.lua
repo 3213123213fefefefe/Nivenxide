@@ -10,7 +10,7 @@ local ok, err = pcall(function()
     assert(type(readfile) == "function" and type(writefile) == "function"
         and type(isfile) == "function" and type(isfolder) == "function"
         and type(makefolder) == "function", "Executor sem suporte a arquivos locais")
-    local version = "6a9317c7ca53eda74a343990fd0226863b4c5ed7"
+    local version = "3256b7a7c07b161f1efd76b80680a9a8759b3ed1"
     local base = "https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/" .. version .. "/"
     local root = "HYDROXIDE_LOCAL"
     local files = {
