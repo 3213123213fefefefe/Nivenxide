@@ -34,7 +34,7 @@ return function(ctx)
     local spellMana = ctx.spellMana
     local markers = {}
     for index, specification in ipairs({
-        {"Gate", false, Color3.fromRGB(255, 205, 80)},
+        {"Gate", false, Color3.fromRGB(82, 48, 77)},
         {"Gelidus", false, Color3.fromRGB(100, 220, 255)},
         {"Gelidus", true, Color3.fromRGB(110, 140, 255)}}) do
         local band = Instance.new("Frame")
@@ -61,8 +61,29 @@ return function(ctx)
             edge.Parent = band
             edges[#edges + 1] = edge
         end
+        local ornaments = {}
+        if specification[1] == "Gate" then
+            -- Small dark diamonds reproduce the reference's central motif and side ticks.
+            for _, detail in ipairs({
+                {0, 0, 0.5, 0, 4}, {1, 0, 0.5, 0, 4},
+                {0.5, 0, 0.5, 0, 3},
+                {0.5, -3, 0.5, -3, 2}, {0.5, 3, 0.5, -3, 2},
+                {0.5, -3, 0.5, 3, 2}, {0.5, 3, 0.5, 3, 2}}) do
+                local diamond = Instance.new("Frame")
+                diamond.Name = "GateOrnament"
+                diamond.BorderSizePixel = 0
+                diamond.AnchorPoint = Vector2.new(0.5, 0.5)
+                diamond.Position = UDim2.new(detail[1], detail[2], detail[3], detail[4])
+                diamond.Size = UDim2.fromOffset(detail[5], detail[5])
+                diamond.Rotation = 45
+                diamond.ZIndex = 1002
+                diamond.Active = false
+                diamond.Parent = band
+                ornaments[#ornaments + 1] = diamond
+            end
+        end
         markers[index] = {name = specification[1], snap = specification[2],
-            color = specification[3], band = band, edges = edges}
+            color = specification[3], band = band, edges = edges, ornaments = ornaments}
     end
     local function updateRanges(character, mana)
         local ready = false
@@ -85,6 +106,11 @@ return function(ctx)
                 for _, edge in ipairs(marker.edges) do
                     edge.BackgroundTransparency = 1 - boundaryOpacity / 100
                     edge.BackgroundColor3 = inRange and Color3.fromRGB(140, 255, 160)
+                        or Color3.fromRGB(35, 25, 36)
+                end
+                for _, diamond in ipairs(marker.ornaments) do
+                    diamond.BackgroundTransparency = 1 - boundaryOpacity / 100
+                    diamond.BackgroundColor3 = inRange and Color3.fromRGB(140, 255, 160)
                         or Color3.fromRGB(35, 25, 36)
                 end
             end
