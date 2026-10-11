@@ -3942,7 +3942,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     do
                         esp.drawings.name = utility:Create("Text", {
                             Text = player.name,
-                            Font = font,
+                            Font = cheat_client.player_esp_font or font,
                             Size = 13,
                             Center = true,
                             Outline = true,
@@ -3952,7 +3952,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         
                         esp.drawings.intent = utility:Create("Text", {
                             Text = "nil",
-                            Font = font,
+                            Font = cheat_client.player_esp_font or font,
                             Size = 13,
                             Center = true,
                             Outline = true,
@@ -3973,7 +3973,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             
                         esp.drawings.health_text = utility:Create("Text", {
                             Text = "100",
-                            Font = font,
+                            Font = cheat_client.player_esp_font or font,
                             Size = 13,
                             Outline = true,
                             Color = Color3.fromRGB(255, 255, 255),
@@ -3988,7 +3988,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         
                         esp.drawings.mana_text = utility:Create("Text", {
                             Text = "100",
-                            Font = font,
+                            Font = cheat_client.player_esp_font or font,
                             Size = 13,
                             Outline = true,
                             Color = Color3.fromRGB(255, 255, 255),
@@ -3996,7 +3996,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         }, "esp")
         
                         esp.drawings.status_effects = utility:Create("Text", {
-                            Font = font,
+                            Font = cheat_client.player_esp_font or font,
                             Size = 13,
                             Outline = true,
                             Color = Color3.fromRGB(255, 255, 255),
@@ -4004,7 +4004,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         }, "esp")
 
                         esp.drawings.racial = utility:Create("Text", {
-                            Font = font,
+                            Font = cheat_client.player_esp_font or font,
                             Size = 13,
                             Outline = true,
                             Color = Color3.fromRGB(255, 255, 255),
@@ -4013,7 +4013,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         }, "esp")
 
                         esp.drawings.racial_number = utility:Create("Text", {
-                            Font = font,
+                            Font = cheat_client.player_esp_font or font,
                             Size = 13,
                             Outline = true,
                             Color = Color3.fromRGB(255, 255, 255),
@@ -4022,7 +4022,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         }, "esp")
 
                         esp.drawings.observe_status = utility:Create("Text", {
-                            Font = font,
+                            Font = cheat_client.player_esp_font or font,
                             Size = 13,
                             Outline = true,
                             Color = Color3.fromRGB(255, 255, 0),
@@ -4884,7 +4884,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                             Transparency = 1,
                             Text = esp.name,
                             Size = 13,
-                            Font = font,
+                            Font = cheat_client.trinket_esp_font or font,
                             ZIndex = esp.zindex,
                             Visible = false
                         }, "esp")
@@ -7702,6 +7702,20 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         do
             local group_player = Tabs.Visuals:AddLeftGroupbox("Player ESP")
             local group_chams = Tabs.Visuals:AddRightGroupbox("Chams")
+            group_player:AddDropdown("NivenxidePlayerEspFont", {Text = "Fonte do ESP", Default = 1,
+                Values = {"UI", "System", "Plex", "Monospace"},
+                Callback = function(value)
+                    local fallback = {UI = 0, System = 1, Plex = 2, Monospace = 3}
+                    local selectedFont = (Drawing.Fonts and Drawing.Fonts[value]) or fallback[value] or font
+                    cheat_client.player_esp_font = selectedFont
+                    for _, esp in pairs(cheat_client.player_esp_objects or {}) do
+                        for _, name in ipairs({"name", "intent", "health_text", "mana_text", "status_effects", "racial", "racial_number", "observe_status"}) do
+                            local text = esp.drawings and esp.drawings[name]
+                            if text then pcall(function() text.Font = selectedFont end) end
+                        end
+                    end
+                end})
+
     
             do
                 group_player:AddToggle("PlayerEsp", {
@@ -8004,6 +8018,20 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local group_misc_esp = Tabs.Visuals:AddLeftGroupbox("World ESP")
             local group_ingredient_esp = Tabs.Visuals:AddRightGroupbox("Ingredient ESP")
             local group_ore_esp = Tabs.Visuals:AddLeftGroupbox("Ore ESP")
+            group_misc_esp:AddDropdown("NivenxideTrinketEspFont", {Text = "Fonte do ESP", Default = 1,
+                Values = {"UI", "System", "Plex", "Monospace"},
+                Callback = function(value)
+                    local fallback = {UI = 0, System = 1, Plex = 2, Monospace = 3}
+                    local selectedFont = (Drawing.Fonts and Drawing.Fonts[value]) or fallback[value] or font
+                    cheat_client.trinket_esp_font = selectedFont
+                    for _, esp in pairs(cheat_client.trinket_esp_objects or {}) do
+                        for _, name in ipairs({"main_text"}) do
+                            local text = esp.drawings and esp.drawings[name]
+                            if text then pcall(function() text.Font = selectedFont end) end
+                        end
+                    end
+                end})
+
 
             do
                 group_misc_esp:AddToggle("TrinketEsp", {
