@@ -4051,6 +4051,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                         end
                     end
                     
+                    esp.text_base_colors = {}
+                    for _, key in ipairs({"name", "intent", "health_text", "mana_text", "status_effects", "racial", "racial_number", "observe_status"}) do
+                        if esp.drawings[key] then esp.text_base_colors[key] = esp.drawings[key].Color end
+                    end
+
                     do
                         esp.highlight = utility:Object("Highlight", {
                             FillTransparency = 0.65,
@@ -4637,6 +4642,11 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                                         else
                                             esp.drawings.intent.Visible = false
                                         end
+                                    end
+                                    -- Subtle ally tint across text, retaining distinct warning colors.
+                                    for key, originalColor in pairs(esp.text_base_colors) do
+                                        esp.drawings[key].Color = is_friendly
+                                            and originalColor:Lerp(Color3.fromRGB(125, 255, 145), 0.35) or originalColor
                                     end
                                 else
                                     for _,v in next, esp.drawings do
@@ -23542,6 +23552,22 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             ClickMenuTitle.TextWrapped = true
             ClickMenuTitle.AutomaticSize = Enum.AutomaticSize.Y
 
+            for _, child in ipairs(ClickMenuMain:GetChildren()) do
+                if child:IsA("GuiObject") and child.LayoutOrder >= 2 then child.LayoutOrder = child.LayoutOrder + 1 end
+            end
+            local ClickMenuAlly = Instance.new("TextButton")
+            ClickMenuAlly.Name = "ToggleAlly"
+            ClickMenuAlly.LayoutOrder = 2
+            ClickMenuAlly.Size = UDim2.new(1, 0, 0, 28)
+            ClickMenuAlly.BackgroundColor3 = Color3.fromRGB(35, 50, 35)
+            ClickMenuAlly.BackgroundTransparency = 0.3
+            ClickMenuAlly.BorderSizePixel = 0
+            ClickMenuAlly.Font = Enum.Font.SourceSansSemibold
+            ClickMenuAlly.TextSize = 18
+            ClickMenuAlly.TextColor3 = Color3.fromRGB(190, 255, 190)
+            ClickMenuAlly.Text = "Marcar como aliado"
+            ClickMenuAlly.Parent = ClickMenuMain
+
             local clickMenuSelectedPlayer = nil
             local clickMenuHealthConnection = nil
             local clickMenuTagsPolling = false
@@ -23560,6 +23586,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             end
 
             local function updateTitleColor()
+                ClickMenuAlly.Visible = clickMenuSelectedPlayer ~= nil and clickMenuSelectedPlayer ~= plr
+                ClickMenuAlly.Text = isPlayerAlly(clickMenuSelectedPlayer) and "Remover aliado" or "Marcar como aliado"
                 if not clickMenuSelectedPlayer then
                     ClickMenuTitle.TextColor3 = Color3.fromRGB(255, 255, 255)
                     return
@@ -23572,8 +23600,8 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 end
             end
 
-            utility:Connection(ClickMenuTitle.MouseButton1Click, function()
-                if not clickMenuSelectedPlayer then
+            local function toggleClickMenuAlly()
+                if not clickMenuSelectedPlayer or clickMenuSelectedPlayer == plr then
                     return
                 end
 
@@ -23598,7 +23626,9 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                     cheat_client:save_friends()
                     updateTitleColor()
                 end
-            end)
+            end
+            utility:Connection(ClickMenuTitle.MouseButton1Click, toggleClickMenuAlly)
+            utility:Connection(ClickMenuAlly.MouseButton1Click, toggleClickMenuAlly)
 
             local function RoundHealth(num)
                 if typeof(num) ~= "number" then
