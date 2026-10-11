@@ -3200,6 +3200,9 @@ do
                 text = index .. ". <font color=\"#5555ff\">Charge Mana</font>"
             elseif action.type == "stopcharge" then
                 text = index .. ". <font color=\"#ff55ff\">Stop Charge</font>"
+            elseif action.type == "castspell" then
+                text = index .. ". Cast na faixa: " .. (action.spell or "?") .. " (" .. (action.mode or "Normal") .. ")"
+                    .. (action.adjustMana and " + carregar" or "")
             elseif action.type == "chargeuntil" then
                 text = index .. ". <font color=\"#55aaff\">Charge Until</font>: " .. (action.amount or 50)
             elseif action.type == "nostun" then
