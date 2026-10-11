@@ -7702,7 +7702,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
         do
             local group_player = Tabs.Visuals:AddLeftGroupbox("Player ESP")
             local group_chams = Tabs.Visuals:AddRightGroupbox("Chams")
-            group_player:AddDropdown("NivenxidePlayerEspFont", {Text = "Fonte do ESP", Default = 1,
+            Tabs.Interface:AddLeftGroupbox("Fonte do ESP de players"):AddDropdown("NivenxidePlayerEspFont", {Text = "Fonte do ESP", Default = 1,
                 Values = {"UI", "System", "Plex", "Monospace"},
                 Callback = function(value)
                     local fallback = {UI = 0, System = 1, Plex = 2, Monospace = 3}
@@ -8018,7 +8018,7 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
             local group_misc_esp = Tabs.Visuals:AddLeftGroupbox("World ESP")
             local group_ingredient_esp = Tabs.Visuals:AddRightGroupbox("Ingredient ESP")
             local group_ore_esp = Tabs.Visuals:AddLeftGroupbox("Ore ESP")
-            group_misc_esp:AddDropdown("NivenxideTrinketEspFont", {Text = "Fonte do ESP", Default = 1,
+            Tabs.Interface:AddLeftGroupbox("Fonte do ESP de trinkets"):AddDropdown("NivenxideTrinketEspFont", {Text = "Fonte do ESP", Default = 1,
                 Values = {"UI", "System", "Plex", "Monospace"},
                 Callback = function(value)
                     local fallback = {UI = 0, System = 1, Plex = 2, Monospace = 3}
@@ -20309,7 +20309,10 @@ if game.PlaceId == 3541987450 or game.PlaceId == 5208655184 or game.PlaceId == 1
                 cheat_client.spell_mana = spellFactory()({player = plr, spellCosts = cheat_client.spell_cost})
                 local factory, err = loadstring(HXD_LOCAL_READ("DEPENDENCIES/CharacterMana.lua"))
                 assert(factory, err)
-                factory()({group = Tabs.Interface:AddLeftGroupbox("Mana ao lado do personagem"),
+                factory()({group = Tabs.Interface:AddLeftGroupbox("Mini barra de mana"),
+                    rangesGroup = Tabs.Interface:AddLeftGroupbox("Marcacoes de mana"),
+                    intentGroup = Tabs.Interface:AddRightGroupbox("Item equipado no personagem"),
+                    snapGroup = Tabs.Interface:AddRightGroupbox("Snap cooldown"),
                     player = plr, utility = utility, library = library,
                     spellMana = cheat_client.spell_mana})
             end)
