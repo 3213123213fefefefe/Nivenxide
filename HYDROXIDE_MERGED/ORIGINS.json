@@ -1,0 +1,11 @@
+{
+  "base": {
+    "url": "https://git.fable.bz/zyu/hydroxide/raw/branch/main/ROGUE/rogue_ui.lua",
+    "sha256": "9156d13c48ef24ba3c37c91c048b1d143d0255572fe7385b42ada5b1748c6919"
+  },
+  "reference": {
+    "url": "https://gitlab.com/makeawishfg/zfza/-/raw/main/runnable_version.lua",
+    "sha256": "8dc8f17c7e1c3a660b74c44309e7fbb65cb5b2b5bc5f2215738bd79acf925baa"
+  },
+  "policy": "Keep Hydroxide for all duplicate features; isolate additional controls and state; no Nivenxide custom features."
+}
