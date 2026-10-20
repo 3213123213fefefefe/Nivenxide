@@ -1,0 +1,21 @@
+{
+  "BaseControls.lua": "749994b0a7b1f0d62778f68d48b498f9e81552988fc86cd843cd0f00c1b0fb1f",
+  "CoreBridge.lua": "da466c7617ca0766ab24f48e15937ec8efa8fdfbd03abf6f1c48568b20b9a356",
+  "DEPENDENCIES/Chatlogger.lua": "7bed3460e5625a114718a854f305d9756409b93fe982b7698fdcaa9a95a6abc7",
+  "DEPENDENCIES/Icons.lua": "9f131dfb47de74db572416b8bb33b9d4c1e5633aa55092918466aa8cdf2c049c",
+  "DEPENDENCIES/Library.lua": "815a497c1dffa3ae1785f38e39cd405946e51e29418ae609649622de771db630",
+  "DEPENDENCIES/RAMAccount.lua": "d14f62c34d3a7b8e9d34686677e2a1e4139dbea2b38e1c24f4320f0a0cd3f9a5",
+  "DEPENDENCIES/SaveManager.lua": "01bf2a4c002859d63e40ce5d09b6cb6b4b4b76c83cd5b3221e703fbf34c78d05",
+  "DEPENDENCIES/ThemeManager.lua": "52eb0f1618c4922644ae092b54bc72d2e2d45620deaa49e8e252e770088ae13e",
+  "ExtrasEngine.lua": "8f48a8d0c9988c47b206a87e272bd3c67899819b7007f88b4d38ae312cb0df24",
+  "ExtrasPolicy.lua": "44711c5fea6aafa32975df04bb50e5614ec567635e868c069b3c8d86f42a5dfb",
+  "ExtrasRuntime.lua": "3cd34bef3b3e299bcc6e2fa5c4c1860d5e872d729fa99b0160be8d2b39178c63",
+  "LICENSE": "0d96a4ff68ad6d4b6f1f30f713b18d5184912ba8dd389f86aa7710db079abcb0",
+  "ModeratorSnapshot.lua": "ca476390d1f0c7f9366eb9a147c3f4eaa6d146f4a8093b07129fa9566dfa6d78",
+  "ORIGINS.json": "5cf07d9b7ef1795f78c9ee071f9f3d86d1fa728c9ad303ba7d9897813c81efc7",
+  "README.md": "8fab3dffea107c5456f94f596464b412e978c62d2bfb117c7bbfa31d4aa0bebb",
+  "assets/SaturationMap.png": "6de7aec9338f0193009af0f959f1fca6f68eefac6b471f00ba94c74078e841fb",
+  "assets/TransparencyTexture.png": "32195d995f08a9a729b1de3982f33ce37052b64748d9462146f082ffb4233cf9",
+  "standard.lua": "69d9636dd9f924a90e17675682d2584ad66a5789c1c5d39ea14e760296973e24",
+  "start.lua": "a0a886d70a27f87c001d3fe69ae961cd36b093e98b7fc1538696f0b1b4f2aedf"
+}
