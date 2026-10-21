@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.sqlite3
+*.sqlite3-*
+blade23_access_key.txt
+blade23_calibracao_xp.json
+sentinel/
