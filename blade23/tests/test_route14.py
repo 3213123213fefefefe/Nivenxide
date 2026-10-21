@@ -97,6 +97,7 @@ __L3.bladeWorkerTick=function() __L3.bladeSupplyOwner=owner end
 __L3.bladeMovePoint=function(p) table.insert(moves,p);return true end
 __L3.bladeBagPickup=function(v) table.insert(bags,v) end
 __L3.bladeCollect=function() end
+__L3.bladePointReached=function() return true end
 __L3.bladeCount=function(n) return inventory[n] or 0 end
 __L3.bladePhase=function(p) phase=p end
 __L3.bladeStatus=function(t) status=t end
@@ -210,6 +211,7 @@ __L3.bladeValue=function() return method end
 __L3.bladeUseTespian=function() return true end
 __L3.setInn=function(name) table.insert(binds,name);return true end
 __L3.bladeRoute={[14]={}}
+__L3.bladePointReached=function() return true end
 local joined=0
 local a1723={State={joinRotReceiverQueue=function() joined+=1;return true end,
  rotReceiverQueueComplete=function() return complete end,rotReceiverHasTurn=function() return turn end}}
@@ -228,6 +230,9 @@ __L3.bladeOrderly();assert(phase=="B2_QUESTS1" and #moves==0 and #binds==0)
     def test_down_waits_before_p9_and_scroom_branch_skips_shrine(self):
         move=self.part('__L3.bladeMovePoint=function', '__L3.bladeBagPickup=function')
         self.run_luau(r'''local __L3={bladeRoute={[9]="P9"},bladeWorker={},bladeStatus=function() end}
+local LocalPlayer21={Character={}}
+__L3.bladeWaitPoints={}
+__L3.bladePointReached=function() return false end
 local tbl303={true};local standing=false;local waits=0;local moved=0
 __L3.bladeStanding=function() return standing end
 local task={wait=function() waits+=1;assert(moved==0);standing=true end}
@@ -290,6 +295,78 @@ local fn686=function() return false end
 local task={wait=function() end}
 '''+flow+r'''
 fn694();assert(table.concat(events,",")=="wipe,rejoin")
+''')
+
+    def test_wait_points_land_and_do_not_refly_after_gravity(self):
+        movement=self.part('__L3.bladeWaitPoints=', '__L3.bladeBagPickup=function')
+        self.run_luau(VEC+r'''
+Vector3.zero=Vector3.new(0,0,0)
+local __L3={bladeRoute={[4]=Vector3.new(5,20,5)},bladeWorker={},bladeStatus=function() end,bladeStanding=function() return true end}
+local tbl303={true};local LocalPlayer21={};local newResult61={attachLock=true}
+local root={Position=Vector3.new(0,20,0),Anchored=true};local state
+local hum={SetStateEnabled=function(_,n,v) assert(n==5 and v) end,ChangeState=function(_,s) state=s end}
+local char={FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end}
+LocalPlayer21.Character=char
+local Toggles8={};local disabled=0
+for _,name in {"Flight","BetterFlight","Noclip"} do
+ local toggle={Value=true};toggle.SetValue=function(_,value) assert(not value);toggle.Value=value;disabled+=1 end;Toggles8[name]=toggle
+end
+local clipped=0;local fn499=function(c) assert(c==char);clipped+=1 end
+local cleared=0;local sResult7={clearVeil=function() cleared+=1 end}
+local Enum={HumanoidStateType={GettingUp=7}}
+local task={wait=function() end};local moves=0
+local fn580=function(points) moves+=1;root.Position=points[1];return true end
+local near=function(p,r) return (root.Position-p).Magnitude<=r end
+'''+movement+r'''
+assert(__L3.bladeMovePoint(4,true))
+assert(moves==1 and disabled==3 and clipped==1 and cleared==1 and newResult61.attachLock==nil)
+assert(not root.Anchored and root.AssemblyLinearVelocity==Vector3.zero and state==7)
+root.Position=Vector3.new(5,2,5)
+for i=1,1000 do assert(__L3.bladeMovePoint(4,true)) end
+assert(moves==1 and clipped==1,"waiting on the floor must not lift the account every tick")
+root.Position=Vector3.new(30,2,5);assert(__L3.bladeMovePoint(4,true) and moves==2)
+LocalPlayer21.Character={FindFirstChild=function() return root end}
+root.Position=Vector3.new(5,2,5);assert(not __L3.bladePointReached(4),"arrival belongs to the old character")
+''')
+
+    def test_purchase_retries_are_serial_throttled_and_no_position_hold(self):
+        purchase=self.part('__L3.bladeBuySword=function()', '-- Exact XP cell:')
+        self.run_luau(r'''
+local now=0;local os={clock=function() return now end};local task={wait=function(t) now+=t end}
+local __L3={bladeRoute={[5]={}},bladeStatus=function() end,bladeMovePoint=function() return true end}
+local tbl303={true};local sword=false;local fn591=function() return sword end
+local getServerValue=function() return 100 end;local fn534=function() end
+local flags={};local fn536=function(value) table.insert(flags,value) end
+local detector={};local merchant={IsA=function() return false end,FindFirstChildWhichIsA=function() return detector end}
+local HResult={nearestNPC=function() return merchant,0 end};local FResult={};local calls=0;local fail=false;local buy=false
+FResult.run=function(_,answers,options)
+ calls+=1;assert(answers[1]=="I'll buy it." and options.doneWhen==nil and options.holdPosition==false)
+ assert(options.timeout==5 and options.maxReplays==0 and options.shouldRun())
+ if fail then error("simulated failure") end
+ if buy then sword=true;assert(not options.shouldRun()) end
+end
+'''+purchase+r'''
+assert(not __L3.bladeBuySword() and calls==1 and not __L3.bladeSwordBusy and flags[#flags]==false)
+assert(not __L3.bladeBuySword() and calls==1,"no immediate duplicate purchase")
+now+=3;fail=true;assert(not __L3.bladeBuySword() and calls==2 and not __L3.bladeSwordBusy and flags[#flags]==false)
+now+=3;fail=false;buy=true;assert(__L3.bladeBuySword() and calls==3)
+assert(__L3.bladeBuySword() and calls==3,"inventory confirmation prevents another purchase")
+''')
+
+    def test_collection_touches_potions_without_moving_to_silver(self):
+        collect=self.part('__L3.bladeCollect=function()', '__L3.bladePrepareLegacy=function()')
+        self.run_luau(VEC+r'''
+local __L3={};local root={Position=Vector3.new(0,0,0)}
+local LocalPlayer21={Character={FindFirstChild=function() return root end}};local tbl303={true}
+local money={Name="MoneyBag"};local potion={Name="ToolBag",Position=Vector3.new(5,0,0),FindFirstChild=function() return {FindFirstChild=function() return {Text="Health Potion"} end} end}
+local thrown={GetChildren=function() return {money,potion} end};local v966={FindFirstChild=function() return thrown end}
+local touches=0;local firetouchinterest=function(part,r,event) assert(part==potion and r==root);touches+=1 end
+__L3.bladeSupplyRequirements=function() return {['Health Potion']=1} end
+__L3.fn596=function(p) return p end;__L3.bladeCount=function() return 0 end
+__L3.fn597=function() error("must not approach a bag") end;local v1013=function() error("must not fly back") end
+'''+collect+r'''
+__L3.bladeCollect();assert(touches==2)
+__L3.bladeSupplyRequirements=function() return {} end;__L3.bladeCollect();assert(touches==2)
 ''')
 
 if __name__ == '__main__':

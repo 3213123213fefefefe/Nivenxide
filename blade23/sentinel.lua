@@ -35466,7 +35466,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             )
             tbl307.tween = CreateResult2
             local tbl338 = { false }
-            CreateResult2.Completed:Connect(function()
+            local completedConnection = CreateResult2.Completed:Connect(function()
               tbl338[1] = true
             end)
             CreateResult2:Play()
@@ -35479,6 +35479,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 v1061.CFrame = CFrame.new(a1759)
               end
             end
+            completedConnection:Disconnect()
+            CreateResult2:Destroy()
             tbl307.tween = nil
           end
           while tbl303[1] do
@@ -38693,28 +38695,25 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return {['Liquid Wisdom']=1,['Health Potion']=1,['Ice Protection']=1,['Tespian Elixir']=5}
         end
         __L3.bladeCollect=function()
+          -- Money bags are handled by Sentinel Auto Bag. Never move the account to a bag.
           local root=LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart")
           local thrown=v966:FindFirstChild("Thrown")
-          if not root or not thrown then return end
-          local origin=root.Position
+          if not root or not thrown or not firetouchinterest then return end
           local requirements=__L3.bladeSupplyRequirements()
+          if next(requirements)==nil then return end
           for _,bag in thrown:GetChildren() do
             if not tbl303[1] then return end
-            local part=__L3.fn596(bag)
-            if part and (part.Position-origin).Magnitude<=50 then
-              if bag.Name=="ToolBag" then
-                local label=bag:FindFirstChild("BillboardGui")
-                local tool=label and label:FindFirstChild("Tool")
-                local name=tool and tool.Text
-                if name and requirements[name] and __L3.bladeCount(name)<requirements[name] then
-                  __L3.fn597(part)
-                end
-              elseif bag.Name=="MoneyBag" and (tonumber(getServerValue("Silver")) or 0)<__L3.bladeSilverGoal() then
-                __L3.fn597(part)
+            if bag.Name=="ToolBag" then
+              local part=__L3.fn596(bag)
+              local label=bag:FindFirstChild("BillboardGui")
+              local tool=label and label:FindFirstChild("Tool")
+              local name=tool and tool.Text
+              if part and (part.Position-root.Position).Magnitude<=50
+                and name and requirements[name] and __L3.bladeCount(name)<requirements[name] then
+                firetouchinterest(part,root,0);firetouchinterest(part,root,1)
               end
             end
           end
-          if tbl303[1] then v1013(origin) end
         end
         __L3.bladePrepareLegacy=function()
           local save=tbl308[1]
@@ -38761,6 +38760,34 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return character~=nil and hum~=nil and hum.Health>0
             and not v969:HasTag(character,"Unconscious") and not v969:HasTag(character,"Knocked")
         end
+        __L3.bladeWaitPoints={[3]=true,[4]=true,[5]=true,[8]=true,[9]=true,[10]=true,[11]=true,[13]=true,[14]=true}
+        __L3.bladeLand=function()
+          -- Movement owns its temporary noclip connection; this runs only after it disconnects.
+          for _,key in {"Flight","BetterFlight","Noclip"} do
+            local toggle=Toggles8[key]
+            if toggle and toggle.Value then toggle:SetValue(false) end
+          end
+          newResult61.attachLock=nil
+          sResult7.clearVeil()
+          local character=LocalPlayer21.Character
+          local root=character and character:FindFirstChild("HumanoidRootPart")
+          if root then root.Anchored=false;root.AssemblyLinearVelocity=Vector3.zero;root.AssemblyAngularVelocity=Vector3.zero end
+          fn499(character)
+          local hum=character and character:FindFirstChildOfClass("Humanoid")
+          if hum then hum:SetStateEnabled(5,true);hum:ChangeState(Enum.HumanoidStateType.GettingUp) end
+        end
+        __L3.bladePointReached=function(index)
+          local character=LocalPlayer21.Character
+          local root=character and character:FindFirstChild("HumanoidRootPart")
+          local point=__L3.bladeRoute[index]
+          if not root or not point then return false end
+          local delta=root.Position-point
+          -- Saved arrival survives the small vertical drop from the raised waypoint to the floor.
+          if __L3.bladeLandedCharacter==character and __L3.bladeLandedPoint==index then
+            return Vector3.new(delta.X,0,delta.Z).Magnitude<=10 and math.abs(delta.Y)<=30
+          end
+          return delta.Magnitude<=4
+        end
         __L3.bladeMovePoint=function(index,standing)
           while tbl303[1] and standing and not __L3.bladeStanding() do
             __L3.bladeStatus("Aguardando levantar antes de P"..index);task.wait(0.25)
@@ -38769,8 +38796,16 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           __L3.bladeLocation=({[3]="PE3",[8]="PE8",[11]="PG11",[13]="PE13"})[index] or "P"..index
           __L3.bladeWorker.point=__L3.bladeLocation
           local point=__L3.bladeRoute[index]
-          if fn580({point})==false or not tbl303[1] then return false end
-          if not near(point,15) then __L3.bladeStatus("Nao chegou a "..__L3.bladeLocation.."; aguardando nova tentativa");task.wait(0.25);return false end
+          if not __L3.bladePointReached(index) then
+            __L3.bladeLandedPoint=nil
+            if fn580({point})==false or not tbl303[1] then return false end
+            if not near(point,8) then __L3.bladeStatus("Nao chegou a "..__L3.bladeLocation.."; aguardando nova tentativa");task.wait(0.25);return false end
+          end
+          if __L3.bladeWaitPoints[index] and (__L3.bladeLandedCharacter~=LocalPlayer21.Character or __L3.bladeLandedPoint~=index) then
+            __L3.bladeLand()
+            __L3.bladeLandedCharacter=LocalPlayer21.Character;__L3.bladeLandedPoint=index
+            task.wait(0.25)
+          end
           return true
         end
         __L3.bladeBagPickup=function(active)
@@ -38827,7 +38862,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             __L3.bladeWorker.supplyState="running";__L3.bladeWorkerTick()
             if not __L3.bladeMovePoint(4,true) then return end
           end
-          if not near(__L3.bladeRoute[4],15) and not __L3.bladeMovePoint(4,true) then return end
+          if not __L3.bladePointReached(4) and not __L3.bladeMovePoint(4,true) then return end
           __L3.bladeBagPickup(true)
           __L3.bladeCollect()
           if not tbl303[1] then return end
@@ -38848,19 +38883,37 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         __L3.bladeBuySword=function()
           if fn591("Sword") then return true end
+          if __L3.bladeSwordBusy then task.wait(0.25);return false end
+          if os.clock()<(__L3.bladeSwordNextAttempt or 0) then task.wait(0.25);return false end
           if not __L3.bladeMovePoint(5,true) then return false end
           local point=__L3.bladeRoute[5]
           local merchant,distance=HResult.nearestNPC("BronzeSword",point)
           if not merchant or not distance or distance>25 then
-            __L3.bladeStatus("P5: aguardando BronzeSword no ponto de compra informado");task.wait(0.5);return false
+            __L3.bladeStatus("P5: aguardando BronzeSword no ponto de compra informado");task.wait(1);return false
           end
+          local detector=merchant:IsA("ClickDetector") and merchant or merchant:FindFirstChildWhichIsA("ClickDetector",true)
+          if not detector then __L3.bladeStatus("P5: aguardando ClickDetector da BronzeSword");task.wait(1);return false end
           if (tonumber(getServerValue("Silver")) or 0)<10 then
-            __L3.bladeStatus("P5: aguardando 10 Silver para a espada");task.wait(0.5);return false
+            __L3.bladeStatus("P5: aguardando 10 Silver para a espada");task.wait(1);return false
           end
           __L3.bladeStatus("P5: comprando espada de Bronze em Alana")
-          fn587(merchant,{"I'll buy it."},5,function() return fn591("Sword") end)
-          local untilTime=os.clock()+6
-          while tbl303[1] and not fn591("Sword") and os.clock()<untilTime do task.wait(0.2) end
+          __L3.bladeSwordBusy=true
+          fn536(true)
+          local purchaseDeadline=os.clock()+8
+          local ok,err=pcall(function()
+            -- doneWhen accepts dialogue text lists, never an inventory predicate.
+            -- No position hold: the raised waypoint must settle naturally on the floor.
+            FResult.run(merchant,{"I'll buy it."},{
+              shouldRun=function() return tbl303[1] and not fn591("Sword") and os.clock()<purchaseDeadline end,
+              timeout=5,holdPosition=false,maxReplays=0,minHold=0,
+            })
+            local deadline=os.clock()+3
+            while tbl303[1] and not fn591("Sword") and os.clock()<deadline do task.wait(0.2) end
+          end)
+          fn536(false)
+          __L3.bladeSwordBusy=false
+          __L3.bladeSwordNextAttempt=os.clock()+3
+          if not ok then __L3.bladeStatus("P5: falha na compra; nova tentativa em 3s");fn534("Blade sword purchase: %s",tostring(err)) end
           return tbl303[1] and fn591("Sword")
         end
         -- Exact XP cell: attack position + two opposite inside corners.
@@ -39067,6 +39120,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         __L3.bladeReleaseSetup=function()
           __L3.bladeBagPickup(false)
           __L3.bladeAtSupplyWait=false;__L3.bladeSupplyCharacter=nil
+          __L3.bladeLandedCharacter=nil;__L3.bladeLandedPoint=nil
+          __L3.bladeSwordNextAttempt=nil
           __L3.bladeShrApproachCharacter=nil;__L3.bladeRotWaitingCharacter=nil;__L3.bladeRotAtP14Character=nil
           a1723.State.bladeReceiverAtP14=false
           __L3.bladeRunConfig=nil
@@ -39778,7 +39833,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if turn then
             if __L3.bladeRotAtP14Character~=LocalPlayer21.Character then
               if not __L3.bladeMovePoint(14,true) then return end
-              if not near(__L3.bladeRoute[14],12) then return end
+              if not __L3.bladePointReached(14) then return end
               __L3.bladeRotAtP14Character=LocalPlayer21.Character
               a1723.State.bladeReceiverAtP14=true
             end

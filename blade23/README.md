@@ -33,7 +33,11 @@ A conta percorre P1 → P2 → PE3. PE3 é a espera da fila de coleta. Apenas a 
 | Rots | 100 Silver; sem poções |
 | Quests | 660 Silver; 1 Liquid Wisdom, 1 Health Potion, 1 Ice Protection e 5 Tespian Elixir |
 
-Ao concluir, desativa a coleta, sai para P5 e libera a vaga. Compra a Bronze Sword local próxima de P5 e confirma a espada no inventário antes de continuar. Se a espada local não aparecer, aguarda; a compra não usa a loja distante de Santorini.
+A coleta usa o Auto Bag do Sentinel para alcançar o Silver sem deslocar a conta até cada bolsa. As poções necessárias usam interação por toque dentro dos mesmos 50 studs.
+
+Ao concluir, desativa a coleta, sai para P5 e libera a vaga. Compra a Bronze Sword local próxima de P5 e confirma a espada no inventário antes de continuar. Se a espada local não aparecer, aguarda; a compra não usa a loja distante de Santorini. A compra executa uma tentativa por vez, sem prender o personagem no ar, confirma o inventário e respeita intervalo de 3 segundos antes de tentar novamente.
+
+Nos pontos de espera PE3, P4, P5, PE8, P9, P10, PG11, PE13 e P14, o bot desliga Flight, Better Flight e Noclip ao chegar, restaura a colisão e permite que a conta caia até o piso. A queda desde a coordenada elevada não dispara uma nova subida a cada atualização. Os deslocamentos usam seu próprio noclip temporário e liberam o tween e sua conexão ao terminar.
 
 ### XP
 
@@ -92,7 +96,7 @@ A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do pers
 
 ## Validação
 
-O runtime passou pela compilação Luau. Nove testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin.
+O runtime passou pela compilação Luau. Doze testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
