@@ -34731,6 +34731,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           qResult3.remove("khei_run")
         end)
         local fn531 = function(a1724)
+          if __L3.progStatusLabel then
+            __L3.progStatusLabel:SetText(a1724 and "Sigil: em execucao" or "Sigil: parado")
+          end
           if v1007 and v1007.Holder then
             v1007.Holder.Visible = a1724
           end
@@ -38657,7 +38660,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         -- Exact XP cell: attack position + two opposite inside corners.
         __L3.bladeCellKey="sentinel/.cache/blade_workers/xp_cell.json"
-        __L3.bladeCellConfig=qResult3.getJSON("blade_xp_cell")
+        __L3.bladeCellDefault=function()
+          return {placeId=5208655184,
+            cornerA={x=2272.9111328125,y=62.99999237060547,z=791.964599609375},
+            cornerB={x=2265.51806640625,y=62.99999237060547,z=776.548583984375},
+            attack={position={x=2268.965087890625,y=62.999996185302737,z=783.982666015625},
+              look={x=-0.012723248451948166,y=-1.1437127689362115e-8,z=0.999919056892395}}}
+        end
+        __L3.bladeCellConfig=qResult3.getJSON("blade_xp_cell") or __L3.bladeCellDefault()
         __L3.bladeCellDirty=qResult3.get("blade_xp_cell_draft")=="true"
         __L3.bladeCellRefresh=0
         __L3.bladeVector=function(value)
@@ -38752,6 +38762,18 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           __L3.bladeCellRefresh=os.clock()+5
           __L3.bladeCellDescribe()
           fn535("Cela XP salva e compartilhada com as outras contas")
+          return true
+        end
+        __L3.bladeCellUseDefault=function()
+          if tbl303[1] then fn535("Pare a progressao antes de mudar a cela XP"); return false end
+          local cell=__L3.bladeCellDefault()
+          if not __L3.bladeCellBounds(cell) then fn535("A cela padrao Necro e do mapa Gaia (5208655184)."); return false end
+          __L3.bladeCellConfig=cell
+          __L3.bladeCellDirty=true
+          qResult3.setJSON("blade_xp_cell",cell)
+          qResult3.set("blade_xp_cell_draft","true")
+          __L3.bladeCellDescribe()
+          fn535("Cela padrao Necro aplicada neste PC. Use Salvar/compartilhar para enviar as outras contas.")
           return true
         end
         __L3.bladeCellClearVisual=function()
@@ -40121,6 +40143,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           __L3.tbl335[1] = false
         end
+        __L3.progStatusLabel=progressionTab:AddLabel("Sigil: parado | escolha a rota e clique Iniciar Sigil",true)
+        v1008=progressionTab:AddButton({Text="Iniciar Sigil",Tooltip=iResult5.blatant(),Func=function()
+          if __L3.progStartClick then __L3.progStartClick()
+          else __L3.progStatusLabel:SetText("Sigil: aguarde o carregamento das opcoes") end
+        end})
+        v1007=progressionTab:AddButton({Text="Parar Sigil",Func=function() v1009(true) end})
+        fn531(false)
         progressionTab:AddDropdown("ProgRoute", {Text="Progression route",Values={"Original","Blade/Sigil (3 stages)"},Default="Original",Multi=false})
         progressionTab:AddDropdown("BladeOrderly", {Text="Blade P2 Orderly method",Values={"Rots","Quests"},Default="Rots",Multi=false})
         progressionTab:AddDropdown("BladeFarm", {Text="Blade XP preference",Values={"Automatic","Shriekers","Zombie Scrooms"},Default="Automatic",Multi=false})
@@ -40139,10 +40168,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end})
         __L3.bladeCellTab=a1723.State.bladeCellTab or progressionTab
         __L3.bladeCellTab:AddLabel("1. Fique no ponto de M1 e olhe para os mobs. 2. Marque dois cantos opostos POR DENTRO da cela. 3. Confira a area verde e salve.",true)
+        __L3.bladeCellTab:AddButton({Text="Usar cela padrao (Necro)",Func=__L3.bladeCellUseDefault})
         __L3.bladeCellTab:AddButton({Text="Marcar ponto de M1 + direcao",Func=function() __L3.bladeCellMark("attack") end})
         __L3.bladeCellTab:AddButton({Text="Marcar canto A (dentro da cela)",Func=function() __L3.bladeCellMark("cornerA") end})
         __L3.bladeCellTab:AddButton({Text="Marcar canto B (oposto ao A)",Func=function() __L3.bladeCellMark("cornerB") end})
-        __L3.bladeCellLabel=__L3.bladeCellTab:AddLabel("Cela XP: aguardando marcacoes",true)
+        __L3.bladeCellLabel=__L3.bladeCellTab:AddLabel("Cela XP: padrao Necro disponivel",true)
+        __L3.bladeCellDescribe()
         __L3.bladeCellTab:AddButton({Text="Ver area e alvos da cela",Func=__L3.bladeCellShow})
         __L3.bladeCellTab:AddButton({Text="Ocultar marcacoes",Func=__L3.bladeCellClearVisual})
         __L3.bladeCellTab:AddButton({Text="Salvar/compartilhar cela XP",Func=__L3.bladeCellPublish})
@@ -40252,45 +40283,49 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           qResult3.setJSON("progression_settings", res251)
           fn534("saveProgSettings: skipIllu=%s", tostring(res251.toggles.ProgSkipIllusionist))
         end)))
-        __L3.num326 = 0
-        v1008 = progressionTab:AddButton({
-          Text = "Start",
-          Tooltip = iResult5.blatant(),
-          Func = function()
-            if tick() - __L3.num326 < 2 then
-              return
-            end
-            __L3.num326 = tick()
-            if not iResult5.allow(a1723, "Blatant", "Auto-Sigil") then
-              return
-            end
-            local v1301 = Options8.ProgStartPhase and Options8.ProgStartPhase.Value
-            local v1302 = v1301 and v1301:match("^P%d")
+        __L3.num326 = -math.huge
+        __L3.progStartClick=function()
+          if tbl303[1] then
+            __L3.progStatusLabel:SetText("Sigil: ja esta em execucao")
+            return
+          end
+          if tick()-__L3.num326<2 then return end
+          __L3.num326=tick()
+          if not iResult5.allow(a1723,"Blatant","Auto-Sigil") then
+            __L3.progStatusLabel:SetText("Sigil: ative Blatant Mode para iniciar")
+            return
+          end
+          __L3.progStatusLabel:SetText("Sigil: iniciando...")
+          local ok,message=pcall(function()
+            local v1301=Options8.ProgStartPhase and Options8.ProgStartPhase.Value
+            local v1302=v1301 and v1301:match("^P%d")
             if v1302 then
-              tbl308[1] = fn541() or {}
+              tbl308[1]=fn541() or {}
               if __L3.bladeEnabled() then
                 local mapping={P1="B1_PREP",P2="B2_ORDERLY",P3="B3_TRAIN",P4="B1_SWORD",P5="B1_XP",P6="B2_ORDERLY",P7="P7"}
                 tbl308[1].bladePhase=mapping[v1302]
                 tbl308[1].phase=tbl308[1].bladePhase
-              else tbl308[1].phase = v1302 end
-              tbl308[1].step = 0
-              tbl308[1].boundInn = nil
+              else tbl308[1].phase=v1302 end
+              tbl308[1].step=0
+              tbl308[1].boundInn=nil
               fn542()
-              pcall(function()
-                Options8.ProgStartPhase:SetValue("Resume")
-              end)
-              fn535("auto-sigil starting at " .. v1302)
+              pcall(function() Options8.ProgStartPhase:SetValue("Resume") end)
+              fn535("auto-sigil starting at "..v1302)
             end
             __L3.fn648(false)
-          end,
-        })
-        v1007 = progressionTab:AddButton({
-          Text = "Stop",
-          Func = function()
-            v1009(true)
-          end,
-        })
-        fn531(false)
+          end)
+          if not ok then
+            pcall(v1009,true)
+            tbl303[1]=false
+            fn531(false); fn532(true)
+            pcall(qResult3.remove,"progression_active")
+            pcall(function() newResult61:DoCleaning() end)
+            local text="Sigil: erro ao iniciar: "..tostring(message)
+            __L3.progStatusLabel:SetText(text)
+            fn535(text)
+            fn534("start failed: %s",tostring(message))
+          end
+        end
         v1012 = progressionTab:AddButton({
           Text = "Reset Progress",
           DoubleClick = true,

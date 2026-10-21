@@ -51,9 +51,9 @@ Ative **Mostrar configuracao manual**. Os campos anteriores continuam disponíve
 2. Selecione **Rots** ou **Quests**.
 3. Marque o ponto de coleta perto da Alana e o ponto de espera. Confira o spawn/inn escolhido.
 4. Confira o silver inicial, padrão 660, incluindo 10 da espada. O valor é ajustável.
-5. Calibre a cela seguindo a seção abaixo. Confira a meta de dano, padrão 6.700, e a quantidade mínima de Shriekers, padrão 50. Para testar apenas essa cela, escolha **Shriekers** em **Blade XP preference**. **Automatic** também permite o farm alternativo de Zombie Scrooms.
+5. A cela padrão Necro já vem marcada. Confira a área ou calibre outra cela seguindo a seção abaixo. Confira a meta de dano, padrão 6.700, e a quantidade mínima de Shriekers, padrão 50. Para testar apenas essa cela, escolha **Shriekers** em **Blade XP preference**. **Automatic** também permite o farm alternativo de Zombie Scrooms.
 6. Em **Rot e filas → Alts**, selecione somente as contas fornecedoras que serão entregues ao Officer.
-7. Habilite Blatant Mode, deixe **Start Phase em Resume** e use **Start**.
+7. Habilite Blatant Mode, deixe **Start Phase em Resume** e clique **Iniciar Sigil**, no topo de **Blade / Sigil**. **Parar Sigil** aparece enquanto o bot está ativo. A linha de estado mostra execução, modo obrigatório ou erro ao iniciar; uma falha de inicialização libera o botão para tentar novamente.
 
 O fluxo entra automaticamente na fila de Rots ao terminar o XP. Não é necessário ativar manualmente **Join receiver queue** nesse fluxo completo.
 
@@ -74,7 +74,9 @@ O rejoin busca novamente o loader do GitHub e executa a versão publicada do Bla
 
 ### Marcar a cela exata de Sanguine Shrine
 
-Faça isso com a progressão parada, usando uma conta dentro da cela desejada:
+A cela padrão Necro no mapa Gaia (`5208655184`) usa o ponto de M1 `(2268.965087890625, 62.999996185302737, 783.982666015625)` e os limites enviados na calibração. Contas sem marcação salva usam esse padrão automaticamente. Marcações já salvas ou compartilhadas continuam tendo prioridade. Para substituir uma marcação antiga, com a progressão parada, clique **Cela XP → Usar cela padrao (Necro)** e depois **Salvar/compartilhar cela XP**. A lista vazia `mobs` do relatório não fixa os alvos: os Shriekers são detectados ao vivo dentro da cela.
+
+Para marcar outra cela, faça isso com a progressão parada, usando uma conta dentro da cela desejada:
 
 1. Vá ao ponto onde quer que o personagem dê M1, olhe para os Shriekers e clique **blade 23 → Cela XP → Marcar ponto de M1 + direcao**. A direção salva é a do personagem.
 2. Vá a um canto da cela, por dentro das paredes, e clique **Marcar canto A**.
