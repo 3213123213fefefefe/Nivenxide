@@ -55,6 +55,8 @@ Ative **Mostrar configuracao manual**. Os campos anteriores continuam disponíve
 6. Em **Rot e filas → Alts**, selecione somente as contas fornecedoras que serão entregues ao Officer.
 7. Habilite Blatant Mode, deixe **Start Phase em Resume** e clique **Iniciar Sigil**, no topo de **Blade / Sigil**. **Parar Sigil** aparece enquanto o bot está ativo. A linha de estado mostra execução, modo obrigatório ou erro ao iniciar; uma falha de inicialização libera o botão para tentar novamente.
 
+Na rota Blade/Sigil, a espada é comprada no objeto `BronzeSword` encontrado a até 250 studs do Inn Keeper de Alana (ou do ponto de coleta, se o keeper ainda não estiver disponível). Se a conta estiver longe de Alana, tenta retornar pelo spawn de Alana antes da compra. Se a loja local não aparecer, aguarda com uma mensagem; não usa o trajeto antigo até Santorini. A próxima etapa exige a espada confirmada no inventário.
+
 O fluxo entra automaticamente na fila de Rots ao terminar o XP. Não é necessário ativar manualmente **Join receiver queue** nesse fluxo completo.
 
 ### Contas que fornecem os Rots

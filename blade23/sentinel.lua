@@ -38602,6 +38602,44 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           qResult3.setJSON(key,{x=root.Position.X,y=root.Position.Y,z=root.Position.Z})
           fn535("Point saved: "..key)
         end
+        __L3.bladeBuySword=function()
+          if fn591("Sword") then return true end
+          local keeper=HResult.innKeeper("Alana")
+          local keeperRoot=keeper and (keeper:FindFirstChild("HumanoidRootPart") or keeper:FindFirstChildWhichIsA("BasePart"))
+          local anchor=keeperRoot and keeperRoot.Position or __L3.bladePoint("blade_supply_point")
+          if not anchor then
+            __L3.bladeStatus("P1 espada: aguardando Inn Keeper ou ponto de coleta de Alana")
+            task.wait(1); return false
+          end
+          if not near(anchor,250) then
+            __L3.bladeStatus("P1 espada: voltando ao spawn de Alana")
+            __L3.setInn("Alana")
+            return false
+          end
+          if (tonumber(getServerValue("Silver")) or 0)<10 then
+            __L3.bladeStatus("P1 espada: precisa de 10 Silver")
+            task.wait(1); return false
+          end
+          local merchant,distance=HResult.nearestNPC("BronzeSword",anchor)
+          local part=merchant and (merchant:FindFirstChild("HumanoidRootPart") or merchant:FindFirstChildWhichIsA("BasePart"))
+          if not part or not distance or distance>250 or (part.Position-anchor).Magnitude>250 then
+            __L3.bladeStatus("P1 espada: BronzeSword nao encontrado em Alana; aguardando a loja")
+            task.wait(1); return false
+          end
+          __L3.bladeStatus("P1 espada: comprando Bronze Sword em Alana")
+          fn580({part.Position+part.CFrame.LookVector*3})
+          if not tbl303[1] or not part.Parent then return false end
+          if not near(part.Position,15) then
+            __L3.bladeStatus("P1 espada: nao chegou a loja de Alana; aguardando")
+            task.wait(1); return false
+          end
+          fn587(merchant,{"I'll buy it."},5,function() return fn591("Sword") end)
+          local deadline=os.clock()+6
+          while tbl303[1] and not fn591("Sword") and os.clock()<deadline do task.wait(0.2) end
+          if fn591("Sword") then return true end
+          __L3.bladeStatus("P1 espada: compra em Alana nao confirmada; confira a loja e o Silver")
+          return false
+        end
         __L3.bladeSupplyRequirements=function()
           if __L3.bladeValue("BladeOrderly","Rots")=="Rots" then return {} end
           return {['Liquid Wisdom']=1,['Health Potion']=1,['Ice Protection']=1,['Tespian Elixir']=5}
@@ -39380,9 +39418,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         __L3.bladeStep=function(phase)
           if phase=="B1_PREP" then __L3.bladePrepare()
           elseif phase=="B1_SWORD" then
-            __L3.bladeStatus("P1: buying bronze sword")
-            __L3.fn609()
-            if tbl303[1] and fn591("Sword") then __L3.bladePhase("B1_XP") end
+            if __L3.bladeBuySword() and tbl303[1] then __L3.bladePhase("B1_XP") end
           elseif phase=="B1_XP" then __L3.bladeXP()
           elseif phase=="B2_ORDERLY" then __L3.bladeOrderly()
           elseif phase=="B2_QUESTS1" then
