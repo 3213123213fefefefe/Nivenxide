@@ -1,153 +1,103 @@
-# blade 23 — um PC ou dois PCs
+# Blade 23 — tudo no mesmo PC
 
-Esta pasta contém o Sentinel modificado, um loader remoto, um servidor de comunicação e um iniciador para Windows. O servidor usa apenas a biblioteca padrão do Python 3.10 ou superior.
+O Sentinel usa filas em arquivos locais do executor. Configure todas as contas no mesmo PC, no mesmo servidor do Roblox e com acesso à mesma pasta de arquivos do executor. Não é necessário Python, `.bat`, endereço de servidor, convite ou teste de conexão entre computadores. Configurações remotas antigas são substituídas pelo modo local.
 
-## Rodar tudo no mesmo PC
+## Carregar e atualizar
 
-Carregue o loader nas contas e, com os bots parados e fora das filas, clique **blade 23 → Blade / Sigil → Tudo neste PC (sem servidor)**. O mesmo botão aparece em **Conexao facil**. Isso salva o modo local e substitui qualquer endereço/chave remotos antigos. Instâncias paradas que compartilham a pasta do executor recebem a configuração automaticamente; em pastas de executores diferentes, selecione o modo em cada uma, mas a coordenação das filas exige uma pasta compartilhada entre todas as instâncias.
-
-Não precisa instalar Python, abrir `.bat`, usar convite ou verificar conexão. O Start e a atualização periódica da interface não fazem testes HTTP de conexão. As filas de XP e Rot usam arquivos locais do executor; ele precisa oferecer acesso a arquivos. Todas as contas continuam precisando estar no mesmo servidor do Roblox. Configure Rots/Quests, o farm e as Alts antes de clicar Iniciar Sigil.
-
-As instruções de servidor abaixo são opcionais, somente para usar dois PCs.
-
-## 1. Ligar o PC principal
-
-Só o PC principal precisa do Python 3.10 ou superior. Os dois PCs precisam estar na mesma rede, ou conectados por uma rede privada/VPN que permita acesso ao PC principal.
-
-1. Feche a janela do servidor antigo se ela estiver aberta.
-2. Baixe apenas **iniciar_servidor.bat** e abra-o. Ele baixa/atualiza `blade23_server.py` automaticamente na mesma pasta, preservando a configuração existente.
-3. Deixe a janela do servidor aberta. Uma página **Blade 23 — conectar PCs** abre no navegador, com **Copiar convite**.
-4. Se o Windows solicitar acesso à rede, permita na rede privada usada pelos PCs.
-
-Se a página não abrir automaticamente, acesse `http://127.0.0.1:8787/` no PC principal. A página de convite só é acessível nesse PC. Ao abrir o iniciador novamente com o servidor já ligado, ele reabre essa página.
-
-O arquivo `blade23_access_key.txt` e o banco `blade23_state.sqlite3` ficam na pasta do iniciador. As conexões já pareadas continuam válidas após reiniciar o servidor usando essa mesma pasta.
-
-## 2. Abrir o bot
-
-Pare a versão anterior ou reentre no jogo antes de carregar. Use o mesmo comando nos dois PCs:
+Pare a versão anterior em **Config → Unload** ou reentre no jogo. Execute:
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/main/blade23/loader.lua", true))()
 ```
 
-A aba **blade 23** reúne **Blade / Sigil**, **Rot e filas**, **Cela XP** e **Conexao facil**. O bot carrega a versão publicada no GitHub sem baixar o `.lua` manualmente.
+A aba **blade 23** contém **Blade / Sigil**, **Rot** e **Filas**. A aba independente **Pontos do mapa** permanece disponível. Os controles antigos de conexão, rota, meta de dano, marcação de coleta e Cela XP ficam ocultos; suas funções foram preservadas internamente.
 
-## 3. Conectar em dois passos
+## Contas Blade / Sigil
 
-Faça a conexão com a progressão e o Rot Bot parados e fora da fila.
+Configure tudo antes de iniciar:
 
-**No PC principal:** em **blade 23 → Conexao facil**, clique **Servidor neste PC (dois PCs)**. A chave é obtida, testada e salva automaticamente.
+1. Escolha **Rots** ou **Quests**.
+2. Escolha **Shriekers**, **Zombie Scrooms** ou **Automatic**.
+3. Configure a velocidade, padrão **100**, e a quantidade mínima de Shriekers.
+4. Para Rots, selecione em **Alts** as contas fornecedoras que serão entregues ao Bounty Officer.
+5. Habilite Blatant Mode e clique **Iniciar Sigil**. O botão **Parar Sigil** interrompe a execução e libera as configurações.
 
-**No outro PC:** na página do navegador do PC principal, clique **Copiar convite**. Envie esse texto ao segundo PC, cole em **Convite do PC principal** no bot e clique **Conectar convite**. O convite já inclui o endereço e um código curto; não é preciso preencher a chave longa.
+As opções são registradas para a execução e ficam bloqueadas enquanto o bot roda. A retomada preserva o progresso individual; uma conta que já terminou uma etapa não refaz essa etapa automaticamente. Uma execução nova marca spawn em **Alana** antes da coleta. Não é preciso escolher uma fase de início na interface.
 
-Deve aparecer **Conectado ao Blade 23**. O convite vale por dez minutos; **Renovar convite** gera outro sem desconectar quem já conectou. Se houver mais de um endereço na página, selecione o da rede acessível pelos dois PCs.
+### Coleta e espada
 
-A conexão fica salva na pasta do executor. Novas instâncias a carregam automaticamente. Instâncias já abertas que compartilham essa pasta recebem a configuração quando estiverem paradas e fora das filas. Se outro executor usa outra pasta, conecte uma vez nessa pasta também. A configuração não muda durante um farm ou turno de Rot.
+A conta percorre P1 → P2 → PE3. PE3 é a espera da fila de coleta. Apenas a dona da vez entra em P4 e ativa AutoBagPickup com alcance de **50 studs**:
 
-Todas as contas precisam estar no **mesmo servidor do Roblox**. O servidor Python deve permanecer aberto no PC principal.
+| Método | Suprimentos necessários |
+| --- | --- |
+| Rots | 100 Silver; sem poções |
+| Quests | 660 Silver; 1 Liquid Wisdom, 1 Health Potion, 1 Ice Protection e 5 Tespian Elixir |
 
-### Configuração manual, quando necessária
+Ao concluir, desativa a coleta, sai para P5 e libera a vaga. Compra a Bronze Sword local próxima de P5 e confirma a espada no inventário antes de continuar. Se a espada local não aparecer, aguarda; a compra não usa a loja distante de Santorini.
 
-Ative **Mostrar configuracao manual**. Os campos anteriores continuam disponíveis; **Salvar e testar configuracao** aplica os valores digitados em uma única ação. O PC principal usa `http://127.0.0.1:8787`; o segundo usa o endereço acessível do primeiro e a chave do arquivo `blade23_access_key.txt`. Para HTTPS ou uma porta diferente, use essa seção.
+### XP
 
-## 4. Iniciar a automação
+Shriekers usa P6 → P7 → PE8. PE8 é a espera do farm; uma conta downada espera recuperar antes de ir a P9. **Automatic** pode usar Zombie Scrooms quando sua vaga estiver disponível; **Zombie Scrooms** usa o farm original e dispensa a aproximação ao Shrine.
 
-### Contas que vão virar Blade/Sigil
+Antes de iniciar o combate com Shriekers, a conta exige a quantidade mínima configurada e todos os alvos da cela com HP cheio durante **5 segundos contínuos**. Essa checagem acontece apenas na entrada da sessão. A conta passa por P9 e usa o ponto de ataque fixo da cela Necro:
 
-1. Em **Blade / Sigil**, escolha **Blade/Sigil (3 stages)**.
-2. Selecione **Rots** ou **Quests**.
-3. O spawn em Gaia é fixo em **Alana**. Ao iniciar, a conta marca esse spawn antes da preparação; os deslocamentos seguintes em Gaia não registram outro spawn. A rotina de Khei continua usando suas próprias estalagens nesse outro mapa. Marque o ponto de coleta em Alana antes do Start; se não houver ponto salvo, o bot usa um ponto diante do Inn Keeper de Alana. O ponto de espera usa o de coleta como padrão.
-4. O Silver é definido pelo método escolhido: **Rots: 100 Silver, sem poções**; **Quests: 660 Silver + 1 Liquid Wisdom, 1 Health Potion, 1 Ice Protection e 5 Tespian Elixir**. A conta fica esperando esses suprimentos em Alana e então compra a espada local antes do XP.
-5. A cela padrão Necro já vem marcada. Confira a área ou calibre outra cela seguindo a seção abaixo. Confira a meta de dano, padrão 6.700, e a quantidade mínima de Shriekers, padrão 50. Para testar apenas essa cela, escolha **Shriekers** em **Blade XP preference**. **Automatic** também permite o farm alternativo de Zombie Scrooms.
-6. Em **Rot e filas → Alts**, selecione somente as contas fornecedoras que serão entregues ao Officer.
-7. Habilite Blatant Mode, deixe **Start Phase em Resume** e clique **Iniciar Sigil**, no topo de **Blade / Sigil**. **Parar Sigil** aparece enquanto o bot está ativo. A linha de estado mostra execução, modo obrigatório ou erro ao iniciar; uma falha de inicialização libera o botão para tentar novamente.
+- Posição: `(2268.965087890625, 62.999996185302737, 783.982666015625)`.
+- Cantos: `(2272.9111328125, 62.99999237060547, 791.964599609375)` e `(2265.51806640625, 62.99999237060547, 776.548583984375)`.
+- Mapa: `5208655184`.
 
-Na rota Blade/Sigil, a espada é comprada no objeto `BronzeSword` encontrado a até 250 studs do Inn Keeper de Alana (ou do ponto de coleta, se o keeper ainda não estiver disponível). Se a conta estiver longe de Alana, tenta retornar pelo spawn de Alana antes da compra. Se a loja local não aparecer, aguarda com uma mensagem; não usa o trajeto antigo até Santorini. A próxima etapa exige a espada confirmada no inventário.
+O farm soma as quedas individuais de HP até **6.700 de dano com espada**, depois desequipa a arma e faz **800 de dano com socos carregados com mana**. O alcance dos socos é de aproximadamente 5 studs. Curas atualizam a referência de HP sem somar nem subtrair do contador. Ambos os contadores são salvos por conta para retomada.
 
-Antes de iniciar, defina Rots/Quests, Shriekers/Zombie Scrooms/Automatic, a cela, os parâmetros de combate e as contas em Alts. O Start valida os dados necessários da automação, sem testar conexão HTTP. As opções da execução ficam bloqueadas enquanto o Sigil roda; os valores, pontos, cela e Alts ficam registrados no save para a retomada após rejoin. Pare o Sigil para editar a próxima execução.
+A mira procura atingir o maior número de alvos dentro do alcance estimado, usando a direção e pequenos ajustes de posição na cela. A geometria é uma estimativa; a eficácia física deve ser conferida no jogo.
 
-O fluxo entra automaticamente na fila de Rots ao terminar o XP. Não é necessário ativar manualmente **Join receiver queue** nesse fluxo completo.
+Ao concluir, sai por P10 e espera o Danger desaparecer antes de avançar. A vaga de XP só é liberada após sair do local de farm.
 
-### Contas que fornecem os Rots
+### Orderly e treino
 
-1. Em **Rot e filas**, deixe **Alts vazio**.
-2. Ative **Enable Rot Bot** e habilite Blatant Mode conforme exigido pelo Sentinel.
-3. Não ative a progressão nem **Join receiver queue** nessas contas.
-4. Deixe **Retomar fornecedor apos hop/rejoin** ativado se quiser que a fornecedora reinicie automaticamente.
+**Rots:** PG11 executa a marcação de spawn em **Renova Town**, sem lançar Gate. A conta segue P12 → PE13, espera sua vez e só então entra em P14. O Master troca automaticamente pela fila. Após **16 entregas confirmadas**, avança para o treino e libera a próxima receptora.
 
-O Master é atualizado automaticamente quando uma receptora inicia o turno e quando termina as 16 entregas confirmadas.
+**Quests:** usa a sequência existente de missões e poções. O treino de Warrior compra apenas **Pommel Strike**, **Action Surge** e **Plate Training** com Alfric, confirmando cada compra e pulando skills já obtidas. As etapas posteriores usam a progressão existente.
 
-Depois de preparar as condições de Rot, a fornecedora permanece esperando em Renova. Ela só anda até a receptora e se downa quando a receptora da vez está presente, com o Rot Bot ativo, perto de Renova, livre para pegar outra conta e ainda abaixo de 16 Rots. Enquanto a receptora carrega uma conta ou ainda não chegou, as fornecedoras esperam. Um Master preenchido manualmente não substitui essa confirmação da fila.
+## Contas fornecedoras de Rot
 
-Use **Parar Rot Bot e cancelar retomada** para parar. A tecla padrão é **F8**, configurável em **Tecla para parar Rot Bot**. Parar cancela a retomada até ativar o Rot Bot novamente.
+Na subaba **Rot**, habilite Blatant Mode, ajuste a retomada após rejoin e a tecla de parada e clique **Iniciar Rot**. Não inicie a progressão Sigil nessa mesma conta. O botão inicia o papel de fornecedora e não exige Master manual.
 
-O rejoin busca novamente o loader do GitHub e executa a versão publicada do Blade 23. O executor precisa oferecer `queue_on_teleport` ou `queueteleport` e ter conexão com o GitHub. Não é preciso manter o script principal na workspace. Se o executor exigir reinjeção manual após trocar de servidor, faça essa etapa no executor.
+A preparação existente em Santorini/Shore 4 mantém as condições de Rot. Em Renova, a fornecedora espera em `(-2085.454589844, 609.353881836, -754.801147461)`. Só se aproxima e se downa quando a receptora da vez está fisicamente em P14, livre, ativa e abaixo de 16 Rots. Enquanto a receptora carrega outra conta ou ainda está a caminho, as fornecedoras aguardam.
 
-### Marcar a cela exata de Sanguine Shrine
+A receptora anda até a conta downada, carrega e entrega no Bounty Officer de Renova usando o pathfinder existente. Após a entrega, retorna à região de P14 antes de buscar outra conta. A fornecedora executa wipe/respawn antes do rejoin. A opção de retomada usa o loader do GitHub após a troca de servidor; o executor precisa oferecer `queue_on_teleport` ou `queueteleport` e permitir a execução após a troca.
 
-A cela padrão Necro no mapa Gaia (`5208655184`) usa o ponto de M1 `(2268.965087890625, 62.999996185302737, 783.982666015625)` e os limites enviados na calibração. Contas sem marcação salva usam esse padrão automaticamente. Marcações já salvas ou compartilhadas continuam tendo prioridade. Para substituir uma marcação antiga, com a progressão parada, clique **Cela XP → Usar cela padrao (Necro)** e depois **Salvar/compartilhar cela XP**. A lista vazia `mobs` do relatório não fixa os alvos: os Shriekers são detectados ao vivo dentro da cela.
+Use **Parar Rot Bot e cancelar retomada** ou a tecla configurada, padrão **F8**, para interromper e cancelar a retomada.
 
-Para marcar outra cela, faça isso com a progressão parada, usando uma conta dentro da cela desejada:
+## Filas e pontos
 
-1. Vá ao ponto onde quer que o personagem dê M1, olhe para os Shriekers e clique **blade 23 → Cela XP → Marcar ponto de M1 + direcao**. A direção salva é a do personagem.
-2. Vá a um canto da cela, por dentro das paredes, e clique **Marcar canto A**.
-3. Vá ao canto diagonalmente oposto, ainda por dentro da mesma cela, e clique **Marcar canto B**. Os cantos delimitam um retângulo nos eixos do mapa; a área verde permite conferir o resultado.
-4. Clique **Ver area e alvos da cela**. Verde mostra os limites e os alvos selecionados, azul mostra o ponto de ataque e amarelo a direção inicial. Confira se foram selecionados os 50 Shriekers desejados, sem incluir a cela vizinha. O HP é lido individualmente; a quantidade visual de contornos pode ser limitada pelo Roblox.
-5. Clique **Salvar/compartilhar cela XP**. Com os dois PCs na mesma rede do Blade 23, as outras instâncias recebem a configuração em até cerca de 5 segundos. Sem rede, a marcação fica local; use o JSON para importar nos outros executores.
-6. Clique **Copiar calibracao da cela** e cole o texto na conversa para revisar o lugar e a distribuição dos mobs. Também é gravado `blade23_calibracao_xp.json` na workspace do executor, quando `writefile` está disponível.
+**Filas** mostra a dona da coleta, os participantes, suas etapas, pontos de espera, contadores de XP e o turno de Rot. A coordenação usa arquivos locais; executores com pastas isoladas não enxergam a mesma fila.
 
-Para importar: cole o relatório em **JSON da cela**, clique **Importar calibracao**, confira a área e salve/compartilhe.
+O arquivo `routes/Blade.json` preserva os 14 pontos enviados. A automação usa essas coordenadas, velocidade padrão 100 e coleta de 50 studs; não aplica as outras opções de TrinketBot do JSON.
 
-O farm verifica HP cheio apenas ao iniciar a sessão de XP. Durante o combate, soma as quedas de HP de cada Shrieker observado na área; curas só atualizam a referência do HP e não somam nem subtraem do total. A sessão mantém a mesma cela até terminar, mesmo se outra instância editar a configuração.
+| Ponto | Ação |
+| --- | --- |
+| P1–P2 | Aproximação em Alana |
+| PE3 | Espera da coleta |
+| P4 | Coleta de Silver e poções |
+| P5 | Compra da espada local |
+| P6–P7 | Aproximação ao Shrine |
+| PE8 | Espera do farm de XP |
+| P9 | Entrada da cela |
+| P10 | Saída e espera de Danger |
+| PG11 | Marcar spawn em Renova, sem Gate |
+| P12 | Aproximação em Renova |
+| PE13 | Espera da receptora |
+| P14 | Receptora ativa para Rots |
 
-O M1 procura a direção com mais alvos dentro do alcance e arco estimados. Pode andar até **1,5 stud** do ponto marcado por padrão; o limite é ajustável de 0 a 3 studs. Paredes e piso são verificados antes dos passos. Se um passo ficar bloqueado, tenta atacar da posição atual. **0** desativa os passos. A câmera pode acompanhar a mira e é restaurada ao terminar.
+A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do personagem em `sentinel/.cache/map_points.json`. Permite atualizar, exportar JSON, copiar `Vector3.new(...)` e excluir pontos. Salvar pontos não altera a rota nem movimenta o personagem.
 
-Alcance e arco são estimativas geométricas ajustáveis, não a hitbox oficial do jogo. A contagem de dano continua vindo do HP, inclusive quando um único M1 acerta vários mobs. A eficácia da mira precisa ser conferida no jogo com sua distribuição real de Shriekers.
+## Validação
 
-### Treino de Warrior com Alfric
+O runtime passou pela compilação Luau. Nove testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin.
 
-Na rota **Blade/Sigil (3 stages)**, tanto por Rots quanto por Quests, o treino exige apenas **Pommel Strike**, **Action Surge** e **Plate Training**. Não compra uma quarta skill para satisfazer `MercenaryCarry`. Skills já obtidas são puladas; cada nova compra aguarda confirmação antes de pagar de novo. O restante da progressão segue a sequência existente.
+Para executar os testes de rota com o CLI oficial Luau instalado:
 
-## O que é compartilhado
-
-- Reservas e fila dos farms de Shriekers e Zombie Scrooms.
-- Fila das contas receptoras de Rot, contagem do turno e Master.
-- Identificação das contas participantes do Rot Bot.
-- Cela XP publicada, incluindo ponto de ataque, direção e limites. O save de XP individual não é compartilhado.
-
-O save individual da progressão continua local. Mover a mesma conta para outro PC não transfere automaticamente esse save.
-
-Se o servidor de comunicação ficar indisponível, as filas remotas não passam a funcionar isoladamente em cada PC. As rotinas mostram erro ou pausam suas ações de coordenação. Um participante sem atualização perde a reserva após cerca de 12 segundos. Ao voltar após expirar, recebe nova ordem de entrada.
-
-## Se os PCs estiverem em redes diferentes
-
-Use um endereço acessível aos dois por uma VPN privada ou hospede o serviço com HTTPS. O programa aceita certificados TLS com `--cert certificado.pem --key chave.pem`. O endereço local mostrado pelo programa só funciona dentro da rede correspondente.
-
-## Se não conectar
-
-- **Servidor antigo:** feche a janela Python antiga e abra o iniciador atualizado. O fluxo de convite precisa do servidor versão 2.
-- **Convite expirado:** clique **Renovar convite** na página do PC principal e copie novamente.
-- **Convite incorreto:** copie o texto inteiro com **Copiar convite**, incluindo o começo `B23|`.
-- **Sem resposta:** confira se o servidor está aberto, se os PCs estão na mesma rede e se o endereço escolhido é acessível pelo segundo PC. Verifique a permissão do firewall na rede privada.
-- **Chave antiga/HTTP 401:** use **Conectar neste PC** no host, ou um novo convite no segundo PC. Isso obtém a chave atual automaticamente.
-- **Porta ocupada:** feche a janela do servidor antigo. Se o servidor versão 2 já estiver ligado, o iniciador reabre sua página.
-- O executor precisa oferecer `request`, `http_request` ou função compatível e acesso a arquivos para salvar a conexão.
-
-Foram verificados: compilação Luau, contagem de XP com cura e retomada, HP cheio apenas na entrada, filas de XP/Rot, bloqueios da fornecedora, três skills de Alfric, carregamento remoto do Blade 23 no rejoin, limites da cela e planejamento geométrico do M1. Os testes de rede cobrem autenticação HTTP, comunicação entre clientes, ordem de chegada pelo servidor, persistência e recuperação de participantes expirados. A validação física em dois PCs e dentro do jogo ainda depende do teste no seu ambiente.
-
-
-A conexão fácil foi verificada com testes HTTP reais locais, casos de convite incorreto/expirado/renovado, compatibilidade das filas anteriores, cliente Luau e callbacks da interface simulados. A página de cópia/renovação foi testada por seus eventos de JavaScript. A execução do `.bat` no Windows e o pareamento físico entre seus dois PCs ainda precisam de teste nesse ambiente.
-
-
-Para verificar o servidor durante desenvolvimento, execute a partir desta pasta:
-
-```text
-python -m unittest discover -s tests -v
+```sh
+LUAU_BIN=/caminho/para/luau python3 -m unittest discover -s tests -p test_route14.py -v
 ```
 
-## Pontos do mapa
-
-A aba **Pontos do mapa** permite salvar sua posição atual com nome e observação. Cada ponto guarda o mapa, XYZ e a direção do personagem no arquivo local `sentinel/.cache/map_points.json`. A lista continua disponível após reabrir o Sentinel na mesma pasta do executor.
-
-Fique no lugar, digite um nome e clique **Salvar posicao atual**. Selecione um ponto para conferir os dados, atualizar sua posição, copiar em JSON ou como `Vector3.new(...)`, ou excluir com dois cliques. **Exportar todos (JSON)** copia a lista inteira para colar na conversa. Nomes iguais em mapas diferentes são permitidos; no mesmo mapa, use outro nome ou atualize explicitamente o ponto. Salvar pontos não modifica as rotas nem movimenta o personagem.
+Os testes usam trechos reais do runtime com serviços simulados. Movimentação física, hitboxes, diálogos e o fluxo completo com várias contas ainda precisam de teste dentro do jogo.
