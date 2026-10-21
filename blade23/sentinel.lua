@@ -33588,6 +33588,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       local tbl254 = {
         "Renova",
         "Oresfall",
+        "Alana",
         "Santorini",
         "Southern Sanctuary",
         "Central Sanctuary",
@@ -38627,17 +38628,23 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         __L3.bladePrepare=function()
           local save=tbl308[1]
-          if not save.bladeSupplyBound then
+          local supplyInn=__L3.bladeValue("BladeSupplyInn","Alana")
+          if not save.bladeSupplyBound or save.bladeSupplyInn~=supplyInn then
             local supply=__L3.bladePoint("blade_supply_point")
             if not supply then
               __L3.bladeStatus("P1: mark the supply point near Alana before Start")
               task.wait(1)
               return
             end
-            if __L3.setInn(__L3.bladeValue("BladeSupplyInn","Oresfall"))==false then return end
+            __L3.bladeStatus("P1: marcando spawn em "..supplyInn)
+            if __L3.setInn(supplyInn)==false then
+              __L3.bladeStatus("P1: spawn em "..supplyInn.." nao confirmado; aguardando nova tentativa")
+              return
+            end
             if not tbl303[1] then return end
             fn580({supply})
             save.bladeSupplyBound=true
+            save.bladeSupplyInn=supplyInn
             fn542()
           end
           __L3.bladeCollect()
@@ -40153,7 +40160,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         progressionTab:AddDropdown("ProgRoute", {Text="Progression route",Values={"Original","Blade/Sigil (3 stages)"},Default="Original",Multi=false})
         progressionTab:AddDropdown("BladeOrderly", {Text="Blade P2 Orderly method",Values={"Rots","Quests"},Default="Rots",Multi=false})
         progressionTab:AddDropdown("BladeFarm", {Text="Blade XP preference",Values={"Automatic","Shriekers","Zombie Scrooms"},Default="Automatic",Multi=false})
-        progressionTab:AddDropdown("BladeSupplyInn", {Text="Supply spawn / inn",Values={"Oresfall","Renova","Santorini","Castle Sanctuary"},Default="Oresfall",Multi=false})
+        progressionTab:AddDropdown("BladeSupplyInn", {Text="Supply spawn / inn",Values={"Alana","Oresfall","Renova","Santorini","Castle Sanctuary"},Default="Alana",Multi=false,Tooltip="Spawn inicial: Alana usa o Inn Keeper da cidade Alana."})
         progressionTab:AddSlider("BladeSilver", {Text="Initial Silver (include sword)",Min=10,Max=2000,Default=660,Rounding=0})
         progressionTab:AddSlider("BladeDamageGoal", {Text="Shrieker damage goal",Min=6400,Max=12000,Default=6700,Rounding=0})
         progressionTab:AddSlider("BladeShrCount", {Text="Minimum Shriekers before entry",Min=1,Max=100,Default=50,Rounding=0})
@@ -40358,6 +40365,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             num389 += 0.1
           end
           __L3.fn650()
+          -- Apply the requested Alana default once, including executors with the old saved selection.
+          if qResult3.get("blade_supply_alana_v1")~="true" and Options8.BladeSupplyInn then
+            Options8.BladeSupplyInn:SetValue("Alana")
+            qResult3.setJSON("progression_settings",__L3.fn649())
+            qResult3.set("blade_supply_alana_v1","true")
+          end
           if qResult3.get("progression_active") == "true" then
             if DResult2.claimResume({ "progression_active" }) then
               __L3.fn648(true)

@@ -49,7 +49,7 @@ Ative **Mostrar configuracao manual**. Os campos anteriores continuam disponíve
 
 1. Em **Blade / Sigil**, escolha **Blade/Sigil (3 stages)**.
 2. Selecione **Rots** ou **Quests**.
-3. Marque o ponto de coleta perto da Alana e o ponto de espera. Confira o spawn/inn escolhido.
+3. O spawn inicial **Supply spawn / inn** vem em **Alana**, usando o **Inn Keeper da cidade Alana**. Marque o ponto de coleta nessa cidade e o ponto de espera. Na primeira execução desta atualização, a seleção antiga de spawn é substituída por Alana; depois, suas alterações são preservadas. Se a preparação ainda estiver em andamento, um spawn marcado em outra cidade será remarcado antes da coleta.
 4. Confira o silver inicial, padrão 660, incluindo 10 da espada. O valor é ajustável.
 5. A cela padrão Necro já vem marcada. Confira a área ou calibre outra cela seguindo a seção abaixo. Confira a meta de dano, padrão 6.700, e a quantidade mínima de Shriekers, padrão 50. Para testar apenas essa cela, escolha **Shriekers** em **Blade XP preference**. **Automatic** também permite o farm alternativo de Zombie Scrooms.
 6. Em **Rot e filas → Alts**, selecione somente as contas fornecedoras que serão entregues ao Officer.
