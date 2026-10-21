@@ -34713,7 +34713,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local Toggles8 = a1723.Library.Toggles
         local Options8 = a1723.Library.Options
         __L3.bladeEnabled=function()
-          return Options8.ProgRoute and Options8.ProgRoute.Value=="Blade/Sigil (3 stages)"
+          local route=__L3.bladeRunConfig and __L3.bladeRunConfig.ProgRoute or (Options8.ProgRoute and Options8.ProgRoute.Value)
+          return route=="Blade/Sigil (3 stages)"
         end
         local tbl303 = { false }
         local tbl304 = { false }
@@ -35133,7 +35134,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local v1013
         local fn558 = function(a1741, a2230, a375, a430, a510)
-          if __L3.bladeEnabled() and not (Toggles8.BladeAllowHop and Toggles8.BladeAllowHop.Value) then return false end
+          if __L3.bladeEnabled() and not __L3.bladeValue("BladeAllowHop",false) then return false end
           if not tbl303[1] or tbl304[1] then
             return false
           end
@@ -35157,7 +35158,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
         end
         local fn560 = function(a1742, a2231, a376)
-          if __L3.bladeEnabled() and not (Toggles8.BladeAllowHop and Toggles8.BladeAllowHop.Value) then return false end
+          if __L3.bladeEnabled() and not __L3.bladeValue("BladeAllowHop",false) then return false end
           fn559()
           return fn557(a1742, a2231, a376)
         end
@@ -36119,6 +36120,20 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not tbl303[1] then
             return false
           end
+          if __L3.bladeRunConfig and game.PlaceId~=num274 and a1781~="Alana" then
+            local destination=__L3.INN_ANCHORS[a1781]
+            if not destination then
+              local keeper=HResult.innKeeper(a1781)
+              local part=keeper and keeper:FindFirstChild("HumanoidRootPart")
+              if part then destination={part.Position,150} end
+            end
+            if not destination then
+              __L3.bladeStatus("Destino indisponivel: "..tostring(a1781).."; spawn mantido em Alana")
+              return false
+            end
+            if not near(destination[1],destination[2]) then fn580({destination[1]}) end
+            return tbl303[1] and near(destination[1],destination[2])
+          end
           fn534("setInn -> %s", tostring(a1781))
           local item52 = __L3.INN_ANCHORS[a1781]
           local v1120 = Options8.ProgProximity and Options8.ProgProximity.Value or 0
@@ -36638,6 +36653,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         __L3.tbl320 = { Vector3.new(1353, 412, 2992), Vector3.new(1630, 415, 2983), Vector3.new(1615, 423, 2782) }
         __L3.fn609 = function()
+          if __L3.bladeEnabled() then
+            if __L3.bladeBuySword() and tbl303[1] then __L3.bladePhase("B1_XP") end
+            return
+          end
           if fn591("Sword") then
             fn543("P5")
             return
@@ -38569,7 +38588,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         -- Blade/Sigil 3-stage route. All per-account progress lives in the existing save.
         __L3.bladeValue=function(name,default)
-          return Options8[name] and Options8[name].Value or default
+          local run=__L3.bladeRunConfig
+          if run and run[name]~=nil then return run[name] end
+          local option=Options8[name] or Toggles8[name]
+          if option and option.Value~=nil then return option.Value end
+          return default
+        end
+        __L3.bladeSilverGoal=function()
+          return __L3.bladeValue("BladeOrderly","Rots")=="Rots" and 100 or 660
         end
         __L3.bladeStatus=function(text)
           if __L3.bladeLabel then __L3.bladeLabel:SetText(text) end
@@ -38590,13 +38616,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return count
         end
         __L3.bladePoint=function(key)
-          local point=qResult3.getJSON(key)
+          local point=__L3.bladeRunConfig and __L3.bladeRunConfig.points and __L3.bladeRunConfig.points[key]
+            or qResult3.getJSON(key)
           if point and tonumber(point.x) and tonumber(point.y) and tonumber(point.z) then
             return Vector3.new(point.x,point.y,point.z)
           end
           return nil
         end
         __L3.bladeMarkPoint=function(key)
+          if tbl303[1] then fn535("Pare o Sigil antes de alterar os pontos"); return end
           local root=LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart")
           if not root then fn535("Character not ready"); return end
           qResult3.setJSON(key,{x=root.Position.X,y=root.Position.Y,z=root.Position.Z})
@@ -38606,7 +38634,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if fn591("Sword") then return true end
           local keeper=HResult.innKeeper("Alana")
           local keeperRoot=keeper and (keeper:FindFirstChild("HumanoidRootPart") or keeper:FindFirstChildWhichIsA("BasePart"))
-          local anchor=keeperRoot and keeperRoot.Position or __L3.bladePoint("blade_supply_point")
+          local anchor=keeperRoot and keeperRoot.Position
+            or (__L3.bladeRunConfig and __L3.bladeVector(__L3.bladeRunConfig.alanaAnchor))
+            or __L3.bladePoint("blade_supply_point")
           if not anchor then
             __L3.bladeStatus("P1 espada: aguardando Inn Keeper ou ponto de coleta de Alana")
             task.wait(1); return false
@@ -38661,7 +38691,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 if name and requirements[name] and __L3.bladeCount(name)<requirements[name] then
                   __L3.fn597(part)
                 end
-              elseif bag.Name=="MoneyBag" and (tonumber(getServerValue("Silver")) or 0)<__L3.bladeValue("BladeSilver",660) then
+              elseif bag.Name=="MoneyBag" and (tonumber(getServerValue("Silver")) or 0)<__L3.bladeSilverGoal() then
                 __L3.fn597(part)
               end
             end
@@ -38670,7 +38700,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         __L3.bladePrepare=function()
           local save=tbl308[1]
-          local supplyInn=__L3.bladeValue("BladeSupplyInn","Alana")
+          local supplyInn="Alana"
           if not save.bladeSupplyBound or save.bladeSupplyInn~=supplyInn then
             local supply=__L3.bladePoint("blade_supply_point")
             if not supply then
@@ -38679,7 +38709,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               return
             end
             __L3.bladeStatus("P1: marcando spawn em "..supplyInn)
-            if __L3.setInn(supplyInn)==false then
+            if not __L3.bladeSpawnReady and __L3.setInn(supplyInn)==false then
               __L3.bladeStatus("P1: spawn em "..supplyInn.." nao confirmado; aguardando nova tentativa")
               return
             end
@@ -38697,7 +38727,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if count<needed then table.insert(missing,name.." "..count.."/"..needed) end
           end
           local silver=tonumber(getServerValue("Silver")) or 0
-          local needed=__L3.bladeValue("BladeSilver",660)
+          local needed=__L3.bladeSilverGoal()
           if silver<needed then table.insert(missing,"Silver "..silver.."/"..needed) end
           if #missing>0 then
             __L3.bladeStatus("P1 supplies: "..table.concat(missing,", "))
@@ -38752,6 +38782,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         __L3.bladeCellLoad=function()
           if __L3.bladeFarmCell then return __L3.bladeFarmCell end
+          if __L3.bladeRunConfig and __L3.bladeRunConfig.cell then return __L3.bladeRunConfig.cell end
           if not __L3.bladeCellDirty and __L3.bladeIO and os.clock()>=__L3.bladeCellRefresh then
             __L3.bladeCellRefresh=os.clock()+5
             local ok,record=pcall(__L3.bladeIO.readJson,__L3.bladeCellKey)
@@ -38897,6 +38928,59 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           return result
         end
+        __L3.bladeLockSetup=function(active)
+          for _,key in {"ProgRoute","BladeOrderly","BladeFarm","BladeDamageGoal","BladeShrCount",
+            "BladeM1Range","BladeM1Arc","BladeM1Step","BladeAimCamera","BladeAllowHop","ProgStartPhase","RotAlts"} do
+            local control=Options8[key] or Toggles8[key]
+            if control and control.SetDisabled then control:SetDisabled(active) end
+          end
+        end
+        __L3.bladeReleaseSetup=function()
+          __L3.bladeRunConfig=nil
+          __L3.bladeSpawnReady=false
+          a1723.State.bladeRunAlts=nil
+          __L3.bladeLockSetup(false)
+        end
+        __L3.bladeCaptureSetup=function(saved)
+          if saved and type(saved.bladeRunConfig)=="table" then return saved.bladeRunConfig end
+          local run={ProgRoute="Blade/Sigil (3 stages)",points={},alts={}}
+          for _,key in {"BladeOrderly","BladeFarm","BladeDamageGoal","BladeShrCount","BladeM1Range","BladeM1Arc","BladeM1Step"} do
+            if Options8[key] then run[key]=Options8[key].Value end
+          end
+          for _,key in {"BladeAimCamera","BladeAllowHop"} do
+            if Toggles8[key] then run[key]=Toggles8[key].Value end
+          end
+          run.cell=__L3.bladeCellLoad()
+          for _,key in {"blade_supply_point","blade_wait_point"} do run.points[key]=qResult3.getJSON(key) end
+          local keeper=HResult.innKeeper("Alana")
+          local root=keeper and (keeper:FindFirstChild("HumanoidRootPart") or keeper:FindFirstChildWhichIsA("BasePart"))
+          if root then run.alanaAnchor=__L3.bladePackVector(root.Position) end
+          if not run.points.blade_supply_point and root then
+            run.points.blade_supply_point=__L3.bladePackVector(root.Position+root.CFrame.LookVector*5)
+          end
+          run.points.blade_wait_point=run.points.blade_wait_point or run.points.blade_supply_point
+          for name,selected in pairs(Options8.RotAlts and Options8.RotAlts.Value or {}) do
+            if selected then run.alts[name]=true end
+          end
+          return run
+        end
+        __L3.bladeValidateSetup=function(run)
+          if game.PlaceId==num274 then return end
+          local missing={}
+          local supply=__L3.bladeVector(run.points and run.points.blade_supply_point)
+          local anchor=__L3.bladeVector(run.alanaAnchor)
+          if not supply then table.insert(missing,"ponto de coleta/Inn Keeper de Alana")
+          elseif anchor and (supply-anchor).Magnitude>250 then table.insert(missing,"ponto de coleta dentro de Alana (o salvo esta longe)") end
+          if run.BladeFarm~="Zombie Scrooms" and not __L3.bladeCellBounds(run.cell) then table.insert(missing,"cela XP para Shriekers/Automatic") end
+          if (run.BladeOrderly or "Rots")=="Rots" and not next(run.alts or {}) then table.insert(missing,"contas fornecedoras em Rot e filas > Alts") end
+          if not __L3.bladeIO.available() then table.insert(missing,"comunicacao local ou servidor dos PCs")
+          elseif __L3.bladeIO.net.config.mode=="Remote HTTP" then
+            local ok=pcall(__L3.bladeIO.sharedTest)
+            if not ok then table.insert(missing,"conexao com o servidor dos PCs") end
+          end
+          if #missing>0 then error("Configure antes de iniciar: "..table.concat(missing,", "),0) end
+        end
+        a1723.Maid:Give(__L3.bladeReleaseSetup)
         __L3.bladeRoster=function()
           local roster={}
           local folder="sentinel/.cache/blade_workers"
@@ -39144,7 +39228,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 end
               end
               root.CFrame=CFrame.lookAt(root.Position,root.Position+plan.direction)
-              if camera and Toggles8.BladeAimCamera and Toggles8.BladeAimCamera.Value then
+              if camera and __L3.bladeValue("BladeAimCamera",true) then
                 cameraChanged=true
                 camera.CFrame=CFrame.lookAt(root.Position-plan.direction*10+Vector3.new(0,6,0),root.Position+plan.direction*4)
               end
@@ -39444,6 +39528,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           if not tbl308[1].phase or tbl308[1].phase == "" then
             tbl308[1].phase = "P0"
+          end
+          if __L3.bladeEnabled() and game.PlaceId~=num274 then
+            while tbl303[1] and not __L3.bladeSpawnReady do
+              __L3.bladeStatus("Inicio: marcando spawn fixo em Alana")
+              if __L3.setInn("Alana") then __L3.bladeSpawnReady=true
+              else task.wait(1) end
+            end
+            if not tbl303[1] then return end
           end
           fn534("runCore: starting at phase %s", tostring(tbl308[1].phase))
           local huge5 = math.huge
@@ -40004,6 +40096,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               return
             end
           end
+          local resumeSave=a1823 and fn541() or nil
+          if __L3.bladeEnabled() or (resumeSave and type(resumeSave.bladeRunConfig)=="table") then
+            local run=__L3.bladeCaptureSetup(resumeSave)
+            __L3.bladeValidateSetup(run)
+            __L3.bladeRunConfig=run
+            a1723.State.bladeRunAlts=run.alts
+            __L3.bladeSpawnReady=false
+            __L3.bladeLockSetup(true)
+          end
           tbl303[1] = true
           __L3.bladeRotJoined=false
           __L3.bladeAtWaitingPoint=false
@@ -40051,6 +40152,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
             tbl308[1].phase=tbl308[1].bladePhase or "B1_PREP"
             tbl308[1].bladePhase=tbl308[1].phase
+            tbl308[1].bladeRunConfig=__L3.bladeRunConfig
             if tbl308[1].phase~="B2_ORDERLY" then
               if a1723.State.leaveRotReceiverQueue then a1723.State.leaveRotReceiverQueue("left") end
               if a1723.Library.Toggles.RotBotEnabled and a1723.Library.Toggles.RotBotEnabled.Value then
@@ -40113,6 +40215,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if a1723.State.leaveRotReceiverQueue then a1723.State.leaveRotReceiverQueue("left") end
             if a1723.Library.Toggles.RotBotEnabled then a1723.Library.Toggles.RotBotEnabled:SetValue(false) end
           end
+          __L3.bladeReleaseSetup()
           __L2.fn529()
           fn495()
           newResult61:DoCleaning()
@@ -40140,7 +40243,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end,
         })
         __L3.tbl333 = { "ProgSkipIllusionist", "ProgStayInServer", "ProgGoToKhei", "BladeAllowHop", "BladeAimCamera" }
-        __L3.tbl334 = { "ProgProximity", "ProgPing", "ProgClass", "ProgRoute", "BladeOrderly", "BladeFarm", "BladeSilver", "BladeDamageGoal", "BladeShrCount", "BladeSupplyInn", "BladeM1Range", "BladeM1Arc", "BladeM1Step" }
+        __L3.tbl334 = { "ProgProximity", "ProgPing", "ProgClass", "ProgRoute", "BladeOrderly", "BladeFarm", "BladeDamageGoal", "BladeShrCount", "BladeM1Range", "BladeM1Arc", "BladeM1Step" }
         __L3.tbl335 = { false }
         __L3.fn649 = function()
           local tbl355 = { toggles = {}, options = {} }
@@ -40197,11 +40300,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end})
         v1007=progressionTab:AddButton({Text="Parar Sigil",Func=function() v1009(true) end})
         fn531(false)
-        progressionTab:AddDropdown("ProgRoute", {Text="Progression route",Values={"Original","Blade/Sigil (3 stages)"},Default="Original",Multi=false})
-        progressionTab:AddDropdown("BladeOrderly", {Text="Blade P2 Orderly method",Values={"Rots","Quests"},Default="Rots",Multi=false})
+        progressionTab:AddDropdown("ProgRoute", {Text="Progression route",Values={"Original","Blade/Sigil (3 stages)"},Default="Blade/Sigil (3 stages)",Multi=false})
+        progressionTab:AddDropdown("BladeOrderly", {Text="Blade P2 Orderly method",Values={"Rots","Quests"},Default="Rots",Multi=false,Callback=function()
+          if __L3.bladeSupplyLabel then __L3.bladeSupplyLabel:SetText(__L3.bladeSilverGoal()==100 and "Spawn fixo: Alana | Rots: 100 Silver, sem pocoes" or "Spawn fixo: Alana | Quests: 660 Silver + pocoes") end
+        end})
         progressionTab:AddDropdown("BladeFarm", {Text="Blade XP preference",Values={"Automatic","Shriekers","Zombie Scrooms"},Default="Automatic",Multi=false})
-        progressionTab:AddDropdown("BladeSupplyInn", {Text="Supply spawn / inn",Values={"Alana","Oresfall","Renova","Santorini","Castle Sanctuary"},Default="Alana",Multi=false,Tooltip="Spawn inicial: Alana usa o Inn Keeper da cidade Alana."})
-        progressionTab:AddSlider("BladeSilver", {Text="Initial Silver (include sword)",Min=10,Max=2000,Default=660,Rounding=0})
+        __L3.bladeSupplyLabel=progressionTab:AddLabel("Spawn fixo: Alana | Rots: 100 Silver, sem pocoes",true)
+        progressionTab:AddLabel("Configure metodo, farm, cela e Alts antes de Iniciar. Para alterar, pare o Sigil.",true)
         progressionTab:AddSlider("BladeDamageGoal", {Text="Shrieker damage goal",Min=6400,Max=12000,Default=6700,Rounding=0})
         progressionTab:AddSlider("BladeShrCount", {Text="Minimum Shriekers before entry",Min=1,Max=100,Default=50,Rounding=0})
         progressionTab:AddToggle("BladeAllowHop", {Text="Allow hops during Blade route",Default=false,Tooltip="Off keeps all accounts and shared queues in the same server"})
@@ -40332,6 +40437,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end)))
         __L3.num326 = -math.huge
         __L3.progStartClick=function()
+          if not __L3.bladeSetupReady then
+            __L3.progStatusLabel:SetText("Sigil: aguarde carregar a configuracao salva antes de iniciar")
+            return
+          end
           if tbl303[1] then
             __L3.progStatusLabel:SetText("Sigil: ja esta em execucao")
             return
@@ -40364,6 +40473,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not ok then
             pcall(v1009,true)
             tbl303[1]=false
+            __L3.bladeReleaseSetup()
             fn531(false); fn532(true)
             pcall(qResult3.remove,"progression_active")
             pcall(function() newResult61:DoCleaning() end)
@@ -40405,12 +40515,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             num389 += 0.1
           end
           __L3.fn650()
-          -- Apply the requested Alana default once, including executors with the old saved selection.
-          if qResult3.get("blade_supply_alana_v1")~="true" and Options8.BladeSupplyInn then
-            Options8.BladeSupplyInn:SetValue("Alana")
+          if qResult3.get("blade_setup_fluid_v1")~="true" then
+            Options8.ProgRoute:SetValue("Blade/Sigil (3 stages)")
             qResult3.setJSON("progression_settings",__L3.fn649())
-            qResult3.set("blade_supply_alana_v1","true")
+            qResult3.set("blade_setup_fluid_v1","true")
           end
+          __L3.bladeSupplyLabel:SetText(__L3.bladeSilverGoal()==100 and "Spawn fixo: Alana | Rots: 100 Silver, sem pocoes" or "Spawn fixo: Alana | Quests: 660 Silver + pocoes")
+          __L3.bladeSetupReady=true
           if qResult3.get("progression_active") == "true" then
             if DResult2.claimResume({ "progression_active" }) then
               __L3.fn648(true)
@@ -41109,7 +41220,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           qResult4.setJSON("blade23_rot_supplier",rotSupplier.settings)
         end
         local fn670 = function()
-          local pairsResult5, v1350, v1351 = pairs(Options9.RotAlts and Options9.RotAlts.Value or {})
+          local pairsResult5, v1350, v1351 = pairs(a1849.State.bladeRunAlts or (Options9.RotAlts and Options9.RotAlts.Value or {}))
           for k305, v1352 in pairsResult5, v1350, v1351 do
             if v1352 then
               return true
@@ -41712,7 +41823,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local tbl369 = {}
         local fn698 = function()
           local tbl371 = {}
-          local pairsResult6, v1376, v1377 = pairs(Options9.RotAlts and Options9.RotAlts.Value or {})
+          local pairsResult6, v1376, v1377 = pairs(a1849.State.bladeRunAlts or (Options9.RotAlts and Options9.RotAlts.Value or {}))
           for k308, v1378 in pairsResult6, v1376, v1377 do
             if v1378 then
               table.insert(tbl371, k308)

@@ -49,13 +49,15 @@ Ative **Mostrar configuracao manual**. Os campos anteriores continuam disponíve
 
 1. Em **Blade / Sigil**, escolha **Blade/Sigil (3 stages)**.
 2. Selecione **Rots** ou **Quests**.
-3. O spawn inicial **Supply spawn / inn** vem em **Alana**, usando o **Inn Keeper da cidade Alana**. Marque o ponto de coleta nessa cidade e o ponto de espera. Na primeira execução desta atualização, a seleção antiga de spawn é substituída por Alana; depois, suas alterações são preservadas. Se a preparação ainda estiver em andamento, um spawn marcado em outra cidade será remarcado antes da coleta.
-4. Confira o silver inicial, padrão 660, incluindo 10 da espada. O valor é ajustável. Na opção **Rots**, a preparação coleta/exige apenas o Silver; não coleta nem espera poções. Na opção **Quests**, também exige/coleta 1 Liquid Wisdom, 1 Health Potion, 1 Ice Protection e 5 Tespian Elixir.
+3. O spawn em Gaia é fixo em **Alana**. Ao iniciar, a conta marca esse spawn antes da preparação; os deslocamentos seguintes em Gaia não registram outro spawn. A rotina de Khei continua usando suas próprias estalagens nesse outro mapa. Marque o ponto de coleta em Alana antes do Start; se não houver ponto salvo, o bot usa um ponto diante do Inn Keeper de Alana. O ponto de espera usa o de coleta como padrão.
+4. O Silver é definido pelo método escolhido: **Rots: 100 Silver, sem poções**; **Quests: 660 Silver + 1 Liquid Wisdom, 1 Health Potion, 1 Ice Protection e 5 Tespian Elixir**. A conta fica esperando esses suprimentos em Alana e então compra a espada local antes do XP.
 5. A cela padrão Necro já vem marcada. Confira a área ou calibre outra cela seguindo a seção abaixo. Confira a meta de dano, padrão 6.700, e a quantidade mínima de Shriekers, padrão 50. Para testar apenas essa cela, escolha **Shriekers** em **Blade XP preference**. **Automatic** também permite o farm alternativo de Zombie Scrooms.
 6. Em **Rot e filas → Alts**, selecione somente as contas fornecedoras que serão entregues ao Officer.
 7. Habilite Blatant Mode, deixe **Start Phase em Resume** e clique **Iniciar Sigil**, no topo de **Blade / Sigil**. **Parar Sigil** aparece enquanto o bot está ativo. A linha de estado mostra execução, modo obrigatório ou erro ao iniciar; uma falha de inicialização libera o botão para tentar novamente.
 
 Na rota Blade/Sigil, a espada é comprada no objeto `BronzeSword` encontrado a até 250 studs do Inn Keeper de Alana (ou do ponto de coleta, se o keeper ainda não estiver disponível). Se a conta estiver longe de Alana, tenta retornar pelo spawn de Alana antes da compra. Se a loja local não aparecer, aguarda com uma mensagem; não usa o trajeto antigo até Santorini. A próxima etapa exige a espada confirmada no inventário.
+
+Antes de iniciar, defina Rots/Quests, Shriekers/Zombie Scrooms/Automatic, a cela, os parâmetros de combate e as contas em Alts. O Start valida os dados necessários e a conexão remota, quando usada. As opções da execução ficam bloqueadas enquanto o Sigil roda; os valores, pontos, cela e Alts ficam registrados no save para a retomada após rejoin. Pare o Sigil para editar a próxima execução.
 
 O fluxo entra automaticamente na fila de Rots ao terminar o XP. Não é necessário ativar manualmente **Join receiver queue** nesse fluxo completo.
 
