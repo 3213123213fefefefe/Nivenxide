@@ -2,43 +2,46 @@
 
 Esta pasta contém o Sentinel modificado, um loader remoto, um servidor de comunicação e um iniciador para Windows. O servidor usa apenas a biblioteca padrão do Python 3.10 ou superior.
 
-## 1. Preparar o PC que será o servidor
+## 1. Ligar o PC principal
 
-1. No PC servidor, baixe apenas `blade23_server.py` e `iniciar_servidor.bat` para a mesma pasta.
-2. Com Python instalado, abra `iniciar_servidor.bat`.
-3. Deixe a janela aberta. Ela mostra o endereço do servidor e a chave de acesso.
-4. Se o Windows solicitar permissão de rede, permita na rede privada usada pelos dois PCs.
+Só o PC principal precisa do Python 3.10 ou superior. Os dois PCs precisam estar na mesma rede, ou conectados por uma rede privada/VPN que permita acesso ao PC principal.
 
-O arquivo `blade23_access_key.txt` é criado automaticamente e mantém a chave após reiniciar. O banco `blade23_state.sqlite3` guarda os registros de coordenação.
+1. Feche a janela do servidor antigo se ela estiver aberta.
+2. Baixe apenas **iniciar_servidor.bat** e abra-o. Ele baixa/atualiza `blade23_server.py` automaticamente na mesma pasta, preservando a configuração existente.
+3. Deixe a janela do servidor aberta. Uma página **Blade 23 — conectar PCs** abre no navegador, com **Copiar convite**.
+4. Se o Windows solicitar acesso à rede, permita na rede privada usada pelos PCs.
 
-## 2. Carregar o script nos dois PCs
+Se a página não abrir automaticamente, acesse `http://127.0.0.1:8787/` no PC principal. A página de convite só é acessível nesse PC. Ao abrir o iniciador novamente com o servidor já ligado, ele reabre essa página.
 
-Pare a versão anterior antes de carregar. Nos dois PCs, use o mesmo comando abaixo no executor. Ele busca a versão atual do GitHub; não exige baixar o `.lua` manualmente.
+O arquivo `blade23_access_key.txt` e o banco `blade23_state.sqlite3` ficam na pasta do iniciador. As conexões já pareadas continuam válidas após reiniciar o servidor usando essa mesma pasta.
+
+## 2. Abrir o bot
+
+Pare a versão anterior ou reentre no jogo antes de carregar. Use o mesmo comando nos dois PCs:
 
 ```lua
 loadstring(game:HttpGet("https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/main/blade23/loader.lua", true))()
 ```
 
-Tudo foi reunido na aba principal **blade 23**:
+A aba **blade 23** reúne **Blade / Sigil**, **Rot e filas**, **Cela XP** e **Conexao facil**. O bot carrega a versão publicada no GitHub sem baixar o `.lua` manualmente.
 
-- **Blade / Sigil:** preparação, itens, ponto de coleta/espera, XP, método de Orderly e progressão até Ultra.
-- **Cela XP:** ponto exato de ataque, limites da cela, alvos, calibração e ajustes de M1.
-- **Rot e filas:** contas fornecedoras, Master, fila das receptoras e contagem de Rots.
-- **Comunicacao entre PCs:** modo de comunicação, endereço, chave e teste de conexão.
+## 3. Conectar em dois passos
 
-## 3. Conectar as contas
+Faça a conexão com a progressão e o Rot Bot parados e fora da fila.
 
-Com a progressão e o Rot Bot parados, em **blade 23 → Comunicacao entre PCs**:
+**No PC principal:** em **blade 23 → Conexao facil**, clique **Conectar neste PC**. A chave é obtida, testada e salva automaticamente.
 
-1. Escolha **Remote HTTP**.
-2. No PC que hospeda o servidor, pode usar `http://127.0.0.1:8787`.
-3. No outro PC, use o endereço com o IP do primeiro, por exemplo `http://192.168.1.10:8787`. O endereço real aparece na janela do servidor; `127.0.0.1` no segundo PC apontaria para ele mesmo.
-4. Cole a **mesma chave de acesso**.
-5. Clique **Salvar configuracao de rede** e depois **Testar conexao**. Deve aparecer **Conectado ao Blade 23**.
+**No outro PC:** na página do navegador do PC principal, clique **Copiar convite**. Envie esse texto ao segundo PC, cole em **Convite do PC principal** no bot e clique **Conectar convite**. O convite já inclui o endereço e um código curto; não é preciso preencher a chave longa.
 
-Faça a configuração em cada instância do Sentinel que já estiver aberta. Instâncias abertas depois leem a configuração salva na pasta local do executor daquele PC.
+Deve aparecer **Conectado ao Blade 23**. O convite vale por dez minutos; **Renovar convite** gera outro sem desconectar quem já conectou. Se houver mais de um endereço na página, selecione o da rede acessível pelos dois PCs.
 
-Todas as contas devem estar no **mesmo servidor do jogo**, mesmo usando PCs diferentes. Não é necessário compartilhar a pasta workspace pela rede no modo Remote HTTP.
+A conexão fica salva na pasta do executor. Novas instâncias a carregam automaticamente. Instâncias já abertas que compartilham essa pasta recebem a configuração quando estiverem paradas e fora das filas. Se outro executor usa outra pasta, conecte uma vez nessa pasta também. A configuração não muda durante um farm ou turno de Rot.
+
+Todas as contas precisam estar no **mesmo servidor do Roblox**. O servidor Python deve permanecer aberto no PC principal.
+
+### Configuração manual, quando necessária
+
+Ative **Mostrar configuracao manual**. Os campos anteriores continuam disponíveis; **Salvar e testar configuracao** aplica os valores digitados em uma única ação. O PC principal usa `http://127.0.0.1:8787`; o segundo usa o endereço acessível do primeiro e a chave do arquivo `blade23_access_key.txt`. Para HTTPS ou uma porta diferente, use essa seção.
 
 ## 4. Iniciar a automação
 
@@ -109,10 +112,22 @@ Use um endereço acessível aos dois por uma VPN privada ou hospede o serviço c
 
 ## Se não conectar
 
-- Confira se a janela do servidor está aberta.
-- Confira IP, porta 8787 e a mesma chave nas contas.
-- Verifique se o firewall permite a conexão na rede privada.
-- O executor precisa disponibilizar `request`, `http_request` ou uma função compatível.
-- Copie o erro mostrado no botão de teste ou no status da fila para diagnóstico.
+- **Servidor antigo:** feche a janela Python antiga e abra o iniciador atualizado. O fluxo de convite precisa do servidor versão 2.
+- **Convite expirado:** clique **Renovar convite** na página do PC principal e copie novamente.
+- **Convite incorreto:** copie o texto inteiro com **Copiar convite**, incluindo o começo `B23|`.
+- **Sem resposta:** confira se o servidor está aberto, se os PCs estão na mesma rede e se o endereço escolhido é acessível pelo segundo PC. Verifique a permissão do firewall na rede privada.
+- **Chave antiga/HTTP 401:** use **Conectar neste PC** no host, ou um novo convite no segundo PC. Isso obtém a chave atual automaticamente.
+- **Porta ocupada:** feche a janela do servidor antigo. Se o servidor versão 2 já estiver ligado, o iniciador reabre sua página.
+- O executor precisa oferecer `request`, `http_request` ou função compatível e acesso a arquivos para salvar a conexão.
 
 Foram verificados: compilação Luau, contagem de XP com cura e retomada, HP cheio apenas na entrada, filas de XP/Rot, bloqueios da fornecedora, três skills de Alfric, carregamento remoto do Blade 23 no rejoin, limites da cela e planejamento geométrico do M1. Os testes de rede cobrem autenticação HTTP, comunicação entre clientes, ordem de chegada pelo servidor, persistência e recuperação de participantes expirados. A validação física em dois PCs e dentro do jogo ainda depende do teste no seu ambiente.
+
+
+A conexão fácil foi verificada com testes HTTP reais locais, casos de convite incorreto/expirado/renovado, compatibilidade das filas anteriores, cliente Luau e callbacks da interface simulados. A página de cópia/renovação foi testada por seus eventos de JavaScript. A execução do `.bat` no Windows e o pareamento físico entre seus dois PCs ainda precisam de teste nesse ambiente.
+
+
+Para verificar o servidor durante desenvolvimento, execute a partir desta pasta:
+
+```text
+python -m unittest discover -s tests -v
+```

@@ -40546,8 +40546,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       end
       tbl358.sharedNow=function() return os.time()+tbl358.net.offset end
       tbl358.sharedLease=function() return tbl358.net.config.mode=="Remote HTTP" and 12 or 8 end
-      tbl358.sharedRequest=function(method,endpoint,payload)
-        local config=tbl358.net.config
+      tbl358.sharedRequest=function(method,endpoint,payload,overrideConfig)
+        local config=overrideConfig or tbl358.net.config
         local requestFn=request or http_request or (http and http.request) or (syn and syn.request)
         if not requestFn then error("Executor HTTP request function unavailable") end
         local url=tostring(config.url or ""):gsub("/+$","")
@@ -40564,7 +40564,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local decodedOk,decoded=pcall(v1319.JSONDecode,v1319,response.Body or "")
         if not decodedOk or type(decoded)~="table" then error("Invalid Blade 23 server response") end
-        if type(decoded.serverTime)=="number" then tbl358.net.offset=decoded.serverTime-os.time() end
+        if not overrideConfig and type(decoded.serverTime)=="number" then tbl358.net.offset=decoded.serverTime-os.time() end
         tbl358.net.lastError=nil
         return decoded
       end
@@ -40611,27 +40611,90 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           tbl358.net.items[key]=nil; tbl358.net.lists[prefix]=nil
         elseif delfile and isfile and isfile(path) then delfile(path) end
       end
-      tbl358.sharedConfigure=function(config)
-        tbl358.net.config={mode=config.mode=="Remote HTTP" and "Remote HTTP" or "Local files",
-          url=tostring(config.url or ""):gsub("/+$",""),token=tostring(config.token or "")}
-        tbl358.net.items={}; tbl358.net.lists={}; tbl358.net.offset=0
-        if not writeJson("sentinel/.cache/blade23_network.json",tbl358.net.config) then
-          return false,"Could not save network settings locally"
+      tbl358.sharedTrim=function(value) return tostring(value or ""):match("^%s*(.-)%s*$") end
+      tbl358.sharedURL=function(value)
+        local url=tbl358.sharedTrim(value):gsub("/+$","")
+        if not url:match("^https?://") then url="http://"..url end
+        if not url:match("^https?://[%w%.:%[%]%-]+$") then error("Endereco invalido. Copie o convite inteiro do PC principal.",0) end
+        return url
+      end
+      tbl358.sharedPublicRequest=function(url,endpoint,payload)
+        local requestFn=request or http_request or (http and http.request) or (syn and syn.request)
+        if not requestFn then error("O executor nao oferece a funcao HTTP request.",0) end
+        local options={Url=tbl358.sharedURL(url)..endpoint,Method="POST",Timeout=5,
+          Headers={["Content-Type"]="application/json"},Body=v1319:JSONEncode(payload or {})}
+        local ok,response=pcall(requestFn,options)
+        if not ok then error("Sem resposta. Abra o iniciador no PC principal e confira se os PCs estao na mesma rede.",0) end
+        local status=response and tonumber(response.StatusCode or response.Status)
+        if not status or status==0 then error("Sem resposta. Abra o iniciador no PC principal e confira a rede.",0) end
+        local decodedOk,decoded=pcall(v1319.JSONDecode,v1319,response and response.Body or "")
+        if status==401 and decodedOk and type(decoded)=="table" and decoded.error=="Invalid access key" then
+          error("Servidor antigo. Feche a janela Python e abra o iniciador atualizado do GitHub.",0)
         end
+        if not status or status<200 or status>=300 then
+          local message=decodedOk and type(decoded)=="table" and decoded.error
+          error(type(message)=="string" and message or "Nao foi possivel conectar. HTTP "..tostring(status or "sem resposta"),0)
+        end
+        if not decodedOk or type(decoded)~="table" or decoded.service~="blade23" or (tonumber(decoded.version) or 0)<2
+          or type(decoded.token)~="string" or #decoded.token<16 then error("Esse endereco nao oferece o pareamento do Blade 23. Atualize o servidor.",0) end
+        return decoded
+      end
+      tbl358.sharedInvite=function(text)
+        local value=tbl358.sharedTrim(text):gsub("^[Cc]onvite:%s*","")
+        local url,code=value:match("^B23|([^|]+)|([%w%-]+)$")
+        if not url or not code then error("Cole o convite inteiro, comecando por B23|. Use Copiar convite no PC principal.",0) end
+        code=code:gsub("%-",""):upper()
+        if #code~=8 or not code:match("^[A-Z2-9]+$") then error("Codigo do convite invalido. Copie novamente.",0) end
+        return tbl358.sharedURL(url),code
+      end
+      tbl358.sharedConfigValue=function(config)
+        if type(config)~="table" then error("Configuracao de rede invalida.",0) end
+        local nextConfig={mode=config.mode=="Remote HTTP" and "Remote HTTP" or "Local files",
+          url=tbl358.sharedTrim(config.url):gsub("/+$",""),token=tbl358.sharedTrim(config.token)}
+        if nextConfig.mode=="Remote HTTP" then
+          nextConfig.url=tbl358.sharedURL(nextConfig.url)
+          if #nextConfig.token<16 then error("Use Conectar neste PC ou cole um convite para obter a chave automaticamente.",0) end
+        end
+        return nextConfig
+      end
+      tbl358.sharedConfigure=function(config,persist)
+        local nextConfig=tbl358.sharedConfigValue(config)
+        if persist~=false and not writeJson("sentinel/.cache/blade23_network.json",nextConfig) then
+          return false,"Nao consegui salvar a conexao na pasta do executor."
+        end
+        tbl358.net.config=nextConfig
+        tbl358.net.items={}; tbl358.net.lists={}; tbl358.net.offset=0; tbl358.net.lastError=nil
         return true
       end
-      tbl358.sharedTest=function()
+      tbl358.sharedTest=function(config)
         local started=os.clock()
-        local response=tbl358.sharedRequest("GET","/v1/health")
-        if response.service~="blade23" then error("The URL is not a Blade 23 server") end
+        local response=tbl358.sharedRequest("GET","/v1/health",nil,config)
+        if response.service~="blade23" then error("O endereco nao e um servidor Blade 23.",0) end
         return math.floor((os.clock()-started)*1000)
       end
-      do
+      tbl358.sharedConnect=function(invite,localPC,mayApply)
+        local url,code
+        if localPC then url="http://127.0.0.1:8787"
+        else url,code=tbl358.sharedInvite(invite) end
+        local response=tbl358.sharedPublicRequest(url,localPC and "/v1/local-connect" or "/v1/pair",localPC and {} or {code=code})
+        local config={mode="Remote HTTP",url=url,token=response.token}
+        local elapsed=tbl358.sharedTest(config)
+        if mayApply and not mayApply() then error("Pare os bots antes de aplicar a conexao.",0) end
+        local saved,message=tbl358.sharedConfigure(config)
+        if not saved then error(message,0) end
+        return elapsed
+      end
+      tbl358.sharedLoadSaved=function()
         local saved=readJson("sentinel/.cache/blade23_network.json")
-        if type(saved)=="table" then
-          tbl358.net.config={mode=saved.mode=="Remote HTTP" and "Remote HTTP" or "Local files",
-            url=tostring(saved.url or ""),token=tostring(saved.token or "")}
-        end
+        if type(saved)~="table" then return false end
+        local nextConfig=tbl358.sharedConfigValue(saved)
+        local current=tbl358.net.config
+        if nextConfig.mode==current.mode and nextConfig.url==current.url and nextConfig.token==current.token then return false end
+        tbl358.sharedConfigure(nextConfig,false)
+        return true
+      end
+      do
+        pcall(tbl358.sharedLoadSaved)
       end
       tbl358.readJson = readJson
       tbl358.writeJson = writeJson
@@ -42220,31 +42283,99 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end)
           end,
         })
-        local networkBox=a1849.Tabs.Blade23:AddRightGroupbox("Comunicacao entre PCs")
-        networkBox:AddDropdown("Blade23Transport",{Text="Modo",Values={"Local files","Remote HTTP"},Default=MResult.net.config.mode,Multi=false})
-        networkBox:AddInput("Blade23ServerURL",{Text="Endereco do servidor",Default=MResult.net.config.url,
-          Placeholder="http://192.168.1.10:8787",Finished=true})
-        networkBox:AddInput("Blade23AccessKey",{Text="Chave de acesso",Default=MResult.net.config.token,Finished=true})
-        local networkStatus=networkBox:AddLabel("Configure o mesmo servidor e chave nos dois PCs.",true)
-        networkBox:AddButton({Text="Salvar configuracao de rede",Func=function()
-          if tbl365[1] or rotQueueEntry or (a1849.State.progActive and a1849.State.progActive()) then
-            networkStatus:SetText("Pare a progressao, Rot Bot e saia da fila antes de trocar a rede.")
+        local netUI={busy=false,nextCheck=0,elapsed=0}
+        netUI.box=a1849.Tabs.Blade23:AddRightGroupbox("Conexao facil")
+        netUI.box:AddLabel("PC principal: abra iniciar_servidor.bat e clique abaixo. No outro PC, cole o convite da pagina que abriu.",true)
+        netUI.status=netUI.box:AddLabel("Conexao: aguardando configuracao",true)
+        netUI.idle=function()
+          return not tbl365[1] and not rotQueueEntry and not (a1849.State.progActive and a1849.State.progActive())
+        end
+        netUI.pretty=function(errorMessage)
+          local message=tostring(errorMessage):gsub("^.-:%d+:%s*","")
+          if message:find("HTTP 401",1,true) then return "Chave antiga ou incorreta. Clique Conectar neste PC ou use um novo convite." end
+          if message:find("server unreachable",1,true) then return "Sem resposta do servidor. Abra o iniciador no PC principal e confira endereco/rede." end
+          return message
+        end
+        netUI.sync=function()
+          local config=MResult.net.config
+          Options9.Blade23Transport:SetValue(config.mode)
+          Options9.Blade23ServerURL:SetValue(config.url)
+          Options9.Blade23AccessKey:SetValue(config.token)
+        end
+        netUI.run=function(action)
+          if netUI.busy then netUI.status:SetText("Aguarde a conexao em andamento..."); return end
+          if not netUI.idle() then
+            netUI.status:SetText("Pare a progressao, o Rot Bot e saia da fila para trocar a conexao.")
             return
           end
-          local ok,message=MResult.sharedConfigure({mode=Options9.Blade23Transport.Value,
-            url=Options9.Blade23ServerURL.Value,token=Options9.Blade23AccessKey.Value})
-          networkStatus:SetText(ok and "Configuracao salva. Teste a conexao antes de iniciar." or tostring(message))
+          netUI.busy=true
+          netUI.status:SetText("Conectando e salvando automaticamente...")
+          task.spawn(function()
+            local ok,result=pcall(action)
+            netUI.busy=false
+            if ok then
+              netUI.sync()
+              netUI.nextCheck=os.clock()+10
+              netUI.status:SetText(type(result)=="number" and ("Conectado ao Blade 23 | "..result.." ms | salvo neste PC") or tostring(result))
+            else netUI.status:SetText(netUI.pretty(result)) end
+          end)
+        end
+        netUI.box:AddButton({Text="Conectar neste PC",Func=function()
+          netUI.run(function() return MResult.sharedConnect(nil,true,netUI.idle) end)
         end})
-        networkBox:AddButton({Text="Testar conexao",Func=function()
-          if MResult.net.config.mode~="Remote HTTP" then
-            networkStatus:SetText("Modo local: as contas precisam compartilhar a pasta do executor.")
-            return
-          end
-          networkStatus:SetText("Conectando...")
-          local ok,result=pcall(MResult.sharedTest)
-          networkStatus:SetText(ok and ("Conectado ao Blade 23 | "..tostring(result).." ms") or tostring(result))
+        netUI.box:AddInput("Blade23Invite",{Text="Convite do PC principal",Default="",Placeholder="B23|http://...|XXXX-XXXX",Finished=false})
+        netUI.box:AddButton({Text="Conectar convite",Func=function()
+          local invitation=Options9.Blade23Invite.Value
+          netUI.run(function() return MResult.sharedConnect(invitation,false,netUI.idle) end)
         end})
-        networkBox:AddLabel("PC1 pode hospedar o servidor. PC2 usa o IP do PC1. Todas as contas devem estar no mesmo servidor do jogo.",true)
+        netUI.box:AddButton({Text="Conferir conexao salva",Func=function()
+          netUI.run(function()
+            if MResult.net.config.mode~="Remote HTTP" then return "Modo local. Para dois PCs, use um dos botoes de conexao acima." end
+            return MResult.sharedTest()
+          end)
+        end})
+        netUI.box:AddToggle("Blade23Advanced",{Text="Mostrar configuracao manual",Default=false,Callback=function(value)
+          if netUI.manual then netUI.manual:SetVisible(value) end
+        end})
+        netUI.manual=a1849.Tabs.Blade23:AddRightGroupbox("Configuracao manual")
+        netUI.manual:AddDropdown("Blade23Transport",{Text="Modo",Values={"Local files","Remote HTTP"},Default=MResult.net.config.mode,Multi=false})
+        netUI.manual:AddInput("Blade23ServerURL",{Text="Endereco do servidor",Default=MResult.net.config.url,
+          Placeholder="http://192.168.1.10:8787",Finished=false})
+        netUI.manual:AddInput("Blade23AccessKey",{Text="Chave avancada",Default=MResult.net.config.token,Finished=false})
+        netUI.manual:AddButton({Text="Salvar e testar configuracao",Func=function()
+          local candidate={mode=Options9.Blade23Transport.Value,url=Options9.Blade23ServerURL.Value,token=Options9.Blade23AccessKey.Value}
+          netUI.run(function()
+            candidate=MResult.sharedConfigValue(candidate)
+            local elapsed=candidate.mode=="Remote HTTP" and MResult.sharedTest(candidate) or nil
+            if not netUI.idle() then error("Pare os bots antes de aplicar a conexao.",0) end
+            local ok,message=MResult.sharedConfigure(candidate)
+            if not ok then error(message,0) end
+            return elapsed or "Modo local salvo. As contas precisam compartilhar a pasta do executor."
+          end)
+        end})
+        netUI.manual:SetVisible(false)
+        netUI.sync()
+        netUI.box:AddLabel("A conexao fica salva na pasta do executor. Instancias paradas que compartilham essa pasta recebem a configuracao automaticamente. Todas as contas devem estar no mesmo servidor do jogo.",true)
+        -- Reuse settings on this PC, without changing a running farm or Rot queue.
+        a1849.Maid:Give(v1342.Heartbeat:Connect(function(dt)
+          netUI.elapsed+=dt
+          if netUI.elapsed<2 or netUI.busy or not netUI.idle() then return end
+          netUI.elapsed=0
+          netUI.busy=true
+          task.spawn(function()
+            local ok,changed=pcall(MResult.sharedLoadSaved)
+            if not ok then
+              netUI.busy=false; netUI.status:SetText(netUI.pretty(changed)); return
+            end
+            if changed then netUI.sync(); netUI.nextCheck=0 end
+            if MResult.net.config.mode=="Remote HTTP" and os.clock()>=netUI.nextCheck then
+              netUI.nextCheck=os.clock()+10
+              local tested,result=pcall(MResult.sharedTest)
+              netUI.status:SetText(tested and ("Conectado ao Blade 23 | "..result.." ms | configuracao salva") or netUI.pretty(result))
+            elseif changed then netUI.status:SetText("Configuracao local recebida da pasta do executor.") end
+            netUI.busy=false
+          end)
+        end))
         a1849.State.registerBot({
           name = "Rot Bot",
           running = function()
