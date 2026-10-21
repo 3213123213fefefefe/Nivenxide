@@ -38973,11 +38973,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           elseif anchor and (supply-anchor).Magnitude>250 then table.insert(missing,"ponto de coleta dentro de Alana (o salvo esta longe)") end
           if run.BladeFarm~="Zombie Scrooms" and not __L3.bladeCellBounds(run.cell) then table.insert(missing,"cela XP para Shriekers/Automatic") end
           if (run.BladeOrderly or "Rots")=="Rots" and not next(run.alts or {}) then table.insert(missing,"contas fornecedoras em Rot e filas > Alts") end
-          if not __L3.bladeIO.available() then table.insert(missing,"comunicacao local ou servidor dos PCs")
-          elseif __L3.bladeIO.net.config.mode=="Remote HTTP" then
-            local ok=pcall(__L3.bladeIO.sharedTest)
-            if not ok then table.insert(missing,"conexao com o servidor dos PCs") end
-          end
+          if not __L3.bladeIO.available() then table.insert(missing,"acesso aos arquivos do executor para as filas locais") end
           if #missing>0 then error("Configure antes de iniciar: "..table.concat(missing,", "),0) end
         end
         a1723.Maid:Give(__L3.bladeReleaseSetup)
@@ -40300,6 +40296,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end})
         v1007=progressionTab:AddButton({Text="Parar Sigil",Func=function() v1009(true) end})
         fn531(false)
+        progressionTab:AddButton({Text="Tudo neste PC (sem servidor)",Func=function()
+          local ok,message=pcall(function()
+            if not a1723.State.bladeUseLocal then error("Aguarde o carregamento do Sentinel",0) end
+            return a1723.State.bladeUseLocal()
+          end)
+          __L3.progStatusLabel:SetText(ok and message or tostring(message))
+        end})
         progressionTab:AddDropdown("ProgRoute", {Text="Progression route",Values={"Original","Blade/Sigil (3 stages)"},Default="Blade/Sigil (3 stages)",Multi=false})
         progressionTab:AddDropdown("BladeOrderly", {Text="Blade P2 Orderly method",Values={"Rots","Quests"},Default="Rots",Multi=false,Callback=function()
           if __L3.bladeSupplyLabel then __L3.bladeSupplyLabel:SetText(__L3.bladeSilverGoal()==100 and "Spawn fixo: Alana | Rots: 100 Silver, sem pocoes" or "Spawn fixo: Alana | Quests: 660 Silver + pocoes") end
@@ -40864,6 +40867,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         tbl358.net.config=nextConfig
         tbl358.net.items={}; tbl358.net.lists={}; tbl358.net.offset=0; tbl358.net.lastError=nil
         return true
+      end
+      tbl358.sharedUseLocal=function(mayApply)
+        if mayApply and not mayApply() then error("Pare os bots e saia das filas antes de selecionar Tudo neste PC.",0) end
+        if not (writefile and readfile and isfile and listfiles and isfolder) then
+          error("O modo neste PC precisa do acesso a arquivos do executor para coordenar as contas.",0)
+        end
+        local saved,message=tbl358.sharedConfigure({mode="Local files",url="",token=""})
+        if not saved then error(message,0) end
+        return "Tudo neste PC salvo | sem Python, servidor ou teste de conexao"
       end
       tbl358.sharedTest=function(config)
         local started=os.clock()
@@ -42484,14 +42496,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         })
         local netUI={busy=false,nextCheck=0,elapsed=0}
         netUI.box=a1849.Tabs.Blade23:AddRightGroupbox("Conexao facil")
-        netUI.box:AddLabel("PC principal: abra iniciar_servidor.bat e clique abaixo. No outro PC, cole o convite da pagina que abriu.",true)
-        netUI.status=netUI.box:AddLabel("Conexao: aguardando configuracao",true)
+        netUI.box:AddLabel("Para todas as contas no mesmo computador, use Tudo neste PC. Nao precisa de Python nem iniciar_servidor.bat. Os botoes de servidor/convite sao apenas para dois PCs.",true)
+        netUI.status=netUI.box:AddLabel(MResult.net.config.mode=="Local files" and "Tudo neste PC | sem servidor" or "Dois PCs | configuracao salva",true)
         netUI.idle=function()
           return not tbl365[1] and not rotQueueEntry and not (a1849.State.progActive and a1849.State.progActive())
         end
         netUI.pretty=function(errorMessage)
           local message=tostring(errorMessage):gsub("^.-:%d+:%s*","")
-          if message:find("HTTP 401",1,true) then return "Chave antiga ou incorreta. Clique Conectar neste PC ou use um novo convite." end
+          if message:find("HTTP 401",1,true) then return "Chave antiga ou incorreta. Use Servidor neste PC (dois PCs) ou um novo convite." end
           if message:find("server unreachable",1,true) then return "Sem resposta do servidor. Abra o iniciador no PC principal e confira endereco/rede." end
           return message
         end
@@ -42519,19 +42531,24 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             else netUI.status:SetText(netUI.pretty(result)) end
           end)
         end
-        netUI.box:AddButton({Text="Conectar neste PC",Func=function()
+        a1849.State.bladeUseLocal=function()
+          if netUI.busy then error("Aguarde a operacao em andamento",0) end
+          local message=MResult.sharedUseLocal(netUI.idle)
+          netUI.sync()
+          netUI.status:SetText(message)
+          return message
+        end
+        netUI.box:AddButton({Text="Tudo neste PC (sem servidor)",Func=function()
+          local ok,message=pcall(a1849.State.bladeUseLocal)
+          if not ok then netUI.status:SetText(netUI.pretty(message)) end
+        end})
+        netUI.box:AddButton({Text="Servidor neste PC (dois PCs)",Func=function()
           netUI.run(function() return MResult.sharedConnect(nil,true,netUI.idle) end)
         end})
         netUI.box:AddInput("Blade23Invite",{Text="Convite do PC principal",Default="",Placeholder="B23|http://...|XXXX-XXXX",Finished=false})
         netUI.box:AddButton({Text="Conectar convite",Func=function()
           local invitation=Options9.Blade23Invite.Value
           netUI.run(function() return MResult.sharedConnect(invitation,false,netUI.idle) end)
-        end})
-        netUI.box:AddButton({Text="Conferir conexao salva",Func=function()
-          netUI.run(function()
-            if MResult.net.config.mode~="Remote HTTP" then return "Modo local. Para dois PCs, use um dos botoes de conexao acima." end
-            return MResult.sharedTest()
-          end)
         end})
         netUI.box:AddToggle("Blade23Advanced",{Text="Mostrar configuracao manual",Default=false,Callback=function(value)
           if netUI.manual then netUI.manual:SetVisible(value) end
@@ -42567,11 +42584,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               netUI.busy=false; netUI.status:SetText(netUI.pretty(changed)); return
             end
             if changed then netUI.sync(); netUI.nextCheck=0 end
-            if MResult.net.config.mode=="Remote HTTP" and os.clock()>=netUI.nextCheck then
-              netUI.nextCheck=os.clock()+10
-              local tested,result=pcall(MResult.sharedTest)
-              netUI.status:SetText(tested and ("Conectado ao Blade 23 | "..result.." ms | configuracao salva") or netUI.pretty(result))
-            elseif changed then netUI.status:SetText("Configuracao local recebida da pasta do executor.") end
+            if changed then
+              netUI.status:SetText(MResult.net.config.mode=="Local files" and "Tudo neste PC recebido da pasta do executor | sem servidor" or "Configuracao de dois PCs recebida da pasta do executor")
+            end
             netUI.busy=false
           end)
         end))
@@ -69751,12 +69766,134 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           World = CreateWindowResult:AddTab("World"),
           Automation = CreateWindowResult:AddTab("Automation"),
           Blade23 = CreateWindowResult:AddTab("blade 23"),
+          MapPoints = CreateWindowResult:AddTab("Pontos do mapa"),
           Botting = CreateWindowResult:AddTab("Botting"),
           Player = CreateWindowResult:AddTab("Player"),
           Settings = CreateWindowResult:AddTab("Settings"),
         },
       }
       cResult.migrate()
+      -- Map coordinate recorder: local named points, independent of the automation.
+      do
+        local pointsUI={app=tbl743,file="sentinel/.cache/map_points.json",labels={},data={version=1,points={}},elapsed=0}
+        pointsUI.http=game:GetService("HttpService")
+        pointsUI.box=tbl743.Tabs.MapPoints:AddLeftGroupbox("Salvar pontos")
+        pointsUI.listBox=tbl743.Tabs.MapPoints:AddRightGroupbox("Pontos salvos")
+        pointsUI.status=pointsUI.box:AddLabel("Pontos salvos na pasta do executor; continuam apos reabrir o Sentinel.",true)
+        pointsUI.current=pointsUI.box:AddLabel("Posicao atual: aguardando personagem",true)
+        pointsUI.box:AddInput("MapPointName",{Text="Nome do ponto",Default="",Placeholder="Ex.: espada de Alana",Finished=false})
+        pointsUI.box:AddInput("MapPointNote",{Text="Observacao (opcional)",Default="",Finished=false})
+        pointsUI.listBox:AddDropdown("MapPointSelected",{Text="Ponto salvo",Values={},Multi=false,Callback=function(label)
+          local point=pointsUI.labels[label]
+          if point then
+            pointsUI.preview:SetText(string.format("%s | mapa %s\nX %.6f | Y %.6f | Z %.6f\n%s",point.name,tostring(point.placeId),point.position.x,point.position.y,point.position.z,point.note or ""))
+          elseif pointsUI.preview then pointsUI.preview:SetText("Selecione um ponto salvo") end
+        end})
+        pointsUI.preview=pointsUI.listBox:AddLabel("Selecione um ponto salvo",true)
+        pointsUI.validVector=function(value)
+          if type(value)~="table" then return false end
+          for _,key in {"x","y","z"} do
+            local n=value[key]
+            if type(n)~="number" or n~=n or math.abs(n)>10000000 then return false end
+          end
+          return true
+        end
+        pointsUI.load=function()
+          if not (isfile and readfile) then error("O executor precisa oferecer leitura de arquivos para guardar os pontos.",0) end
+          if not isfile(pointsUI.file) then return {version=1,points={}} end
+          local data=pointsUI.http:JSONDecode(readfile(pointsUI.file))
+          if type(data)~="table" or data.version~=1 or type(data.points)~="table" then error("Arquivo de pontos invalido; ele foi preservado.",0) end
+          for _,point in data.points do
+            if type(point)~="table" or type(point.name)~="string" or type(point.id)~="string" or type(point.placeId)~="number"
+              or not pointsUI.validVector(point.position) or not pointsUI.validVector(point.look) then error("Arquivo tem um ponto invalido; ele foi preservado.",0) end
+          end
+          return data
+        end
+        pointsUI.refresh=function()
+          local selected=tbl743.Library.Options.MapPointSelected.Value
+          pointsUI.data=pointsUI.load()
+          local values={}
+          pointsUI.labels={}
+          for _,point in pointsUI.data.points do
+            local label="["..tostring(point.placeId).."] "..point.name
+            pointsUI.labels[label]=point;table.insert(values,label)
+          end
+          table.sort(values)
+          tbl743.Library.Options.MapPointSelected:SetValues(values)
+          if selected and pointsUI.labels[selected] then tbl743.Library.Options.MapPointSelected:SetValue(selected)
+          else tbl743.Library.Options.MapPointSelected:SetValue(nil) end
+        end
+        pointsUI.save=function(data)
+          if not writefile then error("O executor nao oferece gravacao de arquivos.",0) end
+          cResult.ensureFor(pointsUI.file)
+          writefile(pointsUI.file,pointsUI.http:JSONEncode(data))
+          pointsUI.refresh()
+        end
+        pointsUI.capture=function(name,note,id)
+          name=tostring(name or ""):match("^%s*(.-)%s*$")
+          if name=="" or #name>80 then error("Digite um nome de 1 a 80 caracteres.",0) end
+          local player=game:GetService("Players").LocalPlayer
+          local root=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+          if not root then error("Aguarde o personagem aparecer para salvar a posicao.",0) end
+          local p,look=root.Position,root.CFrame.LookVector
+          return {id=id or (tostring(game.PlaceId)..":"..name),name=name,note=tostring(note or ""):sub(1,500),placeId=game.PlaceId,
+            position={x=p.X,y=p.Y,z=p.Z},look={x=look.X,y=look.Y,z=look.Z},savedAt=os.time()}
+        end
+        pointsUI.selected=function()
+          local label=tbl743.Library.Options.MapPointSelected.Value
+          local previous=pointsUI.labels[label]
+          if not previous then error("Selecione um ponto na lista.",0) end
+          local data=pointsUI.load()
+          for index,point in data.points do if point.id==previous.id then return point,data,index end end
+          error("Esse ponto foi removido em outra instancia; atualize a lista.",0)
+        end
+        pointsUI.copy=function(value)
+          if setclipboard then setclipboard(value);return "Copiado. Cole aqui na conversa."
+          else print("[Sentinel pontos do mapa] "..value);return "Texto enviado ao console do executor." end
+        end
+        pointsUI.run=function(action)
+          local ok,result=pcall(action)
+          pointsUI.status:SetText(ok and tostring(result or "Pronto") or ("Pontos: "..tostring(result)))
+        end
+        pointsUI.box:AddButton({Text="Salvar posicao atual",Func=function() pointsUI.run(function()
+          local point=pointsUI.capture(tbl743.Library.Options.MapPointName.Value,tbl743.Library.Options.MapPointNote.Value)
+          local data=pointsUI.load()
+          for _,saved in data.points do if saved.id==point.id then error("Ja existe esse nome neste mapa. Use Atualizar ponto selecionado ou outro nome.",0) end end
+          table.insert(data.points,point);pointsUI.save(data)
+          tbl743.Library.Options.MapPointSelected:SetValue("["..tostring(point.placeId).."] "..point.name)
+          return "Ponto salvo: "..point.name
+        end) end})
+        pointsUI.listBox:AddButton({Text="Atualizar ponto selecionado",Func=function() pointsUI.run(function()
+          local point,data,index=pointsUI.selected()
+          if point.placeId~=game.PlaceId then error("O ponto selecionado e de outro mapa. Salve um novo ponto neste mapa.",0) end
+          data.points[index]=pointsUI.capture(point.name,point.note,point.id);pointsUI.save(data)
+          return "Posicao atualizada: "..point.name
+        end) end})
+        pointsUI.listBox:AddButton({Text="Copiar ponto selecionado (JSON)",Func=function() pointsUI.run(function()
+          local point=pointsUI.selected()
+          return pointsUI.copy(pointsUI.http:JSONEncode({version=1,point=point}))
+        end) end})
+        pointsUI.listBox:AddButton({Text="Copiar coordenadas (Vector3)",Func=function() pointsUI.run(function()
+          local point=pointsUI.selected();local p=point.position
+          return pointsUI.copy(string.format("Vector3.new(%.9f, %.9f, %.9f)",p.x,p.y,p.z))
+        end) end})
+        pointsUI.listBox:AddButton({Text="Exportar todos (JSON)",Func=function() pointsUI.run(function()
+          return pointsUI.copy(pointsUI.http:JSONEncode(pointsUI.load()))
+        end) end})
+        pointsUI.listBox:AddButton({Text="Atualizar lista",Func=function() pointsUI.run(function() pointsUI.refresh();return "Lista atualizada" end) end})
+        pointsUI.listBox:AddButton({Text="Excluir ponto selecionado",DoubleClick=true,Func=function() pointsUI.run(function()
+          local point,data,index=pointsUI.selected();table.remove(data.points,index);pointsUI.save(data)
+          return "Ponto excluido: "..point.name
+        end) end})
+        pointsUI.run(function() pointsUI.refresh();return "Pontos carregados | salve uma posicao com um nome" end)
+        tbl743.Maid:Give(game:GetService("RunService").Heartbeat:Connect(function(dt)
+          pointsUI.elapsed+=dt;if pointsUI.elapsed<0.5 then return end;pointsUI.elapsed=0
+          local player=game:GetService("Players").LocalPlayer
+          local root=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+          pointsUI.current:SetText(root and string.format("Posicao atual | X %.3f | Y %.3f | Z %.3f | mapa %s",root.Position.X,root.Position.Y,root.Position.Z,tostring(game.PlaceId)) or "Posicao atual: aguardando personagem")
+        end))
+      end
+      -- End map coordinate recorder.
       tbl743.State.moderatorIds = {}
       tbl743.State.moderatorGroups = {}
       tbl743.State.bots = {}

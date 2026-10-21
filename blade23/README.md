@@ -1,6 +1,14 @@
-# blade 23 — dois PCs
+# blade 23 — um PC ou dois PCs
 
 Esta pasta contém o Sentinel modificado, um loader remoto, um servidor de comunicação e um iniciador para Windows. O servidor usa apenas a biblioteca padrão do Python 3.10 ou superior.
+
+## Rodar tudo no mesmo PC
+
+Carregue o loader nas contas e, com os bots parados e fora das filas, clique **blade 23 → Blade / Sigil → Tudo neste PC (sem servidor)**. O mesmo botão aparece em **Conexao facil**. Isso salva o modo local e substitui qualquer endereço/chave remotos antigos. Instâncias paradas que compartilham a pasta do executor recebem a configuração automaticamente; em pastas de executores diferentes, selecione o modo em cada uma, mas a coordenação das filas exige uma pasta compartilhada entre todas as instâncias.
+
+Não precisa instalar Python, abrir `.bat`, usar convite ou verificar conexão. O Start e a atualização periódica da interface não fazem testes HTTP de conexão. As filas de XP e Rot usam arquivos locais do executor; ele precisa oferecer acesso a arquivos. Todas as contas continuam precisando estar no mesmo servidor do Roblox. Configure Rots/Quests, o farm e as Alts antes de clicar Iniciar Sigil.
+
+As instruções de servidor abaixo são opcionais, somente para usar dois PCs.
 
 ## 1. Ligar o PC principal
 
@@ -29,7 +37,7 @@ A aba **blade 23** reúne **Blade / Sigil**, **Rot e filas**, **Cela XP** e **Co
 
 Faça a conexão com a progressão e o Rot Bot parados e fora da fila.
 
-**No PC principal:** em **blade 23 → Conexao facil**, clique **Conectar neste PC**. A chave é obtida, testada e salva automaticamente.
+**No PC principal:** em **blade 23 → Conexao facil**, clique **Servidor neste PC (dois PCs)**. A chave é obtida, testada e salva automaticamente.
 
 **No outro PC:** na página do navegador do PC principal, clique **Copiar convite**. Envie esse texto ao segundo PC, cole em **Convite do PC principal** no bot e clique **Conectar convite**. O convite já inclui o endereço e um código curto; não é preciso preencher a chave longa.
 
@@ -57,7 +65,7 @@ Ative **Mostrar configuracao manual**. Os campos anteriores continuam disponíve
 
 Na rota Blade/Sigil, a espada é comprada no objeto `BronzeSword` encontrado a até 250 studs do Inn Keeper de Alana (ou do ponto de coleta, se o keeper ainda não estiver disponível). Se a conta estiver longe de Alana, tenta retornar pelo spawn de Alana antes da compra. Se a loja local não aparecer, aguarda com uma mensagem; não usa o trajeto antigo até Santorini. A próxima etapa exige a espada confirmada no inventário.
 
-Antes de iniciar, defina Rots/Quests, Shriekers/Zombie Scrooms/Automatic, a cela, os parâmetros de combate e as contas em Alts. O Start valida os dados necessários e a conexão remota, quando usada. As opções da execução ficam bloqueadas enquanto o Sigil roda; os valores, pontos, cela e Alts ficam registrados no save para a retomada após rejoin. Pare o Sigil para editar a próxima execução.
+Antes de iniciar, defina Rots/Quests, Shriekers/Zombie Scrooms/Automatic, a cela, os parâmetros de combate e as contas em Alts. O Start valida os dados necessários da automação, sem testar conexão HTTP. As opções da execução ficam bloqueadas enquanto o Sigil roda; os valores, pontos, cela e Alts ficam registrados no save para a retomada após rejoin. Pare o Sigil para editar a próxima execução.
 
 O fluxo entra automaticamente na fila de Rots ao terminar o XP. Não é necessário ativar manualmente **Join receiver queue** nesse fluxo completo.
 
@@ -137,3 +145,9 @@ Para verificar o servidor durante desenvolvimento, execute a partir desta pasta:
 ```text
 python -m unittest discover -s tests -v
 ```
+
+## Pontos do mapa
+
+A aba **Pontos do mapa** permite salvar sua posição atual com nome e observação. Cada ponto guarda o mapa, XYZ e a direção do personagem no arquivo local `sentinel/.cache/map_points.json`. A lista continua disponível após reabrir o Sentinel na mesma pasta do executor.
+
+Fique no lugar, digite um nome e clique **Salvar posicao atual**. Selecione um ponto para conferir os dados, atualizar sua posição, copiar em JSON ou como `Vector3.new(...)`, ou excluir com dois cliques. **Exportar todos (JSON)** copia a lista inteira para colar na conversa. Nomes iguais em mapas diferentes são permitidos; no mesmo mapa, use outro nome ou atualize explicitamente o ponto. Salvar pontos não modifica as rotas nem movimenta o personagem.
