@@ -38602,12 +38602,16 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           qResult3.setJSON(key,{x=root.Position.X,y=root.Position.Y,z=root.Position.Z})
           fn535("Point saved: "..key)
         end
+        __L3.bladeSupplyRequirements=function()
+          if __L3.bladeValue("BladeOrderly","Rots")=="Rots" then return {} end
+          return {['Liquid Wisdom']=1,['Health Potion']=1,['Ice Protection']=1,['Tespian Elixir']=5}
+        end
         __L3.bladeCollect=function()
           local root=LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart")
           local thrown=v966:FindFirstChild("Thrown")
           if not root or not thrown then return end
           local origin=root.Position
-          local requirements={['Liquid Wisdom']=1,['Health Potion']=1,['Ice Protection']=1,['Tespian Elixir']=5}
+          local requirements=__L3.bladeSupplyRequirements()
           for _,bag in thrown:GetChildren() do
             if not tbl303[1] then return end
             local part=__L3.fn596(bag)
@@ -38650,7 +38654,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           __L3.bladeCollect()
           if not tbl303[1] then return end
           local missing={}
-          for name,needed in pairs({['Liquid Wisdom']=1,['Health Potion']=1,['Ice Protection']=1,['Tespian Elixir']=5}) do
+          for name,needed in pairs(__L3.bladeSupplyRequirements()) do
             local count=__L3.bladeCount(name)
             if count<needed then table.insert(missing,name.." "..count.."/"..needed) end
           end
