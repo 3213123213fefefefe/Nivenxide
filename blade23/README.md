@@ -96,7 +96,7 @@ A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do pers
 
 ## Validação
 
-O runtime passou pela compilação Luau. Vinte e três testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Vinte e sete testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -107,3 +107,17 @@ LUAU_BIN=/caminho/para/luau python3 -m unittest discover -s tests -p test_route1
 A máscara de nomes do menu Esc evita repetir a varredura completa da árvore do menu a cada 0,25 segundo; a primeira varredura distribui o trabalho entre frames. A melhora física de desempenho precisa ser conferida no cliente.
 
 Os testes usam trechos reais do runtime com serviços simulados. Movimentação física, hitboxes, diálogos e o fluxo completo com várias contas ainda precisam de teste dentro do jogo.
+
+## Diagnóstico de RAM na execução
+
+O loader bloqueia outro carregamento enquanto a mesma instância está carregando ou ativa. Para atualizar, use Unload antes. O descarregamento restaura os hooks iniciais após limpar os recursos das funcionalidades e remove o evento de respawn; chamadas repetidas de Unload não repetem a limpeza.
+
+**Settings → Diagnostico Blade 23 → Copiar diagnostico de RAM** copia um relatório local com executor, etapas de inicialização, memória Lua, memória total do cliente quando as APIs estão disponíveis e nomes das opções ativas. O histórico mantém no máximo 64 amostras, com atualização de 5 segundos após carregar. O relatório não é enviado automaticamente.
+
+Se o Roblox fechar antes de abrir a interface, o último registro está em `sentinel/.cache/blade23_ram_diagnostic.json`. Antes de carregar novamente o bot, copie esse registro pelo executor:
+
+```lua
+setclipboard(readfile("sentinel/.cache/blade23_ram_diagnostic.json"))
+```
+
+Os testes simulam 100 ciclos de instalação e remoção de hooks, falha parcial, execução duplicada, histórico limitado e Unload reentrante. Eles não medem o pico real de RAM do Roblox ou do executor.

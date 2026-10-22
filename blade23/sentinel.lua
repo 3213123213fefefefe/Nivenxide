@@ -1,3 +1,39 @@
+-- Blade 23 session lifecycle and bounded local RAM diagnostics.
+local __bootEnv=(getgenv and getgenv()) or shared
+local __bootPrevious=__bootEnv.__BLADE23_SESSION
+if __bootPrevious and __bootPrevious.jobId==game.JobId and (__bootPrevious.executing or __bootPrevious.state=="running") then
+  warn("[blade 23] Ja existe uma instancia carregando ou ativa. Use Config > Unload antes de recarregar.")
+  return false
+end
+local __bootSession=__bootPrevious
+if not __bootSession or __bootSession.jobId~=game.JobId or __bootSession.state~="loading" then
+  __bootSession={state="loading",jobId=game.JobId,started=os.clock()}
+  __bootEnv.__BLADE23_SESSION=__bootSession
+end
+__bootSession.executing=true
+__bootSession.report=__bootSession.report or {version=1,jobId=game.JobId,placeId=game.PlaceId,samples={}}
+local function __bootMark(phase,sampleOnly)
+  local report=__bootSession.report
+  if not sampleOnly then __bootSession.phase=phase end
+  local entry={phase=__bootSession.phase,event=phase,seconds=math.floor((os.clock()-__bootSession.started)*10)/10}
+  pcall(function() entry.luaMB=math.floor(gcinfo()/1024*10)/10 end)
+  pcall(function() entry.clientMB=math.floor(game:GetService("Stats"):GetTotalMemoryUsageMb()*10)/10 end)
+  if not report.executor then
+    pcall(function() report.executor=tostring(identifyexecutor and identifyexecutor() or getexecutorname and getexecutorname() or "unknown") end)
+  end
+  if #report.samples>=64 then table.remove(report.samples,1) end
+  table.insert(report.samples,entry)
+  report.state=__bootSession.state;report.phase=__bootSession.phase
+  if writefile then pcall(function()
+    if makefolder and isfolder then
+      if not isfolder("sentinel") then makefolder("sentinel") end
+      if not isfolder("sentinel/.cache") then makefolder("sentinel/.cache") end
+    end
+    writefile("sentinel/.cache/blade23_ram_diagnostic.json",game:GetService("HttpService"):JSONEncode(report))
+  end) end
+end
+__bootMark("runtime-entry")
+
 
 local __UI_FILES = {
 	lib = [=[
@@ -7525,9 +7561,11 @@ function Library:Unload()
 		return
 	end
 
+	Library.Unloaded = true -- Guard reentrant unload callbacks before cleaning anything.
 	for _, callback in Library.UnloadSignals do
 		Library:SafeCallback(callback)
 	end
+	table.clear(Library.UnloadSignals)
 
 	for index = #Library.Signals, 1, -1 do
 		local connection = table.remove(Library.Signals, index)
@@ -20324,6 +20362,7 @@ __modules.m6de19a4ba64c = function()
 end
 __modules.m356b75b2d82b = function()
   return function(a1163)
+    __bootMark("bootstrap-services")
     local newResult4 = requireModule("m193359c7f004").new()
     local startResult = requireModule("m692c800c763f").start(a1163, { onRevoke = newResult4 })
     requireModule("m849ca4e850e4").start(a1163, {
@@ -20833,8 +20872,30 @@ __modules.m356b75b2d82b = function()
         if not (hookfunction and checkcaller and newcclosure and islclosure and getupvalues) then
           return
         end
+        local active=true
+        local hooks={}
+        local connections={}
+        local function install(target,replacement)
+          local original=hookfunction(target,replacement)
+          table.insert(hooks,{target=target,original=original})
+          return original
+        end
+        local function cleanup()
+          if not active then return end
+          active=false
+          for _,connection in connections do pcall(function() connection:Disconnect() end) end
+          table.clear(connections)
+          for index=#hooks,1,-1 do
+            local entry=hooks[index]
+            pcall(hookfunction,entry.target,entry.original)
+          end
+          table.clear(hooks)
+        end
+        -- Register each hook immediately so a failure halfway through initialization can clean up.
+        __bootSession.coreCleanup=cleanup
         local v137
-        v137 = hookfunction(workspace.Destroy, function(a1190)
+        v137 = install(workspace.Destroy, function(a1190)
+          if not active then return v137(a1190) end
           if not checkcaller() and tostring(a1190) == "CharacterHandler" then
             return
           end
@@ -20862,6 +20923,7 @@ __modules.m356b75b2d82b = function()
         local fn107 = function()
           task.spawn(function()
             for i23 = 1, 8 do
+              if not active then return end
               fn106()
               if tbl55.tango or tbl55.dolorosa then
                 return
@@ -20871,11 +20933,12 @@ __modules.m356b75b2d82b = function()
           end)
         end
         fn107()
-        LocalPlayer3.CharacterAdded:Connect(fn107)
+        table.insert(connections,LocalPlayer3.CharacterAdded:Connect(fn107))
         local v138
-        v138 = hookfunction(
+        v138 = install(
           Instance.new("RemoteEvent").FireServer,
           newcclosure(function(a1191, ...)
+            if not active then return v138(a1191,...) end
             if not checkcaller() and typeof(a1191) == "Instance" then
               if a1191 == tbl55.dolorosa or a1191 == tbl55.theodora or a1191 == tbl55.drop then
                 return
@@ -20900,9 +20963,10 @@ __modules.m356b75b2d82b = function()
           end
           local v139
           local tbl56 = {}
-          v139 = hookfunction(
+          v139 = install(
             coroutine.wrap,
             newcclosure(function(a1192, ...)
+              if not active then return v139(a1192,...) end
               if not checkcaller() then
                 if type(a1192) == "function" and islclosure(a1192) then
                   local getconstantsResult = getconstants(a1192)
@@ -20943,9 +21007,10 @@ __modules.m356b75b2d82b = function()
           local fn108 = function() end
           local info = debug.info
           local v140
-          v140 = hookfunction(
+          v140 = install(
             coroutine.wrap,
             newcclosure(function(a1193)
+              if not active then return v140(a1193) end
               if not checkcaller() then
                 if type(a1193) == "function" and islclosure(a1193) then
                   local getupvaluesResult2 = getupvalues(a1193)
@@ -70399,6 +70464,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       pcall(function()
         tbl44.e().preloadKeyHandler()
       end)
+      __bootMark("core-hooks")
       tbl44.f()("Normal")
       local str149 = "https://git.fable.bz/zyu/sentinel-ui/raw/branch/main/"
       local str150 = "https://stella.heroinhound.cc/stella.lua"
@@ -70426,7 +70492,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       local fn1432 = function(a11598, a2485)
         return __UI_FILES[a11598] or ""
       end
+      __bootMark("interface")
       local res653 = loadstring(fn1432("lib", "Library.lua"))()
+      __bootSession.library=res653
       local res654 = loadstring(fn1432("theme", "dependencies/ThemeManager.lua"))()
       local res655 = loadstring(fn1432("save", "dependencies/SaveManager.lua"))()
       local newResult107 = dResult.new()
@@ -70434,7 +70502,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       res653:OnUnload(function()
         flag165 = true
         getgenv()[res42] = nil
-        newResult107:DoCleaning()
+        pcall(function() newResult107:DoCleaning() end)
+        if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
+        __bootSession.state="unloaded"
+        __bootMark("unloaded")
+        __bootSession.library=nil
+        if __bootEnv.__BLADE23_SESSION==__bootSession then __bootEnv.__BLADE23_SESSION=nil end
         if cleardrawcache then
           pcall(cleardrawcache)
         end
@@ -70466,6 +70539,32 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         },
       }
       cResult.migrate()
+      do
+        local diagnostic=tbl743.Tabs.Settings:AddRightGroupbox("Diagnostico Blade 23")
+        local function report()
+          __bootMark("snapshot",true)
+          local toggles={}
+          for name,toggle in res653.Toggles do
+            if toggle.Value==true and #toggles<100 then table.insert(toggles,tostring(name)) end
+          end
+          table.sort(toggles)
+          __bootSession.report.activeToggles=toggles
+          return aResult.HttpService:JSONEncode(__bootSession.report)
+        end
+        diagnostic:AddLabel("Diagnostico local: RAM do cliente, memoria Lua e ultima etapa de carregamento.",true)
+        diagnostic:AddButton({Text="Copiar diagnostico de RAM",Func=function()
+          local ok,value=pcall(report)
+          if ok and setclipboard then setclipboard(value);res653:Notify({Title="Blade 23",Description="Diagnostico copiado; cole na conversa."})
+          elseif ok then print("[blade23 diagnostic] "..value) end
+        end})
+        local elapsed=0
+        newResult107:Give(aResult.RunService.Heartbeat:Connect(function(dt)
+          elapsed+=dt
+          if elapsed<5 then return end
+          elapsed=0
+          if __bootSession.state~="unloaded" and __bootSession.state~="failed" then __bootMark("sample",true) end
+        end))
+      end
       -- Map coordinate recorder: local named points, independent of the automation.
       do
         local pointsUI={app=tbl743,file="sentinel/.cache/map_points.json",labels={},data={version=1,points={}},elapsed=0}
@@ -70673,30 +70772,78 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           pcall(tbl743.State.onModeratorsLoaded)
         end
       end)
+      __bootMark("module:l")
+      task.wait()
       tbl44.l()(tbl743)
+      __bootMark("module:p")
+      task.wait()
       tbl44.p()(tbl743)
+      __bootMark("module:r")
+      task.wait()
       tbl44.r()(tbl743)
+      __bootMark("module:w")
+      task.wait()
       tbl44.w()(tbl743)
+      __bootMark("module:A")
+      task.wait()
       tbl44.A()(tbl743)
+      __bootMark("module:E")
+      task.wait()
       tbl44.E()(tbl743)
+      __bootMark("module:K")
+      task.wait()
       tbl44.K()(tbl743)
+      __bootMark("module:N")
+      task.wait()
       tbl44.N()(tbl743)
+      __bootMark("module:O")
+      task.wait()
       tbl44.O()(tbl743)
+      __bootMark("module:P")
+      task.wait()
       tbl44.P()(tbl743)
+      __bootMark("module:T")
+      task.wait()
       tbl44.T()(tbl743)
+      __bootMark("module:U")
+      task.wait()
       tbl44.U()(tbl743)
+      __bootMark("module:V")
+      task.wait()
       tbl44.V()(tbl743)
+      __bootMark("module:X")
+      task.wait()
       tbl44.X()(tbl743)
+      __bootMark("module:Y")
+      task.wait()
       tbl44.Y()(tbl743)
+      __bootMark("module:Z")
+      task.wait()
       tbl44.Z()(tbl743)
+      __bootMark("module:_")
+      task.wait()
       tbl44._()(tbl743)
+      __bootMark("module:aa")
+      task.wait()
       tbl44.aa()(tbl743)
+      __bootMark("module:ab")
+      task.wait()
       tbl44.ab()(tbl743)
+      __bootMark("module:ac")
+      task.wait()
       tbl44.ac()(tbl743)
+      __bootMark("module:af")
+      task.wait()
       tbl44.af()(tbl743)
+      __bootSession.state="running"
+      __bootMark("ready")
       res653:Notify({ Title = "sentinel.bz", Description = "rogue lineage loaded" })
     end, debug.traceback)
     if not ok46 then
+      if __bootSession.library and __bootSession.library.Unload then pcall(function() __bootSession.library:Unload() end) end
+      if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
+      __bootSession.state="failed"
+      __bootMark("failed: "..tostring(result50):sub(1,300))
       getgenv()[res42] = nil
       warn("[sentinel] load failed: " .. tostring(result50))
     end
@@ -70737,8 +70884,13 @@ local __cap = {
 }
 
 local __ok, __err = pcall(__entry, __cap)
+__bootSession.executing=false
 if not __ok then
-	warn("[sandbox] entry error: " .. tostring(__err))
+  if __bootSession.library and __bootSession.library.Unload then pcall(function() __bootSession.library:Unload() end) end
+  if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
+  __bootSession.state="failed";__bootMark("entry-error: "..tostring(__err):sub(1,300))
+  warn("[blade 23] entry error: "..tostring(__err))
+elseif __bootSession.state=="loading" then
+  __bootSession.state="failed";__bootMark("entry-returned-before-ready")
 end
-
-return __ok
+return __ok and __bootSession.state=="running"

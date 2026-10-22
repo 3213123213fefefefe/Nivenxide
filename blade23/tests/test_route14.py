@@ -639,5 +639,93 @@ local n=#events;assert(__L3.bladeDraugVisit() and #events==n)
         ultra=self.part('__L3.fn638 = function()', 'fn534("P7: section 1')
         self.assertLess(ultra.index('bladeDraugVisit()'),ultra.index('bladeTrainerApproach("jagen"'))
 
+    def test_core_hooks_and_respawn_event_cleanup_across_reloads(self):
+        core=self.part('local fn44 = function()', '    tbl44.f = function()')
+        self.run_luau(r'''
+local __bootSession={};local tbl44={};local activeConnections=0;local replacements={};local fail=false;local count=0
+local fire=function() end;local destroy=function() end
+local workspace={Destroy=destroy};local Instance={new=function() return {FireServer=fire} end}
+local connect={Connect=function(_,fn) activeConnections+=1;local on=true;return {Disconnect=function() if on then activeConnections-=1;on=false end end} end}
+local player={CharacterAdded=connect};local services={Players={LocalPlayer=player},RunService={}}
+tbl44.a=function() return services end;tbl44.e=function() return {keyHandlerEnabled=function() return false end} end
+local getgenv=function() return {} end;local checkcaller=function() return true end
+local newcclosure=function(fn) return fn end;local islclosure=function() return false end;local getupvalues=function() return {} end
+local hookfunction=function(target,replacement)
+ count+=1;if fail and target==coroutine.wrap then error("simulated failed hook") end
+ local original=replacements[target] or target;replacements[target]=replacement;return original
+end
+local task={spawn=function(fn) fn() end,wait=function() end}
+'''+core+r'''
+for i=1,100 do
+ fn44()("Normal");assert(activeConnections==1)
+ assert(replacements[destroy]~=destroy and replacements[fire]~=fire)
+ __bootSession.coreCleanup();__bootSession.coreCleanup()
+ assert(activeConnections==0 and replacements[destroy]==destroy and replacements[fire]==fire and replacements[coroutine.wrap]==coroutine.wrap)
+end
+fail=true;assert(not pcall(fn44(),"Normal"));fail=false
+__bootSession.coreCleanup();assert(activeConnections==0 and replacements[destroy]==destroy and replacements[fire]==fire)
+''')
+
+    def test_loader_rejects_concurrent_start_and_allows_reload_after_unload(self):
+        loader=(ROOT/'loader.lua').read_text()
+        self.run_luau(r'''
+local env={};local getgenv=function() return env end
+local warnings=0;local warn=function() warnings+=1 end
+local downloads,compiles,runs=0,0,0;local nested;local broken=false
+local game={JobId="same-job",IsLoaded=function() return true end}
+local loadstring=function(source)
+ compiles+=1;if broken then return nil,"compile failure" end
+ return function() runs+=1;env.__BLADE23_SESSION.state="running";return true end
+end
+local function execute()
+'''+loader+r'''
+end
+game.HttpGet=function()
+ downloads+=1;nested=execute();assert(nested==false,"concurrent load must return before another download")
+ return "runtime"
+end
+assert(execute() and downloads==1 and compiles==1 and runs==1)
+assert(not execute() and downloads==1 and compiles==1)
+env.__BLADE23_SESSION.state="unloaded"
+assert(execute() and downloads==2 and compiles==2 and runs==2)
+env.__BLADE23_SESSION.state="unloaded";broken=true
+assert(not execute() and env.__BLADE23_SESSION.state=="failed")
+broken=false;assert(execute() and runs==3)
+''')
+
+    def test_startup_memory_journal_is_bounded_and_keeps_last_phase(self):
+        startup=self.source[:self.source.index('local __UI_FILES =')]
+        self.run_luau(r'''
+local env={};local getgenv=function() return env end
+local game={JobId="job",PlaceId=1,GetService=function(_,name)
+ if name=="Stats" then return {GetTotalMemoryUsageMb=function() return 1234.5 end} end
+ return {JSONEncode=function() return "report" end}
+end}
+local gcinfo=function() return 65536 end;local identifyexecutor=function() return "test-executor" end
+local writes=0;local writefile=function() writes+=1 end
+'''+startup+r'''
+__bootSession.state="running";__bootMark("ready")
+for i=1,1000 do __bootMark("sample",true) end
+assert(#__bootSession.report.samples==64 and __bootSession.report.phase=="ready")
+assert(__bootSession.report.samples[1].luaMB==64 and __bootSession.report.samples[1].clientMB==1234.5)
+assert(__bootSession.report.executor=="test-executor" and writes==1002)
+''')
+
+    def test_unload_is_reentrant_and_releases_callback_references(self):
+        unload=self.part('function Library:Unload()', 'Library:GiveSignal(UserInputService.WindowFocused:')
+        self.run_luau(r'''
+local env={};local getgenv=function() return env end
+local Library={UnloadSignals={},Signals={}};local calls=0;local destroyed=0
+function Library:SafeCallback(fn) fn() end
+local RunService={UnbindFromRenderStep=function() end}
+local UserInputService={};local OriginalMouseIconEnabled=true
+local ScreenGui={Destroy=function() destroyed+=1 end};local Cursor;local CursorOutline;local DimState={}
+for _,name in {"Toggles","Options","Registry","Tabs","KeybindRows","SearchIndex","SearchBoxes"} do Library[name]={} end
+Library.UnloadSignals[1]=function() calls+=1;Library:Unload() end
+'''+unload+r'''
+Library:Unload();Library:Unload()
+assert(calls==1 and destroyed==1 and #Library.UnloadSignals==0 and Library.Unloaded)
+''')
+
 if __name__ == '__main__':
     unittest.main()
