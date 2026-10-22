@@ -41801,10 +41801,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local channelResult = MResult.channel("rotbot")
         local rotSupplier={settings=qResult4.getJSON("blade23_rot_supplier") or {},owner=nil,seen=0,stopped=false}
-        rotSupplier.status=rotBotTab:AddLabel("Fornecedor: aguardando receptora da fila em Renova",true)
+        rotSupplier.status=rotBotTab:AddLabel("Fornecedor: detecta quem estiver no ponto P14 em Renova",true)
         rotSupplier.waitPoint=Vector3.new(-2085.454589844,609.353881836,-754.801147461)
         rotSupplier.receiverPoint=Vector3.new(-2076.978759765625,615.2067260742188,-759.8974609375)
-        rotSupplier.masterReady=function(expectedId)
+        rotSupplier.masterReadyQueued=function(expectedId)
           local owner=rotSupplier.owner
           if not owner or os.clock()-rotSupplier.seen>4 or owner.ready~=true
             or owner.state~="waiting" or (tonumber(owner.progress) or 16)>=16
@@ -41817,6 +41817,41 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             or character:FindFirstChild("Grabbing") or v1345:HasTag(character,"Unconscious")
             or v1345:HasTag(character,"Knocked") or v1345:HasTag(character,"Jailed") then return nil end
           return player,root
+        end
+        rotSupplier.presenceRadius=6
+        rotSupplier.masterReady=function(expectedId)
+          -- The other PC does not announce itself: use replicated character presence at P14.
+          if os.clock()>=(rotSupplier.supplierRefresh or 0) then
+            rotSupplier.supplierRefresh=os.clock()+0.5
+            rotSupplier.supplierIds={}
+            for _,entry in channelResult.roster() do
+              if entry.rotSupplier then rotSupplier.supplierIds[entry.userId]=true end
+            end
+          end
+          local best,bestRoot,bestDistance
+          for _,player in getResult26:GetPlayers() do
+            if player~=LocalPlayer24 and (not expectedId or player.UserId==expectedId)
+              and not (rotSupplier.supplierIds and rotSupplier.supplierIds[player.UserId]) then
+              local character=player.Character
+              local root=character and character:FindFirstChild("HumanoidRootPart")
+              local hum=character and character:FindFirstChildOfClass("Humanoid")
+              if root and hum and hum.Health>0 and not character:FindFirstChild("Grabbing")
+                and not v1345:HasTag(character,"Unconscious") and not v1345:HasTag(character,"Knocked")
+                and not v1345:HasTag(character,"Jailed") then
+                local delta=root.Position-rotSupplier.receiverPoint
+                local distance=Vector3.new(delta.X,0,delta.Z).Magnitude
+                if distance<=rotSupplier.presenceRadius and math.abs(delta.Y)<=12 then
+                  if player.UserId==rotSupplier.presenceMasterId then return player,root end
+                  if not best or distance<bestDistance or (distance==bestDistance and player.UserId<best.UserId) then
+                    best,bestRoot,bestDistance=player,root,distance
+                  end
+                end
+              end
+            end
+          end
+          if best then rotSupplier.presenceMasterId=best.UserId
+          elseif not expectedId then rotSupplier.presenceMasterId=nil end
+          return best,bestRoot
         end
         rotSupplier.saveSettings=function()
           local resume=Library9.Toggles.RotSupplierResume
@@ -41838,7 +41873,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if fn670() then
             return nil
           end
-          return channelResult.orderedMaster() or MResult.match(Options9.RotMaster and Options9.RotMaster.Value or "")
+          return rotSupplier.masterReady()
         end
         iResult6.mark(a1849, "Blatant", "RotBotEnabled")
         local tbl365 = { false }
@@ -42212,8 +42247,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             else
               local master,masterRoot=rotSupplier.masterReady()
               if not master then
-                fn704("waiting","aguardando em Renova uma receptora da fila chegar e ficar livre")
-                rotSupplier.status:SetText("Fornecedor: esperando uma receptora em P14")
+                fn704("waiting","aguardando uma pessoa livre perto do ponto P14, sem depender de fila compartilhada")
+                rotSupplier.status:SetText("Fornecedor: esperando alguem livre a ate 6 studs de P14")
                 if (v1366.Position-rotSupplier.waitPoint).Magnitude>5 then
                   if rotSupplier.flyTo then rotSupplier.flyTo(rotSupplier.waitPoint+Vector3.new(0,2,0)) end
                 end
@@ -43054,6 +43089,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if Library9.Toggles.RotBotEnabled then Library9.Toggles.RotBotEnabled:SetValue(false) end
           rotSupplier.status:SetText("Rot Bot parado; retomada cancelada ate ativar novamente")
         end
+        rotBotTab:AddLabel("Vitima: detecta qualquer jogador livre a ate 6 studs de P14. Funciona entre PCs no mesmo servidor; nao precisa anunciar Master.",true)
         rotBotTab:AddToggle("RotSupplierResume",{Text="Retomar fornecedor apos hop/rejoin",
           Default=rotSupplier.settings.resume~=false,Callback=function(value)
             rotSupplier.settings.resume=value

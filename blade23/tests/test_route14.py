@@ -264,28 +264,39 @@ pref="Zombie Scrooms";slot="scrooms";moves={};tbl308[1]={};__L3.bladeShrApproach
 __L3.bladeXP();assert(#moves==0 and phase=="B1_EXIT" and tbl308[1].bladeXPMethod=="scrooms")
 ''')
 
-    def test_suppliers_require_present_free_receiver_at_p14(self):
+    def test_suppliers_detect_receiver_without_queue_record(self):
         ready=self.part('rotSupplier.masterReady=function', 'rotSupplier.saveSettings=function')
         self.run_luau(VEC+r'''
 local now=10;local os={clock=function() return now end}
-local rotSupplier={seen=10,receiverPoint=Vector3.new(-2076.978759765625,615.2067260742188,-759.8974609375)}
-local position=rotSupplier.receiverPoint;local health=100;local grabbing=false;local knocked=false
+local rotSupplier={presenceRadius=6,receiverPoint=Vector3.new(-2076.978759765625,615.2067260742188,-759.8974609375)}
+local LocalPlayer24={UserId=99};local position=rotSupplier.receiverPoint-Vector3.new(0,6,0)
+local health=100;local grabbing=false;local knocked=false
 local character={FindFirstChild=function(_,n)
  if n=="HumanoidRootPart" then return {Position=position} end
  if n=="Grabbing" then return grabbing and {} or nil end
 end,FindFirstChildOfClass=function() return {Health=health} end}
-local player={UserId=1,Character=character}
-local getResult26={GetPlayerByUserId=function(_,id) return id==1 and player end}
+local player={UserId=1,Character=character};local players={LocalPlayer24,player}
+local getResult26={GetPlayers=function() return players end}
 local v1345={HasTag=function(_,_,tag) return tag=="Knocked" and knocked end}
+local channelResult={roster=function() return {} end}
 '''+ready+r'''
-assert(not rotSupplier.masterReady())
-rotSupplier.owner={userId=1,ready=true,state="waiting",progress=0}
-assert(rotSupplier.masterReady()==player)
+assert(rotSupplier.owner==nil and rotSupplier.masterReady()==player,"presence must work without any queue or other-PC file")
 position=Vector3.new(-2095.048095703125,620.0502319335938,-793.3778686523438);assert(not rotSupplier.masterReady())
 position=rotSupplier.receiverPoint;grabbing=true;assert(not rotSupplier.masterReady());grabbing=false
 knocked=true;assert(not rotSupplier.masterReady());knocked=false
-rotSupplier.owner.progress=16;assert(not rotSupplier.masterReady());rotSupplier.owner.progress=15
-now=15;assert(not rotSupplier.masterReady())
+health=0;assert(not rotSupplier.masterReady());health=100
+position=rotSupplier.receiverPoint+Vector3.new(0,13,0);assert(not rotSupplier.masterReady())
+position=rotSupplier.receiverPoint;assert(rotSupplier.masterReady(1)==player and not rotSupplier.masterReady(2))
+-- A local supplier at the point must never become another supplier's Master.
+now+=1;channelResult.roster=function() return {{userId=1,rotSupplier=true}} end
+assert(not rotSupplier.masterReady())
+now+=1;channelResult.roster=function() return {} end
+assert(rotSupplier.masterReady()==player)
+-- The standby point is outside the six-stud horizontal trigger.
+position=Vector3.new(-2085.454589844,609.353881836,-754.801147461);assert(not rotSupplier.masterReady())
+-- Ignore the local player's own character, even when no one else is present.
+LocalPlayer24.Character=character;players={LocalPlayer24};position=rotSupplier.receiverPoint
+assert(not rotSupplier.masterReady())
 ''')
 
     def test_wipe_happens_before_rejoin(self):
