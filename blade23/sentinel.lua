@@ -38395,6 +38395,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         __L3.fn638 = function()
           if __L3.bladeEnabled() then
+            if not __L3.bladeDraugVisit() then return end
             if not __L3.bladeTrainerApproach("jagen","Castle Sanctuary",__L3.tbl330) then return end
             if not __L3.bladeTrainPurchase("jagen","Jagen",Vector3.new(6857,1411,-164),{"Please train me.","Here is 350 Silver."},__L2.tbl282,1) then return end
             if not __L2.fn503(__L2.tbl282) then __L3.bladeTrainWait("Jagen: aguardando confirmar skill Ultra");return end
@@ -38638,7 +38639,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         }
         a1723.State.bladeRoutePoints=__L3.bladeRoute
         __L3.bladeStatus=function(text)
-          if __L3.bladeLabel then __L3.bladeLabel:SetText(text) end
+          if __L3.bladeLabel and __L3.bladeLastStatus~=text then
+            __L3.bladeLastStatus=text;__L3.bladeLabel:SetText(text)
+          end
         end
         __L3.bladePhase=function(phase)
           tbl308[1].bladePhase=phase
@@ -39120,11 +39123,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         __L3.bladeMobInCell=function(root,bounds)
           -- Accept a mob whose body overlaps the cell edge; never widen the movement bounds.
           local position=root.Position
-          local radiusX=math.min(2,math.max(0.5,root.Size.X/2))
-          local radiusZ=math.min(2,math.max(0.5,root.Size.Z/2))
+          local radiusX=math.min(3,math.max(0.5,root.Size.X/2)+1)
+          local radiusZ=math.min(3,math.max(0.5,root.Size.Z/2)+1)
           return position.X+radiusX>=bounds.minX and position.X-radiusX<=bounds.maxX
             and position.Z+radiusZ>=bounds.minZ and position.Z-radiusZ<=bounds.maxZ
-            and position.Y>=bounds.minY and position.Y<=bounds.maxY
+            and position.Y>=bounds.minY-4 and position.Y<=bounds.maxY+12
         end
         __L3.bladeShriekers=function()
           local result={}
@@ -39375,6 +39378,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local halfAngle=math.rad(__L3.bladeValue("BladeM1Arc",110)/2)
           local candidates={current}
           local function add(position)
+            for _,existing in candidates do if (position-existing).Magnitude<0.25 then return end end
             if __L3.bladeInCell(position,bounds) and canStand(position) then table.insert(candidates,position) end
           end
           if step>0 then
@@ -39393,19 +39397,27 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 table.insert(nearby,target)
               end
             end
-            local angles={math.atan2(initialLook.X,-initialLook.Z)}
+            local bearings={}
+            local centered=0
             for _,target in nearby do
               local d=target.Position-position
-              local angle=math.atan2(d.X,-d.Z)
-              table.insert(angles,angle)
-              table.insert(angles,angle-halfAngle)
-              table.insert(angles,angle+halfAngle)
+              if Vector3.new(d.X,0,d.Z).Magnitude<0.05 then centered+=1
+              else table.insert(bearings,math.atan2(d.X,-d.Z)%(2*math.pi)) end
             end
-            for _,angle in angles do
+            table.sort(bearings)
+            local function offer(angle,count)
               local direction=Vector3.new(math.sin(angle),0,-math.cos(angle))
-              local count=__L3.bladeConeCount(position,direction,nearby,range,halfAngle)
               local score=count*1000-(position-current).Magnitude*10+(direction:Dot(initialLook))*0.01
               if score>best.score then best={position=position,direction=direction,count=count,score=score} end
+            end
+            offer(math.atan2(initialLook.X,-initialLook.Z),__L3.bladeConeCount(position,initialLook,nearby,range,halfAngle))
+            local n=#bearings
+            local right=0
+            local function angleAt(index) return bearings[(index-1)%n+1]+(index>n and 2*math.pi or 0) end
+            for left=1,n do
+              right=math.max(right,left-1)
+              while right+1<left+n and angleAt(right+1)-bearings[left]<=2*halfAngle+0.0000001 do right+=1 end
+              offer(bearings[left]+halfAngle,right-left+1+centered)
             end
           end
           return best
@@ -39444,6 +39456,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local baseFloor=floor(anchor)
           local failedSteps={}
           local function canStand(position)
+            for index=#failedSteps,1,-1 do
+              if os.clock()>=failedSteps[index].untilTime then table.remove(failedSteps,index) end
+            end
             for _,entry in failedSteps do
               if os.clock()<entry.untilTime and (entry.position-position).Magnitude<0.4 then return false end
             end
@@ -39473,7 +39488,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
               if not plan or os.clock()>=nextPlan then
                 plan=__L3.bladeAimPlan(anchor,current,initialLook,targetsProvider(),bounds,canStand,visible)
-                nextPlan=os.clock()+0.65
+                nextPlan=os.clock()+1
                 if __L3.bladeAimLabel then
                   __L3.bladeAimLabel:SetText(string.format("M1: alcance estimado %d alvos | passo max. %.1f studs",plan.count,__L3.bladeValue("BladeM1Step",1.5)))
                 end
@@ -39486,6 +39501,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 if not running() or done() then break end
                 hum:MoveTo(root.Position)
                 if (root.Position-plan.position).Magnitude>0.75 then
+                  if #failedSteps>=16 then table.remove(failedSteps,1) end
                   table.insert(failedSteps,{position=plan.position,untilTime=os.clock()+3})
                   plan=__L3.bladeAimPlan(anchor,root.Position,initialLook,targetsProvider(),bounds,function() return false end,visible)
                   if plan.count==0 then task.wait(0.2); continue end
@@ -39672,11 +39688,16 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           hum:UnequipTools()
           if character:FindFirstChildWhichIsA("Tool") then return false end
-          control.chargeUntil(100,running)
-          if not running() or mana.Value<99 then
-            __L3.bladeStatus("Soco: aguardando mana cheia");return false
+          local chargeDeadline=os.clock()+8
+          if mana.Value<95 then
+            control.chargeUntil(95,function()
+              return running() and LocalPlayer21.Character==character and os.clock()<chargeDeadline
+            end)
           end
           if control.decharge then control.decharge() end
+          if not running() or mana.Value<94.9 then
+            __L3.bladeStatus("Soco: aguardando mana cheia");return false
+          end
           for hit=1,4 do
             if not running() or LocalPlayer21.Character~=character then break end
             local deadline=os.clock()+1.5
@@ -39718,9 +39739,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           save.bladeFistDamage=tonumber(save.bladeFistDamage) or 0
           local function attach(mob)
             if watched[mob.hum] then return end
-            watched[mob.hum]=true
+            watched[mob.hum]=mob
             local previous=mob.hum.Health
-            table.insert(connections,mob.hum.HealthChanged:Connect(function(value)
+            connections[mob.hum]=mob.hum.HealthChanged:Connect(function(value)
               local delta=previous-value;previous=value
               if not active or not tbl303[1] or not __L3.bladeCounting or __L3.bladeFarmAssigned~="shriekers" then return end
               if delta>0 and mob.model.Parent==v966:FindFirstChild("Live") and __L3.bladeMobInCell(mob.root,bounds) then
@@ -39728,9 +39749,21 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 elseif __L3.bladeCombatMode=="fist" then save.bladeFistDamage+=delta end
                 if os.clock()-lastSave>=0.5 then lastSave=os.clock();fn542() end
               end
-            end))
+            end)
           end
-          for _,mob in __L3.bladeShriekers() do attach(mob) end
+          local nextRefresh=0
+          local function refresh()
+            if os.clock()<nextRefresh then return end
+            nextRefresh=os.clock()+0.5
+            local live=v966:FindFirstChild("Live")
+            for hum,mob in watched do
+              if mob.model.Parent~=live then
+                connections[hum]:Disconnect();connections[hum]=nil;watched[hum]=nil
+              end
+            end
+            for _,mob in __L3.bladeShriekers() do attach(mob) end
+          end
+          refresh()
           local targets=function()
             local list={}
             for _,mob in __L3.bladeShriekers() do if mob.hum.Health>=10 then table.insert(list,mob.root) end end
@@ -39741,7 +39774,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               __L3.bladeCombatMode="sword";__L3.bladeCounting=false
               __L3.fn610()
               __L3.bladeAttack(function()
-                for _,mob in __L3.bladeShriekers() do attach(mob) end
+                refresh()
                 __L3.bladeStatus(string.format("P9: espada %.0f/6700 | soco %.0f/300",save.bladeDamage,save.bladeFistDamage))
                 return save.bladeDamage>=6700 or __L3.bladeFarmAssigned~="shriekers"
               end,targets,cell)
@@ -39754,7 +39787,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               local hum=LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChildOfClass("Humanoid")
               if hum then hum:UnequipTools() end
               __L3.bladeAttack(function()
-                for _,mob in __L3.bladeShriekers() do attach(mob) end
+                refresh()
                 __L3.bladeStatus(string.format("P9: espada %.0f/6700 | mana punch %.0f/300",save.bladeDamage,save.bladeFistDamage))
                 return save.bladeFistDamage>=300 or __L3.bladeFarmAssigned~="shriekers"
               end,targets,cell)
@@ -39925,6 +39958,28 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         -- The Blade route buys these three base skills only. MercenaryCarry
         -- is deliberately not a completion requirement for this route.
         __L3.bladeWarriorSkills={"Pommel Strike","Action Surge","Plate Training"}
+        __L3.bladeDraugVisit=function()
+          local save=tbl308[1]
+          save.done=save.done or {}
+          if save.bladeDraugDone or save.done.p6_draug then return true end
+          local point=Vector3.new(6145,1344,118)
+          if save.boundInn~="Castle Sanctuary" or not near(point,25) then
+            if __L3.setInn("Castle Sanctuary")==false then return false end
+            if not fn580({point}) then return false end
+            __L3.bladeLand()
+          end
+          local npc=HResult.nearestNPC("Draug",point)
+          if not npc then __L3.bladeTrainWait("Draug: NPC indisponivel");return false end
+          __L3.bladeStatus("Castle Sanctuary: falando com Draug antes da Ultra")
+          local deadline=os.clock()+10
+          local ok,accepted=pcall(FResult.run,npc,{"Thank you."},{
+            shouldRun=function() return tbl303[1] and os.clock()<deadline end,
+            doneWhen=__L2.tbl278,holdPosition=false,timeout=6,maxReplays=0,minHold=0,
+          })
+          if not ok or not accepted then __L3.bladeTrainWait("Draug: dialogo nao confirmado");return false end
+          save.bladeDraugDone=true;save.done.p6_draug=true;fn542()
+          return true
+        end
         __L3.bladeTrainingCount=function(skills)
           return #skills-#__L2.fn502(skills)
         end

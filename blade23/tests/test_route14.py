@@ -187,7 +187,7 @@ local tbl308={{bladeFistDamage=0}}
 local fn576=function() return false end
 local os={clock=function() return 0 end}
 local task={wait=function() end}
-local a1723={State={mana={chargeUntil=function(target,running) assert(target==100);charges+=1;mana.Value=100 end}}}
+local a1723={State={mana={chargeUntil=function(target,running) assert(target==95);charges+=1;mana.Value=95 end}}}
 local fn577=function() assert(not tool);attacks+=1;mana.Value-=10 end
 '''+punch+r'''
 assert(__L3.bladeManaPunch(function() return true end));assert(charges==1 and attacks==4)
@@ -544,6 +544,89 @@ local waits=0;local task={wait=function() waits+=1;nearby=false end}
 fn539();assert(waits==0,"Danger and a nearby necro must not prevent entry into the reserved combat farm")
 __L3.bladeFarmAssigned=nil;fn539();assert(waits==1,"unreserved movement keeps its existing wait")
 ''')
+
+    def test_aim_sweep_matches_brute_force_without_quadratic_cone_checks(self):
+        aim=self.part('__L3.bladeConeCount=function', '__L3.bladeAttack=function')
+        self.run_luau(VEC+r'''
+local __L3={bladeValue=function(name,d) if name=="BladeM1Step" then return 0 end;return d end}
+'''+aim+r'''
+local count=__L3.bladeConeCount;local calls=0
+__L3.bladeConeCount=function(...) calls+=1;return count(...) end
+math.randomseed(2026)
+local origin=Vector3.new(0,0,0);local look=Vector3.new(0,0,-1);local half=math.rad(55)
+for trial=1,80 do
+ local targets={};local angles={0}
+ for i=1,35 do
+  local angle=math.random()*math.pi*2;local radius=math.random()*7
+  targets[i]={Position=Vector3.new(math.sin(angle)*radius,0,-math.cos(angle)*radius)}
+  for _,a in {angle,angle-half,angle+half} do table.insert(angles,a) end
+ end
+ targets[#targets+1]={Position=origin}
+ local expected=0
+ for _,angle in angles do expected=math.max(expected,count(origin,Vector3.new(math.sin(angle),0,-math.cos(angle)),targets,8,half)) end
+ local plan=__L3.bladeAimPlan(origin,origin,look,targets,{},function() return false end,function() return true end)
+ assert(plan.count==expected,"coverage changed")
+ assert(count(origin,plan.direction,targets,8,half)==plan.count)
+end
+assert(calls==80,"the sweep should check the initial direction once per position, not every angle against every target")
+''')
+
+    def test_detached_mob_health_listeners_are_pruned_during_farm(self):
+        farm=self.part('__L3.bladeXPShriekers=function()', '__L3.bladeXP=function()')
+        start=farm.index('          local connections,watched=')
+        end=farm.index('          local targets=function()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end}
+local save={};local tbl303={true};local bounds={};local fn542=function() end
+local live={};local v966={FindFirstChild=function() return live end}
+local mobs={};local __L3={bladeShriekers=function() return mobs end}
+local all={}
+local function mob()
+ local entry={disconnected=false};all[#all+1]=entry
+ local h={Health=200,HealthChanged={Connect=function() return {Disconnect=function() entry.disconnected=true end} end}}
+ return {hum=h,model={Parent=live},root={Position={}}}
+end
+mobs={mob()}
+'''+farm[start:end]+r'''
+for i=1,1000 do
+ mobs[1].model.Parent=nil;mobs={mob()};clock+=0.5;refresh()
+ local n=0;for _ in connections do n+=1 end;assert(n==1,"retained a removed mob connection")
+end
+for i=1,#all-1 do assert(all[i].disconnected) end
+''')
+
+    def test_stacked_shriekers_count_without_including_neighbor_cell(self):
+        membership=self.part('__L3.bladeMobInCell=function', '__L3.bladeShriekers=function')
+        self.run_luau(VEC+r'''
+local __L3={}
+'''+membership+r'''
+local bounds={minX=0,maxX=10,minZ=0,maxZ=10,minY=-6,maxY=6}
+assert(__L3.bladeMobInCell({Position=Vector3.new(5,14,5),Size=Vector3.new(2,2,2)},bounds),"spawned mobs stacked above another mob still belong to the cell")
+assert(__L3.bladeMobInCell({Position=Vector3.new(-1.5,0,5),Size=Vector3.new(2,2,2)},bounds))
+assert(not __L3.bladeMobInCell({Position=Vector3.new(20,0,5),Size=Vector3.new(2,2,2)},bounds))
+''')
+
+    def test_draug_visit_binds_then_talks_and_is_not_repeated(self):
+        draug=self.part('__L3.bladeDraugVisit=function()', '__L3.bladeTrainingCount=function')
+        self.run_luau(VEC+r'''
+local __L3={bladeStatus=function() end};local __L2={tbl278={"Welcome back"}}
+local tbl308={{}};local tbl303={true};local clock=0;local os={clock=function() return clock end}
+local at=false;local events={};local accept=false
+__L3.setInn=function(inn) assert(inn=="Castle Sanctuary");table.insert(events,"spawn");tbl308[1].boundInn=inn;return true end
+local fn580=function() at=true;table.insert(events,"move");return true end
+local near=function() return at end
+__L3.bladeLand=function() table.insert(events,"land") end
+__L3.bladeTrainWait=function() table.insert(events,"retry") end
+local HResult={nearestNPC=function(name) assert(name=="Draug");return {} end}
+local FResult={run=function(_,answers,opts) assert(answers[1]=="Thank you." and opts.holdPosition==false);table.insert(events,"talk");return accept end}
+local fn542=function() end
+'''+draug+r'''
+assert(not __L3.bladeDraugVisit() and table.concat(events,",")=="spawn,move,land,talk,retry")
+accept=true;assert(__L3.bladeDraugVisit() and tbl308[1].done.p6_draug and tbl308[1].bladeDraugDone)
+local n=#events;assert(__L3.bladeDraugVisit() and #events==n)
+''')
+        ultra=self.part('__L3.fn638 = function()', 'fn534("P7: section 1')
+        self.assertLess(ultra.index('bladeDraugVisit()'),ultra.index('bladeTrainerApproach("jagen"'))
 
 if __name__ == '__main__':
     unittest.main()
