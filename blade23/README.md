@@ -49,7 +49,7 @@ Antes de iniciar o combate com Shriekers, a conta exige a quantidade mínima con
 - Cantos: `(2272.9111328125, 62.99999237060547, 791.964599609375)` e `(2265.51806640625, 62.99999237060547, 776.548583984375)`.
 - Mapa: `5208655184`.
 
-O farm soma as quedas individuais de HP até **6.700 de dano com espada**, depois desequipa a arma e faz **300 de dano com socos**, em sequências de quatro M1 após cada carga até aproximadamente 95% de mana. O alcance dos socos é de aproximadamente 5 studs. Curas atualizam a referência de HP sem somar nem subtrair do contador. Ambos os contadores são salvos por conta para retomada.
+O farm soma as quedas individuais de HP até **6.700 de dano com espada**, depois desequipa a arma, confirma **3 socos sem carregar mana** para desbloqueá-la e faz **300 de dano com socos de mana**, em sequências de quatro M1 após cada carga até aproximadamente 95% de mana. O alcance dos socos é de aproximadamente 5 studs. Curas atualizam a referência de HP sem somar nem subtrair do contador. Os contadores de espada, socos sem mana (um por M1 confirmado, mesmo atingindo vários mobs) e dano com mana são salvos por conta para retomada. O dano dos três socos iniciais não é somado à meta dos socos de mana.
 
 A mira procura atingir o maior número de alvos dentro do alcance estimado, usando a direção e pequenos ajustes de posição na cela. A geometria é uma estimativa; a eficácia física deve ser conferida no jogo.
 
@@ -96,7 +96,7 @@ A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do pers
 
 ## Validação
 
-O runtime passou pela compilação Luau. Vinte e sete testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Vinte e oito testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 

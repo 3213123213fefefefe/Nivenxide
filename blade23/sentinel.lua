@@ -38676,7 +38676,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             return math.clamp(math.floor(value),1,100)
           end
           if name=="BladeDamageGoal" then return 6700 end
-          if name=="BladeM1Range" and __L3.bladeCombatMode=="fist" then return 5 end
+          if name=="BladeM1Range" and (__L3.bladeCombatMode=="fist" or __L3.bladeCombatMode=="unlock") then return 5 end
           local run=__L3.bladeRunConfig
           if run and run[name]~=nil then return run[name] end
           local option=Options8[name] or Toggles8[name]
@@ -39580,7 +39580,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               local attackDeadline=os.clock()+1.5
               while running() and not done() and fn576() and os.clock()<attackDeadline do task.wait(0.03) end
               if not running() or done() then break end
-              if __L3.bladeCombatMode=="fist" then
+              if __L3.bladeCombatMode=="unlock" then
+                if __L3.bladePlainPunch(running) then task.wait(0.2) else task.wait(0.25) end
+              elseif __L3.bladeCombatMode=="fist" then
                 if __L3.bladeManaPunch(running) then task.wait(0.2) else task.wait(0.25) end
               else
                 __L3.bladeCounting=true;fn577();task.wait(0.15)
@@ -39743,6 +39745,22 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not ok then error("Blade XP routine failed: "..tostring(finished)) end
           if not finished then task.wait(1) end
         end
+        __L3.bladePlainPunch=function(running)
+          local character=LocalPlayer21.Character
+          local hum=character and character:FindFirstChildOfClass("Humanoid")
+          if not hum or not running() then return false end
+          hum:UnequipTools()
+          if character:FindFirstChildWhichIsA("Tool") then return false end
+          local control=a1723.State.mana
+          if control and control.decharge then control.decharge() end
+          __L3.bladeCounting=true;__L3.bladeUnlockAwaiting=true
+          fn577()
+          local deadline=os.clock()+1.5
+          while running() and LocalPlayer21.Character==character and __L3.bladeUnlockAwaiting and os.clock()<deadline do task.wait(0.05) end
+          local confirmed=__L3.bladeUnlockAwaiting==false
+          __L3.bladeUnlockAwaiting=nil
+          return confirmed
+        end
         __L3.bladeManaPunch=function(running)
           local character=LocalPlayer21.Character
           local hum=character and character:FindFirstChildOfClass("Humanoid")
@@ -39802,6 +39820,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local lastSave=0
           save.bladeDamage=tonumber(save.bladeDamage) or 0
           save.bladeFistDamage=tonumber(save.bladeFistDamage) or 0
+          save.bladeUnlockHits=math.clamp(tonumber(save.bladeUnlockHits) or (save.bladeFistDamage>0 and 3 or 0),0,3)
           local function attach(mob)
             if watched[mob.hum] then return end
             watched[mob.hum]=mob
@@ -39811,7 +39830,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               if not active or not tbl303[1] or not __L3.bladeCounting or __L3.bladeFarmAssigned~="shriekers" then return end
               if delta>0 and mob.model.Parent==v966:FindFirstChild("Live") and __L3.bladeMobInCell(mob.root,bounds) then
                 if __L3.bladeCombatMode=="sword" then save.bladeDamage+=delta
-                elseif __L3.bladeCombatMode=="fist" then save.bladeFistDamage+=delta end
+                elseif __L3.bladeCombatMode=="fist" then save.bladeFistDamage+=delta
+                elseif __L3.bladeCombatMode=="unlock" and __L3.bladeUnlockAwaiting then
+                  __L3.bladeUnlockAwaiting=false -- One landed M1 counts once, even when it hits many mobs.
+                  save.bladeUnlockHits=math.min(3,save.bladeUnlockHits+1);fn542()
+                end
                 if os.clock()-lastSave>=0.5 then lastSave=os.clock();fn542() end
               end
             end)
@@ -39848,9 +39871,19 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if tbl303[1] and __L3.bladeFarmAssigned=="shriekers" and save.bladeDamage>=6700 and save.bladeFistDamage<300 then
               -- Let pending sword events settle before attributing any fist damage.
               task.wait(1)
-              __L3.bladeCombatMode="fist"
+              __L3.bladeCombatMode="unlock"
               local hum=LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChildOfClass("Humanoid")
               if hum then hum:UnequipTools() end
+              if save.bladeUnlockHits<3 then
+                __L3.bladeAttack(function()
+                  refresh()
+                  __L3.bladeStatus(string.format("P9: desbloqueando mana | socos sem mana %d/3",save.bladeUnlockHits))
+                  return save.bladeUnlockHits>=3 or __L3.bladeFarmAssigned~="shriekers"
+                end,targets,cell)
+              end
+              __L3.bladeUnlockAwaiting=nil
+              if not tbl303[1] or __L3.bladeFarmAssigned~="shriekers" or save.bladeUnlockHits<3 then return end
+              __L3.bladeCounting=false;__L3.bladeCombatMode="fist"
               __L3.bladeAttack(function()
                 refresh()
                 __L3.bladeStatus(string.format("P9: espada %.0f/6700 | mana punch %.0f/300",save.bladeDamage,save.bladeFistDamage))
@@ -39858,7 +39891,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end,targets,cell)
             end
           end)
-          active=false;__L3.bladeCounting=false;__L3.bladeCombatMode=nil
+          active=false;__L3.bladeCounting=false;__L3.bladeCombatMode=nil;__L3.bladeUnlockAwaiting=nil
           if a1723.State.mana and a1723.State.mana.decharge then pcall(a1723.State.mana.decharge) end
           for _,connection in connections do connection:Disconnect() end
           fn542()

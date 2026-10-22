@@ -148,13 +148,20 @@ __L3.bladeMobInCell=function() return true end
 __L3.fn610=function() end
 local fn580=function() assert(entered) end
 local fn542=function() end
-local swordCalls,fistCalls=0,0
+local swordCalls,fistCalls,unlockCalls=0,0,0
 __L3.bladeAttack=function(done)
  combat=true;__L3.bladeCounting=true
  if __L3.bladeCombatMode=="sword" then
   swordCalls+=1
   for i=1,838 do setHP(200);setHP(192) end
   assert(tbl308[1].bladeDamage==6704 and (tbl308[1].bladeFistDamage or 0)==0)
+ elseif __L3.bladeCombatMode=="unlock" then
+  unlockCalls+=1
+  for i=1,3 do
+   __L3.bladeUnlockAwaiting=true;setHP(200);setHP(192);setHP(184)
+   assert(tbl308[1].bladeUnlockHits==i,"multiple damaged mobs/deltas from one M1 must not count twice")
+  end
+  assert(tbl308[1].bladeFistDamage==0,"ordinary punches do not count toward charged damage")
  else
   fistCalls+=1;assert(tbl308[1].bladeDamage==6704)
   for i=1,38 do setHP(200);setHP(192) end
@@ -163,7 +170,7 @@ __L3.bladeAttack=function(done)
 end
 '''+farm+r'''
 assert(__L3.bladeXPShriekers())
-assert(swordCalls==1 and fistCalls==1 and tbl308[1].bladeDamage==6704 and tbl308[1].bladeFistDamage==304)
+assert(swordCalls==1 and fistCalls==1 and unlockCalls==1 and tbl308[1].bladeUnlockHits==3 and tbl308[1].bladeDamage==6704 and tbl308[1].bladeFistDamage==304)
 assert(not __L3.bladeCounting and not __L3.bladeCombatMode)
 for _,e in listeners do assert(not e.on,"HP listener leak") end
 -- Resumed sword-complete runs only need remaining fist XP, retaining the sword count.
@@ -174,6 +181,21 @@ __L3.bladeAttack=function(done)
  assert(done());combat=false
 end
 assert(__L3.bladeXPShriekers());assert(tbl308[1].bladeFistDamage==304 and swordCalls==0 and fistCalls==1)
+-- Interrupted unlock resumes from two confirmed ordinary hits instead of restarting from zero.
+setHP(200);tbl308[1]={bladeDamage=6704,bladeFistDamage=0,bladeUnlockHits=2};listeners={}
+local plainRemaining=0
+__L3.bladeAttack=function(done)
+ combat=true;__L3.bladeCounting=true
+ if __L3.bladeCombatMode=="unlock" then
+  plainRemaining+=1;__L3.bladeUnlockAwaiting=true;setHP(192)
+  assert(tbl308[1].bladeUnlockHits==3)
+ else
+  assert(__L3.bladeCombatMode=="fist")
+  for i=1,38 do setHP(200);setHP(192) end
+ end
+ assert(done());combat=false
+end
+assert(__L3.bladeXPShriekers() and plainRemaining==1)
 ''')
 
     def test_mana_punch_unequips_and_requires_charge(self):
@@ -725,6 +747,27 @@ Library.UnloadSignals[1]=function() calls+=1;Library:Unload() end
 '''+unload+r'''
 Library:Unload();Library:Unload()
 assert(calls==1 and destroyed==1 and #Library.UnloadSignals==0 and Library.Unloaded)
+''')
+
+    def test_plain_punch_works_at_twenty_fps_without_charging(self):
+        plain=self.part('__L3.bladePlainPunch=function', '__L3.bladeManaPunch=function')
+        self.run_luau(r'''
+local __L3={};local clock=0;local os={clock=function() return clock end}
+local tool={};local hum={UnequipTools=function() tool=nil end}
+local character={FindFirstChildOfClass=function() return hum end,FindFirstChildWhichIsA=function() return tool end}
+local LocalPlayer21={Character=character};local attacks=0;local releases=0;local pending
+local a1723={State={mana={chargeUntil=function() error("ordinary punch must never charge mana") end,decharge=function() releases+=1 end}}}
+local land=true
+local fn577=function() assert(not tool);attacks+=1;if land then pending=clock+0.1 end end
+local task={wait=function(t)
+ clock+=math.max(0.05,math.ceil((t or 0)/0.05)*0.05)
+ if pending and clock>=pending then __L3.bladeUnlockAwaiting=false;pending=nil end
+end}
+'''+plain+r'''
+for i=1,3 do assert(__L3.bladePlainPunch(function() return true end)) end
+assert(attacks==3 and releases==3 and __L3.bladeUnlockAwaiting==nil)
+land=false;assert(not __L3.bladePlainPunch(function() return true end) and clock<2.1)
+assert(not __L3.bladePlainPunch(function() return false end) and attacks==4)
 ''')
 
 if __name__ == '__main__':
