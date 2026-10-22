@@ -43,13 +43,13 @@ Nos pontos de espera PE3, P4, P5, PE8, P9, P10, PG11, PE13 e P14, o bot desliga 
 
 Shriekers usa P6 → P7 → PE8. PE8 é a espera do farm; uma conta downada espera recuperar antes de ir a P9. **Automatic** pode usar Zombie Scrooms quando sua vaga estiver disponível; **Zombie Scrooms** usa o farm original e dispensa a aproximação ao Shrine.
 
-Antes de iniciar o combate com Shriekers, a conta exige a quantidade mínima configurada e todos os alvos da cela com HP cheio durante **5 segundos contínuos**. Essa checagem acontece apenas na entrada da sessão. A conta passa por P9 e usa o ponto de ataque fixo da cela Necro:
+Antes de iniciar o combate com Shriekers, a conta exige a quantidade mínima configurada e todos os alvos da cela com HP cheio durante **3 segundos contínuos**. Essa checagem acontece apenas na entrada da sessão. A conta passa por P9 e usa o ponto de ataque fixo da cela Necro:
 
 - Posição: `(2268.965087890625, 62.999996185302737, 783.982666015625)`.
 - Cantos: `(2272.9111328125, 62.99999237060547, 791.964599609375)` e `(2265.51806640625, 62.99999237060547, 776.548583984375)`.
 - Mapa: `5208655184`.
 
-O farm soma as quedas individuais de HP até **6.700 de dano com espada**, depois desequipa a arma e faz **800 de dano com socos carregados com mana**. O alcance dos socos é de aproximadamente 5 studs. Curas atualizam a referência de HP sem somar nem subtrair do contador. Ambos os contadores são salvos por conta para retomada.
+O farm soma as quedas individuais de HP até **6.700 de dano com espada**, depois desequipa a arma e faz **300 de dano com socos**, em sequências de quatro M1 após cada carga completa de mana. O alcance dos socos é de aproximadamente 5 studs. Curas atualizam a referência de HP sem somar nem subtrair do contador. Ambos os contadores são salvos por conta para retomada.
 
 A mira procura atingir o maior número de alvos dentro do alcance estimado, usando a direção e pequenos ajustes de posição na cela. A geometria é uma estimativa; a eficácia física deve ser conferida no jogo.
 
@@ -57,9 +57,9 @@ Ao concluir, sai por P10 e espera o Danger desaparecer antes de avançar. A vaga
 
 ### Orderly e treino
 
-**Rots:** PG11 executa a marcação de spawn em **Renova Town**, sem lançar Gate. A conta segue P12 → PE13, espera sua vez e só então entra em P14. O Master troca automaticamente pela fila. Após **16 entregas confirmadas**, avança para o treino e libera a próxima receptora.
+**Rots:** PG11 executa a marcação de spawn em **Renova Town**, sem lançar Gate. A conta segue P12 → PE13, espera sua vez e só então entra em P14. O Master troca automaticamente pela fila. O mínimo de Shriekers usa o valor atual configurado na interface, inclusive na retomada; cada participante verifica seu próprio mínimo. Após **16 entregas confirmadas**, avança para o treino e libera a próxima receptora.
 
-**Quests:** usa a sequência existente de missões e poções. O treino de Warrior compra apenas **Pommel Strike**, **Action Surge** e **Plate Training** com Alfric, confirmando cada compra e pulando skills já obtidas. As etapas posteriores usam a progressão existente.
+**Quests:** usa a sequência existente de missões e poções. O treino de Warrior compra apenas **Pommel Strike**, **Action Surge** e **Plate Training** com Alfric, com limite persistente de três compras confirmadas, considerando também skills já obtidas. Respostas de pagamento duplicadas no mesmo diálogo são bloqueadas antes do envio. Se faltar Silver, Orderly ou XP, permanece no trainer, coleta Silver próximo e tenta novamente após 15 segundos. Não refaz a estalagem e a viagem entre cada tentativa. Em Castle Sanctuary, aguarda a compra e a skill Ultra de Jagen antes de seguir ao treino existente de Mana Dash e depois Ya'alda/Khei. A rota Blade não desvia para o day farm em Santorini antes dessa compra.
 
 ## Contas fornecedoras de Rot
 
@@ -67,7 +67,7 @@ Na subaba **Rot**, habilite Blatant Mode, ajuste a retomada após rejoin e a tec
 
 A preparação existente em Santorini/Shore 4 mantém as condições de Rot. Em Renova, a fornecedora espera em `(-2085.454589844, 609.353881836, -754.801147461)`. Só se aproxima e se downa quando a receptora da vez está fisicamente em P14, livre, ativa e abaixo de 16 Rots. Enquanto a receptora carrega outra conta ou ainda está a caminho, as fornecedoras aguardam.
 
-A receptora anda até a conta downada, carrega e entrega no Bounty Officer de Renova usando o pathfinder existente. Após a entrega, retorna à região de P14 antes de buscar outra conta. A fornecedora executa wipe/respawn antes do rejoin. A opção de retomada usa o loader do GitHub após a troca de servidor; o executor precisa oferecer `queue_on_teleport` ou `queueteleport` e permitir a execução após a troca.
+A vítima usa o voo temporário existente do Sentinel para chegar ao Master e só se downa quando está próxima e a receptora continua livre. A receptora anda até a conta downada, carrega e entrega no Bounty Officer de Renova usando o pathfinder existente. Após a entrega, retorna à região de P14 antes de buscar outra conta. A fornecedora executa wipe/respawn antes do rejoin. A retomada pressiona Play antes de iniciar a preparação, inclusive quando o menu já contém um personagem provisório. A opção de retomada usa o loader do GitHub após a troca de servidor; o executor precisa oferecer `queue_on_teleport` ou `queueteleport` e permitir a execução após a troca.
 
 Use **Parar Rot Bot e cancelar retomada** ou a tecla configurada, padrão **F8**, para interromper e cancelar a retomada.
 
@@ -96,12 +96,14 @@ A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do pers
 
 ## Validação
 
-O runtime passou pela compilação Luau. Doze testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Dezessete testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
 ```sh
 LUAU_BIN=/caminho/para/luau python3 -m unittest discover -s tests -p test_route14.py -v
 ```
+
+A máscara de nomes do menu Esc evita repetir a varredura completa da árvore do menu a cada 0,25 segundo; a primeira varredura distribui o trabalho entre frames. A melhora física de desempenho precisa ser conferida no cliente.
 
 Os testes usam trechos reais do runtime com serviços simulados. Movimentação física, hitboxes, diálogos e o fluxo completo com várias contas ainda precisam de teste dentro do jogo.

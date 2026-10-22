@@ -140,7 +140,7 @@ __L3.bladeCellBounds=function() return {},{} end
 __L3.bladeShriekers=function() return {mob} end
 __L3.bladeStanding=function() return clock>=7 end
 __L3.bladeMovePoint=function(n)
- assert(n==9 and clock-healedAt>=5 and __L3.bladeStanding());entered=true;return true
+ assert(n==9 and clock-healedAt>=3 and __L3.bladeStanding());entered=true;return true
 end
 __L3.bladeStatus=function() end
 __L3.bladeInCell=function() return true end
@@ -156,23 +156,23 @@ __L3.bladeAttack=function(done)
   assert(tbl308[1].bladeDamage==6704 and (tbl308[1].bladeFistDamage or 0)==0)
  else
   fistCalls+=1;assert(tbl308[1].bladeDamage==6704)
-  for i=1,100 do setHP(200);setHP(192) end
+  for i=1,38 do setHP(200);setHP(192) end
  end
  assert(done());combat=false
 end
 '''+farm+r'''
 assert(__L3.bladeXPShriekers())
-assert(swordCalls==1 and fistCalls==1 and tbl308[1].bladeDamage==6704 and tbl308[1].bladeFistDamage==800)
+assert(swordCalls==1 and fistCalls==1 and tbl308[1].bladeDamage==6704 and tbl308[1].bladeFistDamage==304)
 assert(not __L3.bladeCounting and not __L3.bladeCombatMode)
 for _,e in listeners do assert(not e.on,"HP listener leak") end
 -- Resumed sword-complete runs only need remaining fist XP, retaining the sword count.
-setHP(200);tbl308[1]={bladeDamage=6704,bladeFistDamage=400};listeners={};swordCalls=0;fistCalls=0
+setHP(200);tbl308[1]={bladeDamage=6704,bladeFistDamage=144};listeners={};swordCalls=0;fistCalls=0
 __L3.bladeAttack=function(done)
  combat=true;assert(__L3.bladeCombatMode=="fist");__L3.bladeCounting=true;fistCalls+=1
- for i=1,50 do setHP(200);setHP(192) end
+ for i=1,20 do setHP(200);setHP(192) end
  assert(done());combat=false
 end
-assert(__L3.bladeXPShriekers());assert(tbl308[1].bladeFistDamage==800 and swordCalls==0 and fistCalls==1)
+assert(__L3.bladeXPShriekers());assert(tbl308[1].bladeFistDamage==304 and swordCalls==0 and fistCalls==1)
 ''')
 
     def test_mana_punch_unequips_and_requires_charge(self):
@@ -182,12 +182,16 @@ local __L3={bladeStatus=function() end}
 local tool={};local mana={Value=10};local hum={UnequipTools=function() tool=nil end}
 local character={FindFirstChildOfClass=function() return hum end,FindFirstChild=function() return mana end,FindFirstChildWhichIsA=function() return tool end}
 local LocalPlayer21={Character=character};local charges,attacks=0,0
-local a1723={State={mana={chargeUntil=function(target,running) assert(target==95);charges+=1;mana.Value=95 end}}}
-local fn577=function() assert(not tool and mana.Value>=90);attacks+=1 end
+local tbl308={{bladeFistDamage=0}}
+local fn576=function() return false end
+local os={clock=function() return 0 end}
+local task={wait=function() end}
+local a1723={State={mana={chargeUntil=function(target,running) assert(target==100);charges+=1;mana.Value=100 end}}}
+local fn577=function() assert(not tool);attacks+=1;mana.Value-=10 end
 '''+punch+r'''
-assert(__L3.bladeManaPunch(function() return true end));assert(charges==1 and attacks==1)
+assert(__L3.bladeManaPunch(function() return true end));assert(charges==1 and attacks==4)
 mana.Value=10;a1723.State.mana.chargeUntil=function() end
-assert(not __L3.bladeManaPunch(function() return true end));assert(attacks==1)
+assert(not __L3.bladeManaPunch(function() return true end));assert(attacks==4)
 ''')
 
     def test_p10_danger_and_p14_turn_order(self):
@@ -367,6 +371,109 @@ __L3.fn597=function() error("must not approach a bag") end;local v1013=function(
 '''+collect+r'''
 __L3.bladeCollect();assert(touches==2)
 __L3.bladeSupplyRequirements=function() return {} end;__L3.bladeCollect();assert(touches==2)
+''')
+
+    def test_minimum_setting_overrides_old_snapshot_and_uses_own_queue_readiness(self):
+        value=self.part('__L3.bladeValue=function', '__L3.bladeSilverGoal=function')
+        assignments=self.part('__L3.bladeAssignments=function', '__L3.bladeWorkerPath=')
+        self.run_luau(r'''
+local __L3={bladeRunConfig={BladeShrCount=50}};local Options8={BladeShrCount={Value=7}};local Toggles8={}
+'''+value+assignments+r'''
+assert(__L3.bladeValue("BladeShrCount",50)==7)
+Options8.BladeShrCount.Value=23;assert(__L3.bladeValue("BladeShrCount",50)==23)
+local roster={{userId=1,joined=1,stage="B1_XP",preference="Shriekers",shrAvailable=false},
+ {userId=2,joined=2,stage="B1_XP",preference="Shriekers",shrAvailable=true}}
+local a=__L3.bladeAssignments(roster);assert(not a[1] and a[2]=="shriekers")
+''')
+
+    def test_entry_starts_after_three_seconds_for_seven_full_shriekers(self):
+        farm=self.part('__L3.bladeXPShriekers=function()', '__L3.bladeXP=function()')
+        # Stop the extracted real routine immediately after its gate, before combat setup.
+        gate=farm[:farm.index('          if not __L3.bladeMovePoint(9,true)')]+r'''
+          return os.clock()
+        end
+'''
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local task={wait=function(t) clock+=t end}
+local tbl303={true};local tbl308={{}};local count=6
+local __L3={bladeFarmAssigned="shriekers",bladeCellLoad=function() return {} end,bladeCellBounds=function() return {},{} end,
+ bladeValue=function() return 7 end,bladeStanding=function() return true end,bladeStatus=function() end}
+__L3.bladeShriekers=function()
+ if clock>=1 then count=7 end
+ local mobs={};for i=1,count do mobs[i]={hum={Health=200,MaxHealth=200}} end;return mobs
+end
+'''+gate+r'''
+assert(__L3.bladeXPShriekers()==4,"seven mobs appear at t=1; enter at t=4, not at fifty mobs or after five seconds")
+''')
+
+    def test_training_waits_fifteen_seconds_counts_paid_skills_and_never_buys_fourth(self):
+        training=self.part('__L3.bladeTrainingCount=function', '__L3.bladeStep=function')
+        self.run_luau(VEC+r'''
+local __L3={};local __L2={fn502=function(skills) return skills end,tbl279={"a","b","c"}}
+local tbl271={"Pommel Strike","Action Surge","Plate Training","MercenaryCarry"}
+local tbl303={true};local tbl308={{}};local LocalPlayer21={Character={}}
+local clock=0;local os={clock=function() return clock end};local silver=0;local pendingAt
+local task={wait=function(t)
+ clock+=t
+ if pendingAt and clock>=pendingAt then silver-=20;pendingAt=nil end
+ if clock>=15 and silver==0 then silver=1000 end
+end}
+local getServerValue=function() return silver end;local fn542=function() end;local fn534=function() end
+local nav=0;local binds=0;local land=0;local at=false
+local fn580=function() nav+=1;at=true;return true end
+local near=function() return at end
+__L3.setInn=function() binds+=1;return true end
+__L3.bladeLand=function() land+=1 end
+__L3.bladeStanding=function() return true end
+__L3.bladeStatus=function() end
+__L3.bladeBagPickup=function() end
+local HResult={nearestNPC=function() return {} end};local calls=0;local times={}
+local FResult={run=function(_,answers,opts)
+ calls+=1;times[calls]=clock
+ assert(opts.allowAnswer(answers[#answers]))
+ assert(not opts.allowAnswer(answers[#answers]),"a duplicate dialogue event cannot pay twice")
+ assert(opts.maxReplays==0 and opts.holdPosition==false)
+ if silver>0 then pendingAt=clock+2 end
+end}
+'''+training+r'''
+assert(__L3.bladeAlfricTrain())
+assert(calls==4 and nav==1 and binds==1 and land==1,"one failed attempt, then exactly three paid skills without a reset")
+assert(tbl308[1].bladeTraining.alfric.confirmed==3 and silver==940)
+assert(times[2]-times[1]>=15,"failed purchase retries after 15 seconds")
+assert(times[3]-times[2]>=2 and times[4]-times[3]>=2,"wait for each delayed debit before buying again")
+assert(__L3.bladeAlfricTrain() and calls==4 and nav==1,"completed base training cannot buy a fourth skill")
+assert(__L3.bladeTrainPurchase("jagen","Jagen",{}, {"pay"},{"ultra"},1))
+assert(calls==5 and tbl308[1].bladeTraining.jagen.confirmed==1)
+''')
+
+    def test_supplier_approach_uses_flight_and_cleans_it_up(self):
+        flight=self.part('rotSupplier.flyTo=function', '        local fn703 =')
+        self.run_luau(VEC+r'''
+Vector3.zero=Vector3.new(0,0,0)
+local player={UserId=1};local target={Position=Vector3.new(10,20,30)}
+local root={Anchored=true};local char={};local LocalPlayer24={Character=char}
+local rotSupplier={masterReady=function(id) assert(id==1);return player,target end,status={SetText=function() end}}
+local disconnected=0;local cleared=0;local clipped=0;local destination
+local fn676=function() return {Disconnect=function() disconnected+=1 end} end
+local fn677=function(p,speed) destination=p;assert(speed==100) end
+local sResult10={root=function() return root end,humanoid=function() return nil end,
+ clearVeil=function() cleared+=1 end,reclip=function(c) assert(c==char);clipped+=1 end}
+'''+flight+r'''
+assert(rotSupplier.approach(player));assert(destination.X==10 and destination.Y==22 and destination.Z==30)
+assert(disconnected==1 and cleared==1 and clipped==1 and not root.Anchored)
+''')
+
+    def test_supplier_clicks_play_even_with_menu_placeholder_character(self):
+        play=self.part('rotSupplier.ensurePlaying=function', '        local fn687 =')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local task={wait=function(t) clock+=t end}
+local tbl365={true};local menu=true;local clicks=0
+local rotSupplier={status={SetText=function() end}}
+local sResult10={root=function() return {} end}
+local vResult6={startMenu=function() return menu end,clickPlay=function() clicks+=1;if clicks==3 then menu=false end end}
+'''+play+r'''
+assert(rotSupplier.ensurePlaying() and clicks==3)
+menu=true;tbl365[1]=false;assert(not rotSupplier.ensurePlaying() and clicks==3)
 ''')
 
 if __name__ == '__main__':

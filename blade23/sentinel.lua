@@ -32823,6 +32823,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               return
             end
             local fn469 = function(a1660, a2197)
+              -- Reserve a guarded answer before yielding, so duplicate dialogue events cannot pay twice.
+              if v852.allowAnswer and not v852.allowAnswer(a1660) then return end
               if v852.beforeAnswer then
                 pcall(v852.beforeAnswer, a1660, a2196.msg)
               end
@@ -37794,6 +37796,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
             if not cond18 then
               fn545("frey", function()
+                if __L3.bladeEnabled() then
+                  if not __L3.bladeTrainerApproach("frey","Central Sanctuary",{Vector3.new(1921,258,-851),Vector3.new(1926,285,-864),Vector3.new(1905,285,-810),Vector3.new(1913,307,-813),Vector3.new(1955,309,-830)}) then return false end
+                  return __L3.bladeTrainPurchase("frey","Frey",Vector3.new(1954,309,-833),{"Is there anything you can teach me?","I'll pay."},__L2.tbl279,3)
+                end
                 fn580({
                   Vector3.new(1921, 258, -851),
                   Vector3.new(1926, 285, -864),
@@ -37810,7 +37816,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 end
                 return #__L2.fn502(__L2.tbl279) == 0
               end)
-              if tbl303[1] and #__L2.fn502(__L2.tbl279) > 0 then
+              if tbl303[1] and #__L2.fn502(__L2.tbl279) > 0 and not (__L3.bladeEnabled() and tbl308[1].bladeTraining and tbl308[1].bladeTraining.frey and tbl308[1].bladeTraining.frey.confirmed>=3) then
                 local concatResult2 = table.concat(__L2.fn502(__L2.tbl279), ", ")
                 local v1225 = tonumber(getServerValue("Silver")) or 0
                 if v1225 >= __L2.num309 then
@@ -38385,6 +38391,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
         end
         __L3.fn638 = function()
+          if __L3.bladeEnabled() then
+            if not __L3.bladeTrainerApproach("jagen","Castle Sanctuary",__L3.tbl330) then return end
+            if not __L3.bladeTrainPurchase("jagen","Jagen",Vector3.new(6857,1411,-164),{"Please train me.","Here is 350 Silver."},__L2.tbl282,1) then return end
+            if not __L2.fn503(__L2.tbl282) then __L3.bladeTrainWait("Jagen: aguardando confirmar skill Ultra");return end
+          end
           fn534("P7: section 1 (day >= 1)")
           if __L2.fn504(__L2.tbl282) then
             fn546()
@@ -38395,17 +38406,17 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               return
             end
           end
-          __L3.setInn("Castle Sanctuary")
+          if not __L3.bladeEnabled() then __L3.setInn("Castle Sanctuary") end
           if tbl308[1].p7dash and not fn492() then
             local res235 = fn491(tbl308[1])
             fn542()
             fn534("P7: resumed mid-training, walking the ledge on side %d", tonumber(tbl308[1].p7side) or 0)
             fn580(res235.path)
           else
-            fn580(__L3.tbl330)
+            if not __L3.bladeEnabled() then fn580(__L3.tbl330) end
           end
           local flag70 = false
-          if not __L2.fn504(__L2.tbl282) then
+          if not (__L3.bladeEnabled() and tbl308[1].bladeTraining and tbl308[1].bladeTraining.jagen and tbl308[1].bladeTraining.jagen.confirmed>=1) and not __L2.fn504(__L2.tbl282) then
             for i71 = 1, 2 do
               if not tbl303[1] or __L2.fn503(__L2.tbl282) then
                 break
@@ -38539,6 +38550,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           newResult61.dayFarmDay = nil
         end
         __L3.fn640 = function()
+          if __L3.bladeEnabled() then __L3.fn638();return end
           if (getServerValue("DaysSurvived") or 0) < 1 then
             __L3.fn639()
           end
@@ -38589,6 +38601,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         -- Blade/Sigil 3-stage route. All per-account progress lives in the existing save.
         __L3.bladeValue=function(name,default)
+          if name=="BladeShrCount" then
+            local option=Options8.BladeShrCount
+            local value=tonumber(option and option.Value) or tonumber(__L3.bladeRunConfig and __L3.bladeRunConfig.BladeShrCount) or default or 50
+            return math.clamp(math.floor(value),1,100)
+          end
           if name=="BladeDamageGoal" then return 6700 end
           if name=="BladeM1Range" and __L3.bladeCombatMode=="fist" then return 5 end
           local run=__L3.bladeRunConfig
@@ -39130,7 +39147,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           __L3.bladeLockSetup(false)
         end
         __L3.bladeCaptureSetup=function(saved)
-          if saved and type(saved.bladeRunConfig)=="table" and saved.bladeRunConfig.version==2 then return saved.bladeRunConfig end
+          if saved and type(saved.bladeRunConfig)=="table" and saved.bladeRunConfig.version==2 then
+            local run=table.clone(saved.bladeRunConfig)
+            run.BladeShrCount=__L3.bladeValue("BladeShrCount",50)
+            return run
+          end
           local run={version=2,ProgRoute="Blade/Sigil (3 stages)",points={},alts={}}
           for _,key in {"BladeOrderly","BladeFarm","BladeSpeed","BladeShrCount","BladeM1Range","BladeM1Arc","BladeM1Step"} do
             if Options8[key] then run[key]=Options8[key].Value end
@@ -39203,7 +39224,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           for _,entry in waiting do
             local slot
-            if entry.preference~="Zombie Scrooms" and shrAvailable and not occupied.shriekers then slot="shriekers"
+            if entry.preference~="Zombie Scrooms" and entry.shrAvailable and not occupied.shriekers then slot="shriekers"
             elseif entry.preference~="Shriekers" and not occupied.scrooms then slot="scrooms" end
             if slot then assignments[entry.userId]=slot; occupied[slot]=true end
           end
@@ -39243,7 +39264,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               table.sort(roster,function(a,b) local x,y=a.accountJoined or a.joined or 0,b.accountJoined or b.joined or 0;if x==y then return a.userId<b.userId end;return x<y end)
               local lines={"Coleta P4: "..(supplyOwner and supplyOwner.name or "livre")}
               for index,entry in roster do
-                table.insert(lines,string.format("%d. %s | %s | %s | XP %.0f/6700 + %.0f/800",index,entry.name or "?",entry.stage or "?",entry.point or "?",entry.damage or 0,entry.fistDamage or 0))
+                table.insert(lines,string.format("%d. %s | %s | %s | XP %.0f/6700 + %.0f/300",index,entry.name or "?",entry.stage or "?",entry.point or "?",entry.damage or 0,entry.fistDamage or 0))
               end
               __L3.bladeQueueLabel:SetText(table.concat(lines,"\n"))
             end
@@ -39608,12 +39629,20 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           hum:UnequipTools()
           if character:FindFirstChildWhichIsA("Tool") then return false end
-          if mana.Value<90 then control.chargeUntil(95,running) end
-          if not running() or mana.Value<90 then
-            __L3.bladeStatus("Soco: aguardando mana carregada ("..tostring(math.floor(mana.Value)).."%)");return false
+          control.chargeUntil(100,running)
+          if not running() or mana.Value<99 then
+            __L3.bladeStatus("Soco: aguardando mana cheia");return false
           end
-          __L3.bladeCounting=true
-          fn577()
+          if control.decharge then control.decharge() end
+          for hit=1,4 do
+            if not running() or LocalPlayer21.Character~=character then break end
+            local deadline=os.clock()+1.5
+            while running() and fn576() and os.clock()<deadline do task.wait(0.03) end
+            if not running() then break end
+            __L3.bladeCounting=true
+            fn577()
+            task.wait(0.2)
+          end
           return true
         end
         __L3.bladeXPShriekers=function()
@@ -39621,7 +39650,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local cell=__L3.bladeCellLoad()
           local bounds,attackPoint=__L3.bladeCellBounds(cell)
           if not bounds then __L3.bladeStatus("Cela XP fixa indisponivel neste mapa");task.wait(0.5);return false end
-          -- Full HP and five-second stability are checked only before starting this farm entry.
+          -- Full HP and three-second stability are checked only before starting this farm entry.
           local readySince
           while tbl303[1] and __L3.bladeFarmAssigned=="shriekers" do
             local mobs=__L3.bladeShriekers()
@@ -39629,7 +39658,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             for _,mob in mobs do if mob.hum.Health>=mob.hum.MaxHealth then full+=1 end end
             local ready=#mobs>=__L3.bladeValue("BladeShrCount",50) and full==#mobs
             if ready then readySince=readySince or os.clock() else readySince=nil end
-            local remaining=readySince and math.max(0,5-(os.clock()-readySince)) or 5
+            local remaining=readySince and math.max(0,3-(os.clock()-readySince)) or 3
             __L3.bladeStatus(string.format("PE8: %d/%d full HP | minimo %d | iniciar em %.1fs",full,#mobs,__L3.bladeValue("BladeShrCount",50),remaining))
             if ready and remaining<=0 and __L3.bladeStanding() then break end
             task.wait(0.25)
@@ -39670,12 +39699,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               __L3.fn610()
               __L3.bladeAttack(function()
                 for _,mob in __L3.bladeShriekers() do attach(mob) end
-                __L3.bladeStatus(string.format("P9: espada %.0f/6700 | soco %.0f/800",save.bladeDamage,save.bladeFistDamage))
+                __L3.bladeStatus(string.format("P9: espada %.0f/6700 | soco %.0f/300",save.bladeDamage,save.bladeFistDamage))
                 return save.bladeDamage>=6700 or __L3.bladeFarmAssigned~="shriekers"
               end,targets,cell)
             end
             __L3.bladeCounting=false;__L3.bladeCombatMode=nil
-            if tbl303[1] and __L3.bladeFarmAssigned=="shriekers" and save.bladeDamage>=6700 and save.bladeFistDamage<800 then
+            if tbl303[1] and __L3.bladeFarmAssigned=="shriekers" and save.bladeDamage>=6700 and save.bladeFistDamage<300 then
               -- Let pending sword events settle before attributing any fist damage.
               task.wait(1)
               __L3.bladeCombatMode="fist"
@@ -39683,8 +39712,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               if hum then hum:UnequipTools() end
               __L3.bladeAttack(function()
                 for _,mob in __L3.bladeShriekers() do attach(mob) end
-                __L3.bladeStatus(string.format("P9: espada %.0f/6700 | mana punch %.0f/800",save.bladeDamage,save.bladeFistDamage))
-                return save.bladeFistDamage>=800 or __L3.bladeFarmAssigned~="shriekers"
+                __L3.bladeStatus(string.format("P9: espada %.0f/6700 | mana punch %.0f/300",save.bladeDamage,save.bladeFistDamage))
+                return save.bladeFistDamage>=300 or __L3.bladeFarmAssigned~="shriekers"
               end,targets,cell)
             end
           end)
@@ -39693,11 +39722,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           for _,connection in connections do connection:Disconnect() end
           fn542()
           if not ok then error(err) end
-          return tbl303[1] and save.bladeDamage>=6700 and save.bladeFistDamage>=800
+          return tbl303[1] and save.bladeDamage>=6700 and save.bladeFistDamage>=300
         end
         __L3.bladeXP=function()
           local save=tbl308[1]
-          if save.bladeXPDone or (save.bladeDamage or 0)>=6700 and (save.bladeFistDamage or 0)>=800 then
+          if save.bladeXPDone or (save.bladeDamage or 0)>=6700 and (save.bladeFistDamage or 0)>=300 then
             save.bladeXPDone=true;__L3.bladePhase("B1_EXIT");return
           end
           if not save.bladeFarmJoined then save.bladeFarmJoined=DateTime.now().UnixTimestampMillis;fn542() end
@@ -39853,48 +39882,91 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         -- The Blade route buys these three base skills only. MercenaryCarry
         -- is deliberately not a completion requirement for this route.
         __L3.bladeWarriorSkills={"Pommel Strike","Action Surge","Plate Training"}
-        __L3.bladeAlfricTrain=function()
-          local missing=__L2.fn502(__L3.bladeWarriorSkills)
-          if #missing==0 then return true end
-          if __L3.setInn("Renova")==false then return false end
-          fn580({Vector3.new(-2068,305,-634),Vector3.new(-1844,252,-265),Vector3.new(-1805,315,-227)})
-          local budget=#missing
-          for purchase=1,budget do
-            if not tbl303[1] then return false end
-            local before=#__L2.fn502(__L3.bladeWarriorSkills)
-            if before==0 then return true end
-            fn588("Alfric",Vector3.new(-1805,315,-227),{"Yeah.","I'll pay."})
-            local deadline=os.clock()+6
-            repeat
-              if not tbl303[1] then return false end
-              if #__L2.fn502(__L3.bladeWarriorSkills)<before then break end
-              task.wait(0.2)
-            until os.clock()>=deadline
-            if #__L2.fn502(__L3.bladeWarriorSkills)>=before then
-              __L3.bladeStatus("Alfric: compra nao confirmada; confira XP e Silver (meta: 3 skills)")
-              task.wait(1)
-              return false
-            end
+        __L3.bladeTrainingCount=function(skills)
+          return #skills-#__L2.fn502(skills)
+        end
+        __L3.bladeTrainWait=function(name,confirmed)
+          __L3.bladeStatus(name..": aguardando Silver/Orderly/XP; nova tentativa em 15s")
+          -- Touch dropped Silver without moving away from the trainer.
+          __L3.bladeBagPickup(true)
+          local deadline=os.clock()+15
+          while tbl303[1] and os.clock()<deadline do
+            if confirmed and confirmed() then break end
+            task.wait(0.25)
           end
-          return #__L2.fn502(__L3.bladeWarriorSkills)==0
+          __L3.bladeBagPickup(false)
+        end
+        __L3.bladeTrainPurchase=function(key,npc,anchor,answers,skills,limit)
+          local save=tbl308[1]
+          save.bladeTraining=save.bladeTraining or {}
+          local progress=save.bladeTraining[key] or {confirmed=0}
+          save.bladeTraining[key]=progress
+          while tbl303[1] do
+            local observed=__L3.bladeTrainingCount(skills)
+            progress.confirmed=math.max(progress.confirmed or 0,observed)
+            if progress.pending and ((tonumber(getServerValue("Silver")) or 0)<progress.pending.silver or observed>progress.pending.observed) then
+              progress.confirmed=math.max(progress.confirmed,(progress.pending.confirmed or 0)+1)
+              progress.pending=nil;fn542()
+            end
+            if progress.confirmed>=limit then progress.pending=nil;fn542();return true end
+            local character=LocalPlayer21.Character
+            if not __L3.bladeStanding() then task.wait(0.25);continue end
+            local merchant=HResult.nearestNPC(npc,anchor)
+            if not merchant or not near(anchor,25) then return false end
+            local before=tonumber(getServerValue("Silver")) or 0
+            progress.pending={silver=before,observed=observed,confirmed=progress.confirmed}
+            fn542()
+            __L3.bladeStatus(npc..": comprando skill "..(progress.confirmed+1).."/"..limit)
+            local deadline=os.clock()+10
+            local paymentSent=false
+            local ok,err=pcall(function()
+              FResult.run(merchant,answers,{
+                allowAnswer=function(answer)
+                  if answer==answers[#answers] then
+                    if paymentSent then return false end
+                    paymentSent=true
+                  end
+                  return true
+                end,
+                shouldRun=function() return tbl303[1] and LocalPlayer21.Character==character and os.clock()<deadline end,
+                holdPosition=false,timeout=6,maxReplays=0,minHold=0,
+              })
+            end)
+            if not ok then fn534("Trainer %s: %s",npc,tostring(err)) end
+            -- Check all delayed results before another purchase, keeping exactly one in flight.
+            __L3.bladeTrainWait(npc,function()
+              return (tonumber(getServerValue("Silver")) or 0)<before or __L3.bladeTrainingCount(skills)>observed
+            end)
+          end
+          return false
+        end
+        __L3.bladeTrainerApproach=function(key,inn,path)
+          __L3.bladeTrainerCharacters=__L3.bladeTrainerCharacters or {}
+          local character=LocalPlayer21.Character
+          if __L3.bladeTrainerCharacters[key]==character and near(path[#path],25) then return true end
+          if not near(path[#path],25) then
+            if __L3.setInn(inn)==false then return false end
+            if not fn580(path) then return false end
+          end
+          __L3.bladeLand()
+          __L3.bladeTrainerCharacters[key]=LocalPlayer21.Character
+          return tbl303[1]
+        end
+        __L3.bladeAlfricTrain=function()
+          local progress=tbl308[1].bladeTraining and tbl308[1].bladeTraining.alfric
+          if math.max(progress and progress.confirmed or 0,__L3.bladeTrainingCount(tbl271))>=3 then return true end
+          if not __L3.bladeTrainerApproach("alfric","Renova",{Vector3.new(-2068,305,-634),Vector3.new(-1844,252,-265),Vector3.new(-1805,315,-227)}) then return false end
+          return __L3.bladeTrainPurchase("alfric","Alfric",Vector3.new(-1805,315,-227),{"Yeah.","I'll pay."},tbl271,3)
         end
         __L3.bladeTrain=function()
-          __L3.bladeStatus("P3: Alfric (3 skills) e Frey")
+          __L3.bladeStatus("P3: Alfric (limite de 3 skills) e Frey")
           if not __L3.bladeAlfricTrain() then return end
-          if #__L2.fn502(__L2.tbl279)>0 then
-            if __L3.setInn("Central Sanctuary")==false then return end
-            fn580({Vector3.new(1921,258,-851),Vector3.new(1926,285,-864),Vector3.new(1905,285,-810),Vector3.new(1913,307,-813),Vector3.new(1955,309,-830)})
-            for attempt=1,8 do
-              if not tbl303[1] or #__L2.fn502(__L2.tbl279)==0 then break end
-              fn588("Frey",Vector3.new(1954,309,-833),{"Is there anything you can teach me?","I'll pay."})
-              task.wait(0.4)
-            end
-            if #__L2.fn502(__L2.tbl279)>0 then
-              __L3.bladeStatus("P3: Frey training incomplete; verify XP and Silver")
-              task.wait(2); return
-            end
+          local progress=tbl308[1].bladeTraining and tbl308[1].bladeTraining.frey
+          if math.max(progress and progress.confirmed or 0,__L3.bladeTrainingCount(__L2.tbl279))<3 then
+            if not __L3.bladeTrainerApproach("frey","Central Sanctuary",{Vector3.new(1921,258,-851),Vector3.new(1926,285,-864),Vector3.new(1905,285,-810),Vector3.new(1913,307,-813),Vector3.new(1955,309,-830)}) then return end
+            if not __L3.bladeTrainPurchase("frey","Frey",Vector3.new(1954,309,-833),{"Is there anything you can teach me?","I'll pay."},__L2.tbl279,3) then return end
           end
-          __L3.bladeStatus("P3: continuing existing Jagen / Mana Dash / Khei sequence")
+          __L3.bladeStatus("P3: base e super confirmadas; seguindo para Jagen")
           __L3.bladePhase("P7")
         end
         __L3.bladeStep=function(phase)
@@ -40725,7 +40797,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         progressionTab:AddToggle("BladeAllowHop", {Text="Allow hops during Blade route",Default=false,Tooltip="Off keeps all accounts and shared queues in the same server"})
         __L3.hiddenSetup:AddButton({Text="Mark supply point (stand near Alana)",Func=function() __L3.bladeMarkPoint("blade_supply_point") end})
         __L3.hiddenSetup:AddButton({Text="Mark waiting point",Func=function() __L3.bladeMarkPoint("blade_wait_point") end})
-        __L3.bladeLabel=progressionTab:AddLabel("Rota de 14 pontos pronta | espada 6700 + mana punch 800 | configure e Inicie",true)
+        __L3.bladeLabel=progressionTab:AddLabel("Rota de 14 pontos pronta | espada 6700 + mana punch 300 | configure e Inicie",true)
         __L3.hiddenSetup:AddButton({Text="Copy Blade progress",Func=function()
           local report={save=tbl308[1],worker=__L3.bladeWorker,route=__L3.bladeValue("ProgRoute","Original")}
           local json=aResult22.HttpService:JSONEncode(report)
@@ -41756,15 +41828,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               { CFrame = CFrame.new(v1353) }
             )
             local tbl370 = { false }
-            CreateResult5.Completed:Connect(function()
+            local completedConnection=CreateResult5.Completed:Connect(function()
               tbl370[1] = true
             end)
             CreateResult5:Play()
             __NATIVE[119](tbl370, tbl365)()
-            if not tbl365[1] then
-              CreateResult5:Cancel()
-              return
-            end
+            if not tbl365[1] then CreateResult5:Cancel() end
+            completedConnection:Disconnect();CreateResult5:Destroy()
+            if not tbl365[1] then return end
             if v1353 == a1851 then
               return
             end
@@ -41935,6 +42006,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           return sResult10.root() ~= nil
         end
+        rotSupplier.ensurePlaying=function()
+          local deadline=os.clock()+60
+          while tbl365[1] and (vResult6.startMenu() or not sResult10.root()) and os.clock()<deadline do
+            rotSupplier.status:SetText("Fornecedor: entrando no jogo (Play)")
+            vResult6.clickPlay();task.wait(0.5)
+          end
+          return tbl365[1] and not vResult6.startMenu() and sResult10.root()~=nil
+        end
         local fn687 = function(master)
           return rotSupplier.approach and rotSupplier.approach(master) or false
         end
@@ -42038,12 +42117,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 fn704("waiting","aguardando em Renova uma receptora da fila chegar e ficar livre")
                 rotSupplier.status:SetText("Fornecedor: esperando uma receptora em P14")
                 if (v1366.Position-rotSupplier.waitPoint).Magnitude>5 then
-                  fn683(rotSupplier.waitPoint,100)
+                  if rotSupplier.flyTo then rotSupplier.flyTo(rotSupplier.waitPoint+Vector3.new(0,2,0)) end
                 end
                 task.wait(0.3)
                 continue
               end
-              fn704("going:"..master.UserId,"andando ate "..master.Name.." para fornecer Rot")
+              fn704("going:"..master.UserId,"voando ate "..master.Name.." para fornecer Rot")
               rotSupplier.status:SetText("Fornecedor: receptora "..master.Name.." pronta")
               fn687(master)
               local ready,readyRoot=rotSupplier.masterReady(master.UserId)
@@ -42455,11 +42534,24 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not ok then rotWalkStatus:SetText("Walk navigation error: "..tostring(err)) end
           return ok and success
         end
+        rotSupplier.flyTo=function(position)
+          local connection=fn676()
+          local ok,err=pcall(fn677,position,100)
+          connection:Disconnect()
+          sResult10.clearVeil()
+          local character=LocalPlayer24.Character
+          local root=sResult10.root()
+          if root then root.Anchored=false;root.AssemblyLinearVelocity=Vector3.zero end
+          if character then sResult10.reclip(character) end
+          local hum=sResult10.humanoid()
+          if hum then hum:SetStateEnabled(5,true);hum:ChangeState(5) end
+          if not ok then rotSupplier.status:SetText("Fornecedor: falha no voo "..tostring(err)) end
+          return ok
+        end
         rotSupplier.approach=function(master)
-          return rotWalkTo(function()
-            local ready,root=rotSupplier.masterReady(master.UserId)
-            return ready and root.Position or nil
-          end,function() return rotSupplier.masterReady(master.UserId)~=nil end,8)
+          local ready,root=rotSupplier.masterReady(master.UserId)
+          if not ready then return false end
+          return rotSupplier.flyTo(root.Position+Vector3.new(0,2,0))
         end
         local fn703 = function(a1864)
           local res265, officerDistance = fn701()
@@ -42931,7 +43023,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 -- Do not run the alt's quest/menu/Tween preparation on the carrier.
                 while tbl365[1] do task.wait(0.25) end
               else
-                local ok,err=pcall(fn695)
+                local ok,err=pcall(function()
+                  if not rotSupplier.ensurePlaying() then
+                    if not tbl365[1] then return end
+                    error("Play nao gerou personagem em 60s")
+                  end
+                  fn695()
+                end)
                 if not ok then
                   rotSupplier.status:SetText("Fornecedor parou: "..tostring(err))
                   warn("[blade 23 Rot] "..tostring(err))
@@ -60442,8 +60540,17 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not v2569 then
             return
           end
+          if obj12[v2569] then return end
+          obj12[v2569]=true
+          table.insert(tbl574,v2569.DescendantAdded:Connect(function(label)
+            if label:IsA("TextLabel") and fn1137(label.Text) then
+              local prefix=label.Text:sub(1,1)=="@" and "@" or ""
+              fn1134(label,function() return prefix..fn1123() end)
+            end
+          end))
           local getDescendantsResult23, v2570, v2571 = v2569:GetDescendants()
           for k579, v2572 in getDescendantsResult23, v2570, v2571 do
+            if k579%40==0 then task.wait() end
             if v2572:IsA("TextLabel") and fn1137(v2572.Text) then
               local v2573 = v2572.Text:sub(1, 1) == "@" and "@" or ""
               fn1134(v2572, function()
@@ -60473,7 +60580,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   fn1141(v2575)
                 end
               end)
-              task.wait(0.25)
+              task.wait(1)
             end
             flag134 = false
           end)
