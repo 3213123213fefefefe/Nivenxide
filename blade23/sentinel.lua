@@ -34799,6 +34799,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return false
         end
         local fn539 = function()
+          -- This reserved combat farm must be able to enter while Shriekers keep Danger active.
+          if __L3.bladeRunConfig and __L3.bladeFarmAssigned=="shriekers"
+            and tbl308[1] and tbl308[1].phase=="B1_XP" then return end
           while true do
             if not (tbl303[1] and fn537() and fn538()) then
               break
@@ -39002,7 +39005,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           local mobs=__L3.bladeShriekers()
           local full=0
-          for _,mob in mobs do if mob.hum.Health>=mob.hum.MaxHealth then full+=1 end end
+          for _,mob in mobs do if __L3.bladeFullHP(mob.hum) then full+=1 end end
           __L3.bladeCellLabel:SetText(string.format("Cela XP: %d Shriekers | %d full HP | %.1f x %.1f studs%s",
             #mobs,full,bounds.maxX-bounds.minX,bounds.maxZ-bounds.minZ,
             __L3.bladeCellDirty and " | rascunho: salvar/compartilhar" or " | salva"))
@@ -39111,21 +39114,52 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           fn535("Cela importada. Confira a area e clique Salvar/compartilhar.")
         end
         a1723.Maid:Give(__L3.bladeCellClearVisual)
+        __L3.bladeFullHP=function(hum)
+          return hum and hum.MaxHealth>0 and hum.Health>0 and hum.MaxHealth-hum.Health<=0.05
+        end
+        __L3.bladeMobInCell=function(root,bounds)
+          -- Accept a mob whose body overlaps the cell edge; never widen the movement bounds.
+          local position=root.Position
+          local radiusX=math.min(2,math.max(0.5,root.Size.X/2))
+          local radiusZ=math.min(2,math.max(0.5,root.Size.Z/2))
+          return position.X+radiusX>=bounds.minX and position.X-radiusX<=bounds.maxX
+            and position.Z+radiusZ>=bounds.minZ and position.Z-radiusZ<=bounds.maxZ
+            and position.Y>=bounds.minY and position.Y<=bounds.maxY
+        end
         __L3.bladeShriekers=function()
           local result={}
+          local report={nearby=0,outside=0,missingHP=0,count=0,full=0,minimum=__L3.bladeValue("BladeShrCount",50)}
+          __L3.bladeShrReport=report
           local live=v966:FindFirstChild("Live")
-          if not live then return result end
-          local bounds=__L3.bladeCellBounds(__L3.bladeCellLoad())
-          if not bounds then return result end
+          if not live then report.error="pasta Live indisponivel";return result end
+          local bounds,anchor=__L3.bladeCellBounds(__L3.bladeCellLoad())
+          if not bounds then report.error="cela invalida ou mapa diferente";return result end
           for _,mob in live:GetChildren() do
-            local root=mob:FindFirstChild("HumanoidRootPart")
-            local hum=mob:FindFirstChildOfClass("Humanoid")
-            if mob.Name:lower():find("shrieker",1,true) and root and hum
-              and __L3.bladeInCell(root.Position,bounds) and hum.MaxHealth>0 then
-              table.insert(result,{model=mob,root=root,hum=hum})
+            if mob.Name:lower():find("shrieker",1,true) then
+              local root=mob:FindFirstChild("HumanoidRootPart") or mob.PrimaryPart
+              local hum=mob:FindFirstChildOfClass("Humanoid")
+              if root and (root.Position-anchor).Magnitude<=60 then
+                report.nearby+=1
+                if not hum or hum.MaxHealth<=0 then report.missingHP+=1
+                elseif __L3.bladeMobInCell(root,bounds) then
+                  table.insert(result,{model=mob,root=root,hum=hum})
+                  if __L3.bladeFullHP(hum) then report.full+=1 end
+                else report.outside+=1 end
+              end
             end
           end
+          report.count=#result
           return result
+        end
+        __L3.bladeXPWaitStatus=function()
+          local r=__L3.bladeShrReport or {count=0,full=0,minimum=__L3.bladeValue("BladeShrCount",50),outside=0,missingHP=0}
+          if r.error then return "PE8: "..r.error end
+          local reason
+          if r.count<r.minimum then reason="faltam alvos dentro da cela"
+          elseif r.full<r.count then reason="aguardando HP cheio"
+          elseif __L3.bladeShrOwner then reason="vaga ocupada por "..__L3.bladeShrOwner
+          else reason="sincronizando reserva local" end
+          return string.format("PE8: cela %d/%d | full %d/%d | fora %d | sem HP %d | %s",r.count,r.minimum,r.full,r.count,r.outside,r.missingHP,reason)
         end
         __L3.bladeLockSetup=function(active)
           for _,key in {"ProgRoute","BladeOrderly","BladeFarm","BladeDamageGoal","BladeShrCount","BladeSpeed",
@@ -39195,6 +39229,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
             end
           end
+          local self=__L3.bladeWorker
+          if self and self.active and self.jobId==game.JobId then
+            for index=#roster,1,-1 do if roster[index].userId==LocalPlayer21.UserId then table.remove(roster,index) end end
+            table.insert(roster,self)
+          end
           return roster
         end
         __L3.bladeAssignments=function(roster)
@@ -39249,13 +39288,17 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             worker.fistDamage=tonumber(tbl308[1].bladeFistDamage) or 0
             local mobs=__L3.bladeShriekers()
             local full=0
-            for _,mob in mobs do if mob.hum.Health>=mob.hum.MaxHealth then full+=1 end end
+            for _,mob in mobs do if __L3.bladeFullHP(mob.hum) then full+=1 end end
             worker.shrAvailable=#mobs>=__L3.bladeValue("BladeShrCount",50) and full==#mobs
             if not __L3.bladeIO.writeJson(__L3.bladeWorkerPath,worker) then
               __L3.bladeFarmAssigned=nil
               error(__L3.bladeIO.net.lastError or "Could not write shared XP queue file")
             end
             local roster=__L3.bladeRoster()
+            __L3.bladeShrOwner=nil
+            for _,entry in roster do
+              if entry.userId~=LocalPlayer21.UserId and entry.farmState=="running" and entry.slot=="shriekers" then __L3.bladeShrOwner=entry.name or tostring(entry.userId);break end
+            end
             local supplyOwner=__L3.bladeSupplyAssignments(roster)
             __L3.bladeSupplyOwner=supplyOwner and supplyOwner.userId
             local assignments=__L3.bladeAssignments(roster)
@@ -39483,7 +39526,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           while tbl303[1] and __L3.bladeFarmAssigned=="shriekers" do
             local mobs=__L3.bladeShriekers()
             local full=0
-            for _,mob in mobs do if mob.hum.Health>=mob.hum.MaxHealth then full+=1 end end
+            for _,mob in mobs do if __L3.bladeFullHP(mob.hum) then full+=1 end end
             __L3.bladeStatus(string.format("P1 Shriekers: waiting full HP %d/%d (expected %d)",full,#mobs,__L3.bladeValue("BladeShrCount",50)))
             if #mobs>=__L3.bladeValue("BladeShrCount",50) and full==#mobs then break end
             task.wait(0.25)
@@ -39505,7 +39548,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               previous=value -- Healing always updates the baseline, never the total.
               if not active or not tbl303[1] or __L3.bladeFarmAssigned~="shriekers" then return end
               if delta>0 and mob.model.Parent==v966:FindFirstChild("Live")
-                and __L3.bladeInCell(mob.root.Position,bounds) then
+                and __L3.bladeMobInCell(mob.root,bounds) then
                 save.bladeDamage+=delta
                 save.bladeMobDamage[id]=(save.bladeMobDamage[id] or 0)+delta
                 if os.clock()-lastSave>=0.5 then lastSave=os.clock(); fn542() end
@@ -39655,11 +39698,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           while tbl303[1] and __L3.bladeFarmAssigned=="shriekers" do
             local mobs=__L3.bladeShriekers()
             local full=0
-            for _,mob in mobs do if mob.hum.Health>=mob.hum.MaxHealth then full+=1 end end
+            for _,mob in mobs do if __L3.bladeFullHP(mob.hum) then full+=1 end end
             local ready=#mobs>=__L3.bladeValue("BladeShrCount",50) and full==#mobs
             if ready then readySince=readySince or os.clock() else readySince=nil end
             local remaining=readySince and math.max(0,3-(os.clock()-readySince)) or 3
-            __L3.bladeStatus(string.format("PE8: %d/%d full HP | minimo %d | iniciar em %.1fs",full,#mobs,__L3.bladeValue("BladeShrCount",50),remaining))
+            __L3.bladeStatus(string.format("PE8: cela %d/%d | full %d/%d | iniciar em %.1fs",#mobs,__L3.bladeValue("BladeShrCount",50),full,#mobs,remaining))
             if ready and remaining<=0 and __L3.bladeStanding() then break end
             task.wait(0.25)
           end
@@ -39680,7 +39723,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             table.insert(connections,mob.hum.HealthChanged:Connect(function(value)
               local delta=previous-value;previous=value
               if not active or not tbl303[1] or not __L3.bladeCounting or __L3.bladeFarmAssigned~="shriekers" then return end
-              if delta>0 and mob.model.Parent==v966:FindFirstChild("Live") and __L3.bladeInCell(mob.root.Position,bounds) then
+              if delta>0 and mob.model.Parent==v966:FindFirstChild("Live") and __L3.bladeMobInCell(mob.root,bounds) then
                 if __L3.bladeCombatMode=="sword" then save.bladeDamage+=delta
                 elseif __L3.bladeCombatMode=="fist" then save.bladeFistDamage+=delta end
                 if os.clock()-lastSave>=0.5 then lastSave=os.clock();fn542() end
@@ -39738,7 +39781,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             __L3.bladeShrApproachCharacter=LocalPlayer21.Character
           end
           if not slot then
-            __L3.bladeStatus(preference=="Zombie Scrooms" and "P5: aguardando vaga nos Zombie Scrooms" or "PE8: aguardando vaga de XP e Shriekers full")
+            __L3.bladeStatus(preference=="Zombie Scrooms" and "P5: aguardando vaga nos Zombie Scrooms" or __L3.bladeXPWaitStatus())
             task.wait(0.3);return
           end
           __L3.bladeWorker.farmState="running";__L3.bladeWorker.slot=slot

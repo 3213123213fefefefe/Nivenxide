@@ -43,7 +43,7 @@ Nos pontos de espera PE3, P4, P5, PE8, P9, P10, PG11, PE13 e P14, o bot desliga 
 
 Shriekers usa P6 → P7 → PE8. PE8 é a espera do farm; uma conta downada espera recuperar antes de ir a P9. **Automatic** pode usar Zombie Scrooms quando sua vaga estiver disponível; **Zombie Scrooms** usa o farm original e dispensa a aproximação ao Shrine.
 
-Antes de iniciar o combate com Shriekers, a conta exige a quantidade mínima configurada e todos os alvos da cela com HP cheio durante **3 segundos contínuos**. Essa checagem acontece apenas na entrada da sessão. A conta passa por P9 e usa o ponto de ataque fixo da cela Necro:
+Antes de iniciar o combate com Shriekers, a conta exige a quantidade mínima configurada e todos os alvos da cela com HP cheio durante **3 segundos contínuos**. Essa checagem acontece apenas na entrada da sessão. O detector aceita a sobreposição do corpo de um mob com a borda da cela, com limite de 2 studs, e tolera arredondamento de até 0,05 HP. Isso não considera um hit de 8 como HP cheio. A linha PE8 informa quantidade na cela, mínimo, full HP, alvos fora da área e o dono de uma vaga ocupada. Uma reserva válida de Shriekers permite entrar mesmo com Danger ativo; as outras rotinas mantêm sua espera anterior. A conta passa por P9 e usa o ponto de ataque fixo da cela Necro:
 
 - Posição: `(2268.965087890625, 62.999996185302737, 783.982666015625)`.
 - Cantos: `(2272.9111328125, 62.99999237060547, 791.964599609375)` e `(2265.51806640625, 62.99999237060547, 776.548583984375)`.
@@ -96,7 +96,7 @@ A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do pers
 
 ## Validação
 
-O runtime passou pela compilação Luau. Dezessete testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Dezenove testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 

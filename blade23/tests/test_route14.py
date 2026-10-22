@@ -117,7 +117,7 @@ __L3.bladePrepare();assert(phase=="B1_SWORD")
     def test_shrieker_gate_healing_sword_then_fists(self):
         farm=self.part('__L3.bladeXPShriekers=function()', '__L3.bladeXP=function()')
         self.run_luau(r'''
-local __L3={bladeFarmAssigned="shriekers"}
+local __L3={bladeFarmAssigned="shriekers",bladeFullHP=function(h) return h.Health>=h.MaxHealth end}
 local tbl303={true};local tbl308={{}}
 local clock=0;local healedAt
 local os={clock=function() return clock end}
@@ -144,6 +144,7 @@ __L3.bladeMovePoint=function(n)
 end
 __L3.bladeStatus=function() end
 __L3.bladeInCell=function() return true end
+__L3.bladeMobInCell=function() return true end
 __L3.fn610=function() end
 local fn580=function() assert(entered) end
 local fn542=function() end
@@ -244,7 +245,7 @@ local near=function() return true end
 local fn580=function() assert(standing);moved+=1;return true end
 '''+move+r'''assert(__L3.bladeMovePoint(9,true) and waits==1 and moved==1)''')
         xp=self.part('__L3.bladeXP=function()', '__L3.bladeExitXP=function()')
-        self.run_luau(r'''local __L3={bladeWorker={}}
+        self.run_luau(r'''local __L3={bladeWorker={},bladeXPWaitStatus=function() return "waiting" end}
 local tbl303={true};local tbl308={{}}
 local LocalPlayer21={Character={}};local DateTime={now=function() return {UnixTimestampMillis=1} end}
 local task={wait=function() end};local fn542=function() end
@@ -396,7 +397,7 @@ local a=__L3.bladeAssignments(roster);assert(not a[1] and a[2]=="shriekers")
         self.run_luau(r'''
 local clock=0;local os={clock=function() return clock end};local task={wait=function(t) clock+=t end}
 local tbl303={true};local tbl308={{}};local count=6
-local __L3={bladeFarmAssigned="shriekers",bladeCellLoad=function() return {} end,bladeCellBounds=function() return {},{} end,
+local __L3={bladeFullHP=function(h) return h.Health>=h.MaxHealth end,bladeFarmAssigned="shriekers",bladeCellLoad=function() return {} end,bladeCellBounds=function() return {},{} end,
  bladeValue=function() return 7 end,bladeStanding=function() return true end,bladeStatus=function() end}
 __L3.bladeShriekers=function()
  if clock>=1 then count=7 end
@@ -474,6 +475,74 @@ local vResult6={startMenu=function() return menu end,clickPlay=function() clicks
 '''+play+r'''
 assert(rotSupplier.ensurePlaying() and clicks==3)
 menu=true;tbl365[1]=false;assert(not rotSupplier.ensurePlaying() and clicks==3)
+''')
+
+    def test_detection_queue_and_entry_with_33_and_50_mobs(self):
+        detect=self.part('__L3.bladeFullHP=function', '__L3.bladeLockSetup=function')
+        roster=self.part('__L3.bladeRoster=function', '__L3.bladeWorkerPath=')
+        tick=self.part('__L3.bladeWorkerTick=function', '__L3.bladeRelease=function')
+        xp=self.part('__L3.bladeXP=function()', '__L3.bladeExitXP=function()')
+        farm=self.part('__L3.bladeXPShriekers=function()', '__L3.bladeXP=function()')
+        gate=farm[:farm.index('          if not __L3.bladeMovePoint(9,true)')]+r'''
+          enteredAt=os.clock()
+          return true
+        end
+'''
+        self.run_luau(VEC+r'''
+local clock=0;local enteredAt;local os={clock=function() return clock end,time=function() return 100 end}
+local task={wait=function(t) clock+=t or 0 end};local DateTime={now=function() return {UnixTimestampMillis=100000} end}
+local LocalPlayer21={UserId=1,Name="test",Character={}}
+local game={JobId="same-job"};local a1723={State={}}
+local __L3={bladeWorker={},bladeWorkerPath="self.json",bladeShrApproachCharacter=LocalPlayer21.Character}
+local tbl303={true};local tbl308={{phase="B1_XP"}};local fn542=function() end
+local count=33;local minimum=33;local mobs={};local calls=0
+for i=1,50 do
+ local root={Position=Vector3.new(i%2==0 and -0.5 or 5,0,5),Size=Vector3.new(2,2,2)}
+ local hum={Health=i==1 and 199.999 or 200,MaxHealth=200}
+ local mob={Name=i..".Shrieker",PrimaryPart=root,
+  FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end}
+ mobs[i]=mob
+end
+local live={GetChildren=function() local t={};for i=1,count do t[i]=mobs[i] end;return t end}
+local v966={FindFirstChild=function() return live end}
+__L3.bladeValue=function(name,default) if name=="BladeShrCount" then return minimum elseif name=="BladeFarm" then return "Shriekers" end;return default end
+__L3.bladeCellLoad=function() return {} end
+__L3.bladeCellBounds=function() return {minX=0,maxX=10,minZ=0,maxZ=10,minY=-6,maxY=6},Vector3.new(5,0,5) end
+__L3.bladeEnabled=function() return true end
+__L3.bladeStanding=function() return true end
+__L3.bladeStatus=function() end
+__L3.bladeSupplyAssignments=function() return nil end
+__L3.bladePhase=function(phase) tbl308[1].phase=phase end
+__L3.bladeRelease=function() error("must not release a valid entry") end
+__L3.bladeIO={sharedList=function() return {} end,readJson=function() return nil end,
+ sharedNow=function() return 100 end,sharedLease=function() return 8 end,
+ writeJson=function() calls+=1;return true end,channel=function() return {roster=function() return {} end} end}
+'''+detect+roster+tick+gate+xp+r'''
+__L3.bladeXP()
+assert(calls>=3 and tbl308[1].phase=="B1_EXIT" and enteredAt>=3 and enteredAt<4)
+assert(__L3.bladeShrReport.count==33 and __L3.bladeShrReport.full==33,"boundary overlap and rounded full HP must count")
+count=50;minimum=50;clock=0;enteredAt=nil;tbl308[1]={phase="B1_XP"};__L3.bladeWorker={}
+__L3.bladeXP();assert(tbl308[1].phase=="B1_EXIT" and enteredAt>=3 and __L3.bladeShrReport.full==50)
+-- A full sword hit must still block entry; HP tolerance only handles rounding noise.
+mobs[1].FindFirstChildOfClass=function() return {Health=192,MaxHealth=200} end
+__L3.bladeShriekers();assert(__L3.bladeShrReport.full==49)
+assert(__L3.bladeXPWaitStatus():find("aguardando HP cheio",1,true))
+-- Mobs wholly outside this cell must not be counted, even when nearby.
+mobs[2].PrimaryPart.Position=Vector3.new(15,0,5)
+__L3.bladeShriekers();assert(__L3.bladeShrReport.count==49 and __L3.bladeShrReport.outside==1)
+assert(__L3.bladeXPWaitStatus():find("faltam alvos dentro da cela",1,true))
+''')
+
+
+    def test_reserved_shrieker_entry_does_not_wait_for_danger_to_clear(self):
+        wait=self.part('local fn539 = function()', '        local fn540 =')
+        self.run_luau(r'''
+local __L3={bladeRunConfig={},bladeFarmAssigned="shriekers"};local tbl308={{phase="B1_XP"}};local tbl303={true}
+local nearby=true;local fn537=function() return true end;local fn538=function() return nearby end
+local waits=0;local task={wait=function() waits+=1;nearby=false end}
+'''+wait+r'''
+fn539();assert(waits==0,"Danger and a nearby necro must not prevent entry into the reserved combat farm")
+__L3.bladeFarmAssigned=nil;fn539();assert(waits==1,"unreserved movement keeps its existing wait")
 ''')
 
 if __name__ == '__main__':
