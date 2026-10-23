@@ -770,5 +770,73 @@ land=false;assert(not __L3.bladePlainPunch(function() return true end) and clock
 assert(not __L3.bladePlainPunch(function() return false end) and attacks==4)
 ''')
 
+    def test_core_potassium_inspects_two_values_and_caches_without_enumeration(self):
+        core=self.part('local fn44 = function()', '    tbl44.f = function()')
+        self.run_luau(r'''
+local __bootSession={report={executor="Potassium"}};local tbl44={};local replacements={}
+local fire=function() end;local destroy=function() end
+local workspace={Destroy=destroy};local Instance={new=function() return {FireServer=fire} end}
+local player={CharacterAdded={Connect=function() return {Disconnect=function() end} end}}
+local services={Players={LocalPlayer=player},RunService={}}
+tbl44.a=function() return services end;tbl44.e=function() return {keyHandlerEnabled=function() return false end} end
+local getgenv=function() return {} end;local checkcaller=function() return false end
+local newcclosure=function(fn) return fn end;local islclosure=function() return true end
+local getupvalues=function() error("must not enumerate captured tables on Potassium") end
+local captures={};local reads=0
+local getupvalue=function(fn,index) reads+=1;assert(index<=2);return captures[fn][index] end
+local hookfunction=function(target,replacement) local original=replacements[target] or target;replacements[target]=replacement;return original end
+local task={spawn=function(fn) fn() end,wait=function() end}
+'''+core+r'''
+fn44()("Normal")
+local one=function() return "one" end;captures[one]={services.RunService}
+local two=function() return "two" end;captures[two]={services.RunService,{}}
+local other=function() return "other" end;captures[other]={{}}
+local wrap=replacements[coroutine.wrap]
+for i=1,100 do assert(wrap(one)()==nil);assert(wrap(two)()=="two");assert(wrap(other)()=="other") end
+assert(reads==5 and __bootSession.report.coreInspections==3)
+__bootSession.coreCleanup()
+getupvalue=function(fn,index) if index==2 then error("upvalue index out of range") end;return services.RunService end
+fn44()("Normal");assert(replacements[coroutine.wrap](one)()==nil);__bootSession.coreCleanup()
+getupvalue=nil;fn44()("Normal")
+assert(replacements[coroutine.wrap](one)()=="one")
+assert(__bootSession.report.coreInspectionUnavailable)
+__bootSession.coreCleanup()
+''')
+
+    def test_potassium_skips_optional_leaderboard_registry_and_connection_inspection(self):
+        registry=self.part('local fn1067 = function()', '        local fn1068 = function()')
+        labels=self.part('local fn1063 = function(a11222)', '        local fn1064 = function()')
+        self.run_luau(r'''
+local __bootSession={report={executor="Potassium"}}
+local getreg_=function() error("registry must not be enumerated") end
+local getconnections_3=function() error("connections must not be inspected") end
+'''+registry+labels+r'''
+fn1067();fn1063(nil)
+assert(__bootSession.report.leaderboardInspection=="disabled-potassium")
+''')
+
+    def test_captcha_rejects_oversized_counts_before_table_allocation(self):
+        decoder=self.part('local EncodingService = cloneref(game:GetService("EncodingService"))','return CSGPHS8\n]=],')
+        self.run_luau(VEC+r'''
+local cloneref=function(x) return x end;local game={GetService=function() return {} end}
+local allocations=0;local realCreate=table.create
+local table=table.clone(table)
+table.create=function(count,value) allocations+=1;assert(count<=600000);return realCreate(count,value) end
+'''+decoder+r'''
+local payload=buffer.create(60)
+buffer.writeu32(payload,0,1);buffer.writeu32(payload,4,0xffffffff)
+local ok,err=pcall(CSGPHS8.decodePayload,payload,0)
+assert(not ok and tostring(err):find("memory limit") and allocations==0)
+buffer.writeu32(payload,4,1);buffer.writeu32(payload,8,1)
+ok,err=pcall(CSGPHS8.decodePayload,payload,0)
+assert(not ok and tostring(err):find("payload length") and allocations==0)
+buffer.writeu32(payload,4,0);buffer.writeu32(payload,8,0);buffer.writeu32(payload,20,1)
+buffer.writeu32(payload,60-4,0xffffffff)
+-- Raw data starts at byte 60, so allocate a larger malformed payload for that branch.
+local raw=buffer.create(64);buffer.copy(raw,0,payload);buffer.writeu32(raw,60,0xffffffff)
+ok,err=pcall(CSGPHS8.decodePayload,raw,0)
+assert(not ok and tostring(err):find("memory limit") and allocations==0)
+''')
+
 if __name__ == '__main__':
     unittest.main()

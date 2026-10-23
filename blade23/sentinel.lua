@@ -14,6 +14,7 @@ __bootSession.executing=true
 __bootSession.report=__bootSession.report or {version=1,jobId=game.JobId,placeId=game.PlaceId,samples={}}
 local function __bootMark(phase,sampleOnly)
   local report=__bootSession.report
+  report.version=2;report.build="ram-guard-3"
   if not sampleOnly then __bootSession.phase=phase end
   local entry={phase=__bootSession.phase,event=phase,seconds=math.floor((os.clock()-__bootSession.started)*10)/10}
   pcall(function() entry.luaMB=math.floor(gcinfo()/1024*10)/10 end)
@@ -8703,7 +8704,12 @@ local EncodingService = cloneref(game:GetService("EncodingService"))
 
 local CSGPHS8 = {}
 local newVector3 = Vector3.new
-local createTable = table.create
+-- Corrupt mesh counts must fail before allocating a multi-gigabyte table.
+local function createTable(count, value)
+  assert(type(count)=="number" and count==count and count>=0 and count%1==0 and count<=600000,
+    "captcha geometry count exceeds memory limit")
+  return table.create(count,value)
+end
 local min = math.min
 local max = math.max
 
@@ -9180,6 +9186,7 @@ end
 function CSGPHS8.decodePayload(payload, geomType)
 	local r = { data = payload, at = 0 }
 	local hullCount, positionCount, faceCount = u32(r), u32(r), u32(r)
+  assert(hullCount<=2048 and positionCount<=200000 and faceCount<=200000,"captcha geometry exceeds memory limit")
 	u32(r) -- first hull position count
 	u32(r) -- first hull face count
 	local rawLength = u32(r)
@@ -9195,6 +9202,8 @@ function CSGPHS8.decodePayload(payload, geomType)
 	local clersAt = r.at
 	r.at += clersLength
 	local positionValueCount = positionCount * 3
+  assert(clersAt+clersLength<=buffer.len(payload) and positionValueCount*4<=buffer.len(payload)-r.at,
+    "captcha geometry counts exceed payload length")
 	local positions = createTable(positionValueCount)
 	for i = 1, positionValueCount do
 		positions[i] = f32(r)
@@ -20872,6 +20881,33 @@ __modules.m356b75b2d82b = function()
         if not (hookfunction and checkcaller and newcclosure and islclosure and getupvalues) then
           return
         end
+        -- Inspect at most two upvalues, never materialize every captured value on Potassium.
+        local executorName=string.lower(tostring(__bootSession.report and __bootSession.report.executor or ""))
+        local potassium=string.find(executorName,"potassium",1,true)~=nil
+        local readUpvalue=getupvalue or (debug and debug.getupvalue)
+        local inspected=setmetatable({},{__mode="k"})
+        local function capturesOnlyRunService(fn)
+          local cached=inspected[fn]
+          if cached~=nil then return cached end
+          local report=__bootSession.report
+          if report then report.coreInspections=(report.coreInspections or 0)+1 end
+          local matches=false
+          if type(readUpvalue)=="function" then
+            local ok,first=pcall(readUpvalue,fn,1)
+            if ok and first==RunService then
+              local okSecond,second=pcall(readUpvalue,fn,2)
+              local missing=not okSecond and (tostring(second):find("out of range",1,true) or tostring(second):find("invalid upvalue index",1,true))
+              matches=(okSecond and second==nil) or not not missing
+            end
+          elseif not potassium then
+            local ok,values=pcall(getupvalues,fn)
+            matches=ok and type(values)=="table" and #values==1 and values[1]==RunService
+          elseif report then
+            report.coreInspectionUnavailable=true
+          end
+          inspected[fn]=matches
+          return matches
+        end
         local active=true
         local hooks={}
         local connections={}
@@ -21013,8 +21049,7 @@ __modules.m356b75b2d82b = function()
               if not active then return v140(a1193) end
               if not checkcaller() then
                 if type(a1193) == "function" and islclosure(a1193) then
-                  local getupvaluesResult2 = getupvalues(a1193)
-                  if #getupvaluesResult2 == 1 and getupvaluesResult2[1] == RunService then
+                  if capturesOnlyRunService(a1193) then
                     return v140(fn108)
                   end
                 end
@@ -44156,9 +44191,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return nil, "PhysicalConfigData unreadable"
         end
         local v1451
+        __bootMark("captcha-decode:begin",true)
         local ok135, result129 = pcall(function()
           v1451 = res282.decode(res283)
         end)
+        __bootSession.report.captchaDecode=ok135 and "ok" or tostring(result129):sub(1,200)
+        __bootMark("captcha-decode:end",true)
         if not (ok135 and v1451) then
           return nil, "failed to decode CSG: " .. tostring(result129)
         end
@@ -58416,6 +58454,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return a2385
         end
         local fn1063 = function(a11222)
+          if string.find(string.lower(tostring(__bootSession.report.executor or "")),"potassium",1,true) then
+            __bootSession.report.leaderboardInspection="disabled-potassium"
+            return
+          end
           if not a11222:IsA("TextLabel") then
             return
           end
@@ -58505,6 +58547,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return nil
         end
         local fn1067 = function()
+          if string.find(string.lower(tostring(__bootSession.report.executor or "")),"potassium",1,true) then
+            __bootSession.report.leaderboardInspection="disabled-potassium"
+            return
+          end
           if not (getreg_ and v2238 and v2242 and getfenv_ and v2239 and v2241) then
             return
           end
@@ -58522,6 +58568,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               collectgarbage("collect")
             end)
             task.wait(0.1)
+            __bootMark("leaderboard-registry:begin",true)
             local pairsResult18, v2350, v2351 = pairs(getreg_())
             for k536, v2352 in pairsResult18, v2350, v2351 do
               if typeof(v2352) == "function" and v2239(v2352) and not (v2240 and v2240(v2352)) then
@@ -58557,6 +58604,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
             end
           end)
+          __bootMark("leaderboard-registry:end",true)
         end
         local fn1068 = function()
           local res458, v2359 = fn1055()
@@ -70595,7 +70643,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           elapsed+=dt
           if elapsed<5 then return end
           elapsed=0
-          if __bootSession.state~="unloaded" and __bootSession.state~="failed" then __bootMark("sample",true) end
+          if __bootSession.state~="unloaded" and __bootSession.state~="failed" then
+            local toggles={}
+            for name,toggle in res653.Toggles do
+              if toggle.Value==true and #toggles<100 then table.insert(toggles,tostring(name)) end
+            end
+            table.sort(toggles)
+            __bootSession.report.activeToggles=toggles
+            __bootMark("sample",true)
+          end
         end))
       end
       -- Map coordinate recorder: local named points, independent of the automation.

@@ -96,7 +96,7 @@ A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do pers
 
 ## Validação
 
-O runtime passou pela compilação Luau. Vinte e oito testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Trinta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -121,3 +121,11 @@ setclipboard(readfile("sentinel/.cache/blade23_ram_diagnostic.json"))
 ```
 
 Os testes simulam 100 ciclos de instalação e remoção de hooks, falha parcial, execução duplicada, histórico limitado e Unload reentrante. Eles não medem o pico real de RAM do Roblox ou do executor.
+
+### Investigação do pico após carregar (ram-guard-3)
+
+O registro do Potassium mostrou o cliente saindo de aproximadamente 3,3 GB para 22 GB após a inicialização; ele não identifica sozinho a rotina causadora. Esta versão testa caminhos suspeitos: a inspeção normal de funções lê no máximo dois upvalues e guarda somente o resultado booleano em um cache de chaves fracas. No Potassium não usa enumeração completa como alternativa; uma API individual ausente aparece em `coreInspectionUnavailable`. A inspeção avançada da leaderboard por registry e conexões fica desativada nesse executor, afetando suas melhorias opcionais de interação, sem impedir a automação Blade.
+
+O leitor de captcha rejeita contagens de geometria excessivas antes de criar tabelas e verifica o espaço disponível para as posições. O diagnóstico versão 2 inclui `build: ram-guard-3`, contagem das inspeções, opções ativas a cada amostra e eventos antes/depois de decodificar captcha ou varrer o registry. Os limites e a compatibilidade passaram por testes simulados; a causa do pico e a redução real de RAM ainda precisam de confirmação no cliente Potassium.
+
+Para comparar, encerre o cliente que já acumulou RAM, reabra e execute o loader atualizado uma vez. Observe inicialmente sem iniciar a automação e copie o novo diagnóstico após cerca de 60 segundos, ou antes se o consumo subir rapidamente.
