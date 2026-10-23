@@ -10,7 +10,7 @@ Pare a versão anterior em **Config → Unload** ou reentre no jogo. Execute:
 loadstring(game:HttpGet("https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/main/blade23/loader.lua", true))()
 ```
 
-A aba **blade 23** contém **Blade / Sigil**, **Rot** e **Filas**. Os controles antigos de conexão, rota, meta de dano, marcação de coleta e Cela XP ficam ocultos; suas funções foram preservadas internamente.
+A aba **blade 23** contém **Blade / Sigil**, **Rot** e **Filas**. A aba independente **Pontos do mapa** permanece disponível. Os controles antigos de conexão, rota, meta de dano, marcação de coleta e Cela XP ficam ocultos; suas funções foram preservadas internamente.
 
 ## Contas Blade / Sigil
 
@@ -92,10 +92,11 @@ O arquivo `routes/Blade.json` preserva os 14 pontos enviados. A automação usa 
 | PE13 | Espera da receptora |
 | P14 | Receptora ativa para Rots |
 
+A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do personagem em `sentinel/.cache/map_points.json`. Permite atualizar, exportar JSON, copiar `Vector3.new(...)` e excluir pontos. Salvar pontos não altera a rota nem movimenta o personagem.
 
 ## Validação
 
-O runtime passou pela compilação Luau. Quarenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Vinte e oito testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -107,30 +108,16 @@ A máscara de nomes do menu Esc evita repetir a varredura completa da árvore do
 
 Os testes usam trechos reais do runtime com serviços simulados. Movimentação física, hitboxes, diálogos e o fluxo completo com várias contas ainda precisam de teste dentro do jogo.
 
-## Aliados, pausa no menu e proteções por mundo (allies-menu-4)
+## Diagnóstico de RAM na execução
 
-Em **blade 23 → Aliados do servidor**, selecione os jogadores na lista múltipla. A lista usa UserIds, compartilha o arquivo de amigos existente e mantém aliados que saíram do servidor. Ela se atualiza ao entrar/sair um jogador e também pelo botão Atualizar jogadores. Os aliados continuam salvos no arquivo de amigos e também entram no Save Config junto com RotAlts. Aliados explicitamente salvos, alts selecionadas em RotAlts e membros reconhecidos das filas locais não acionam o Proximity Check do Sigil, mesmo com Ignore Friendly ativado para combate. Safe Server e o Proximity Notifier, quando este usa Ignore Allies, também reconhecem essas alts.
+O loader bloqueia outro carregamento enquanto a mesma instância está carregando ou ativa. Para atualizar, use Unload antes. O descarregamento restaura os hooks iniciais após limpar os recursos das funcionalidades e remove o evento de respawn; chamadas repetidas de Unload não repetem a limpeza.
 
-Configure **Proximity Check (Gaia)** e **Stay In Server (Gaia)** antes de iniciar. Stay In Server mantém a verificação: ao detectar uma ameaça, encerra o trabalho corrente, salva o progresso e solicita o menu no mesmo servidor. Se houver Danger, o método de menu existente aguarda a liberação. O bot permanece no menu até você apertar Play; Safe Server Auto Play não deve interferir nessa pausa. Após o personagem estar pronto, ele retoma o progresso salvo sem criar dois trabalhadores simultâneos. Parar Sigil cancela a retomada pendente.
+**Settings → Diagnostico Blade 23 → Copiar diagnostico de RAM** copia um relatório local com executor, etapas de inicialização, memória Lua, memória total do cliente quando as APIs estão disponíveis e nomes das opções ativas. O histórico mantém no máximo 64 amostras, com atualização de 5 segundos após carregar. O relatório não é enviado automaticamente.
 
-XP de espada, desbloqueio de mana e XP de socos mantêm seus contadores. Ao retomar Shriekers, a conta volta à fila/ponto de espera e exige novamente a quantidade configurada, todos com HP cheio e três segundos estáveis antes da nova entrada. Essa checagem continua fora do combate. Compras usam as confirmações já salvas e as skills realmente presentes; Orderly retorna à fila de Rots. A transição por Ya'alda e as etapas salvas de Khei também podem ser retomadas.
+Se o Roblox fechar antes de abrir a interface, o último registro está em `sentinel/.cache/blade23_ram_diagnostic.json`. Antes de carregar novamente o bot, copie esse registro pelo executor:
 
-**Menu por Illusionist quando Super (Gaia)** pausa no menu quando uma conta com Super detecta um Illusionist não aliado por Observing ou pelo marcador MindMage. Esse menu não exige Allow Hops. **Skip Illusionist Server (Gaia)** segue a política de Stay In Server/Allow Hops. Em Khei existem controles independentes de **Proximity Check**, **Skip Illusionist Server** e **Stay In Server**. Auto Go To Khei agora respeita a escolha configurada, sem desativar Stay In Server ou ser forçado ao iniciar. Distância zero desliga a proximidade no respectivo mundo.
+```lua
+setclipboard(readfile("sentinel/.cache/blade23_ram_diagnostic.json"))
+```
 
-**Leaderboard Observe**, **Better Leaderboard** e **Leaderboard in Menu** permanecem na aba Player. A inspeção original de conexões, upvalues e registry foi restaurada também no Potassium. A abertura da leaderboard no menu continua aceitando o personagem temporário do menu.
-
-Os 41 testes incluem seleções persistentes e aliados offline, exclusão de alts, políticas por mundo, pausa e cancelamento, espera pelo Play manual, retomada de contadores e do handoff, detecção de Illusionist e restauração da inspeção original. A compilação e os testes simulados não substituem validar menu, física e diálogos no cliente.
-
-## Remoção das alterações experimentais de RAM
-
-Foram retirados o grupo de diagnóstico, a coleta periódica de memória, os checkpoints de memória no carregamento e a gravação do relatório JSON. Também foram revertidos o cache/limite da inspeção de funções, as restrições de inspeção da leaderboard no Potassium e os limites experimentais no leitor de captcha. A proteção contra execução duplicada e a limpeza normal de Unload continuam funcionando. Aliados, pausa/retomada manual, configurações separadas de Khei e o restante da automação permanecem.
-
-## Salvar alts e aliados no perfil
-
-As seleções **Alts (RotAlts)** e **Aliados do servidor (ServerAllies)** fazem parte do Save Config. Selecione as contas, salve/crie o perfil em Config → Configuration e use Set autoload nesse perfil para restaurar automaticamente ao executar novamente. O perfil conserva as seleções de contas que não estejam no servidor; elas continuam disponíveis para desmarcar. Carregar outro perfil aplica a lista de aliados daquele perfil, inclusive uma lista vazia salva de propósito. Perfis antigos que não continham essas opções precisam ser salvos novamente.
-
-Iniciar uma fornecedora Rot ou retomá-la após rejoin não apaga mais Alts: o papel de fornecedora é separado da seleção. Ao entrar na fila como receptora, o bot volta a usar as alts selecionadas. Os arquivos do perfil permanecem na pasta do executor até serem alterados ou apagados.
-
-## Pausa entre etapas
-
-O controlador de progressão sempre cede 0,1 segundo após executar uma etapa. Isso evita repetir sem pausa uma rotina que retorna imediatamente, por exemplo enquanto um objeto necessário não está disponível, bloqueando o processamento dos frames. A correção mantém as etapas, os critérios de conclusão e as esperas de compra existentes. Os testes verificam retornos imediatos repetidos, parada e ordem das etapas; não reproduzem o travamento nativo do cliente ou do executor.
+Os testes simulam 100 ciclos de instalação e remoção de hooks, falha parcial, execução duplicada, histórico limitado e Unload reentrante. Eles não medem o pico real de RAM do Roblox ou do executor.

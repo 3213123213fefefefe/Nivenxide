@@ -715,6 +715,23 @@ assert(not execute() and env.__BLADE23_SESSION.state=="failed")
 broken=false;assert(execute() and runs==3)
 ''')
 
+    def test_startup_memory_journal_is_bounded_and_keeps_last_phase(self):
+        startup=self.source[:self.source.index('local __UI_FILES =')]
+        self.run_luau(r'''
+local env={};local getgenv=function() return env end
+local game={JobId="job",PlaceId=1,GetService=function(_,name)
+ if name=="Stats" then return {GetTotalMemoryUsageMb=function() return 1234.5 end} end
+ return {JSONEncode=function() return "report" end}
+end}
+local gcinfo=function() return 65536 end;local identifyexecutor=function() return "test-executor" end
+local writes=0;local writefile=function() writes+=1 end
+'''+startup+r'''
+__bootSession.state="running";__bootMark("ready")
+for i=1,1000 do __bootMark("sample",true) end
+assert(#__bootSession.report.samples==64 and __bootSession.report.phase=="ready")
+assert(__bootSession.report.samples[1].luaMB==64 and __bootSession.report.samples[1].clientMB==1234.5)
+assert(__bootSession.report.executor=="test-executor" and writes==1002)
+''')
 
     def test_unload_is_reentrant_and_releases_callback_references(self):
         unload=self.part('function Library:Unload()', 'Library:GiveSignal(UserInputService.WindowFocused:')
@@ -751,279 +768,6 @@ for i=1,3 do assert(__L3.bladePlainPunch(function() return true end)) end
 assert(attacks==3 and releases==3 and __L3.bladeUnlockAwaiting==nil)
 land=false;assert(not __L3.bladePlainPunch(function() return true end) and clock<2.1)
 assert(not __L3.bladePlainPunch(function() return false end) and attacks==4)
-''')
-
-    def test_core_restores_full_function_inspection_on_potassium(self):
-        core=self.part('local fn44 = function()', '    tbl44.f = function()')
-        self.run_luau(r'''
-local __bootSession={report={executor="Potassium"}};local tbl44={};local replacements={}
-local fire=function() end;local destroy=function() end
-local workspace={Destroy=destroy};local Instance={new=function() return {FireServer=fire} end}
-local player={CharacterAdded={Connect=function() return {Disconnect=function() end} end}}
-local services={Players={LocalPlayer=player},RunService={}}
-tbl44.a=function() return services end;tbl44.e=function() return {keyHandlerEnabled=function() return false end} end
-local getgenv=function() return {} end;local checkcaller=function() return false end
-local newcclosure=function(fn) return fn end;local islclosure=function() return true end
-local captures={};local reads=0
-local getupvalues=function(fn) reads+=1;return captures[fn] end
-local getupvalue=function() error("must use the original full inspection") end
-local hookfunction=function(target,replacement) local original=replacements[target] or target;replacements[target]=replacement;return original end
-local task={spawn=function(fn) fn() end,wait=function() end}
-'''+core+r'''
-fn44()("Normal")
-local one=function() return "one" end;captures[one]={services.RunService}
-local two=function() return "two" end;captures[two]={services.RunService,{}}
-local other=function() return "other" end;captures[other]={{}}
-local wrap=replacements[coroutine.wrap]
-for i=1,100 do assert(wrap(one)()==nil);assert(wrap(two)()=="two");assert(wrap(other)()=="other") end
-assert(reads==300,"original inspection should run without the experimental cache")
-__bootSession.coreCleanup()
-''')
-
-
-
-    def test_explicit_allies_and_rot_alts_override_enemy_filter_for_progression(self):
-        friendly=self.part('__L2.fn512 = function', '      __L2.fn513 = function')
-        self.run_luau(r'''
-local __L2={}
-'''+friendly+r'''
-local alice={UserId=10,Name="Alice"};local rot={UserId=20,Name="RotVictim"};local enemy={UserId=30,Name="Enemy"}
-local app={State={isFriend=function(p) return p==alice end,isFriendly=function() return false end},Library={Options={RotAlts={Value={RotVictim=true}}}}}
-assert(__L2.fn512(app,alice));assert(__L2.fn512(app,rot));assert(not __L2.fn512(app,enemy))
-app.State.bladeRunAlts={["30"]=true};assert(__L2.fn512(app,enemy))
-app.State.bladeRunAlts={};app.State.bladeTeam={[20]=true};assert(__L2.fn512(app,rot))
-assert(not __L2.fn512(app,nil))
-''')
-
-    def test_server_ally_selector_keeps_saved_offline_ids_and_refreshes_without_erasing(self):
-        refresh=self.part('local alliesUpdating=false', '        local toggleFriend')
-        ui=self.part('alliesUpdating=true -- AddDropdown', '        local addLeftGroupboxResult17')
-        self.run_luau(r'''
-local res464={[42]="Offline"};local Options17={};local saved;local events={};local self={UserId=1,Name="Self"};local alice={UserId=10,Name="Alice"}
-local LocalPlayer33=self;local players={self,alice}
-local signal={Connect=function(_,fn) table.insert(events,fn);return {} end}
-local getResult42={GetPlayers=function() return players end,PlayerAdded=signal,PlayerRemoving=signal}
-local fn1094=function(value) saved=table.clone(value) end
-local task={defer=function(fn) fn() end}
-local group={AddLabel=function() end,AddButton=function() end}
-function group:AddDropdown(name,settings)
- local option={Value={},SetValues=function(obj,values) obj.Values=values end}
- function option:SetValue(value) self.Value=value;settings.Callback(value) end
- Options17[name]=option;settings.Callback(settings.Default)
-end
-local a11260={State={},Tabs={Blade23={AddRightGroupbox=function() return group end}},Maid={Give=function() end},SaveManager={SetIgnoreIndexes=function() end}}
-'''+refresh+ui+r'''
-assert(res464[42]=="Offline","constructing dropdown must not erase saved friends")
-assert(Options17.ServerAllies.Value["Offline [42]"])
-a11260.State.loadingConfig=true
-Options17.ServerAllies:SetValue({["Alice [10]"]=true,["Offline [42]"]=true})
-assert(saved[10]=="Alice" and saved[42]=="Offline","loading a profile must update effective allies, not only the dropdown")
-a11260.State.loadingConfig=false
-players={self};fn1104()
-assert(Options17.ServerAllies.Value["Alice [10]"] and res464[10]=="Alice")
-Options17.ServerAllies:SetValue({})
-assert(next(saved)==nil and next(res464)==nil)
-''')
-
-    def test_threat_settings_are_independent_between_gaia_and_khei(self):
-        helpers=self.part('__L3.bladeThreatDistance=function()', '        __L3.bladeEnabled=function()')
-        self.run_luau(r'''
-local __L3={};local a1723={State={}};local __L2={fn512=function() return false end};local num274=3541987450;local game={PlaceId=5208655184}
-local Options8={ProgProximity={Value=120},ProgKheiProximity={Value=650}}
-local Toggles8={ProgStayInServer={Value=true},ProgKheiStayInServer={Value=false}}
-'''+helpers+r'''
-assert(__L3.bladeThreatDistance()==120 and __L3.bladeStayHere())
-game.PlaceId=num274;assert(__L3.bladeThreatDistance()==650 and not __L3.bladeStayHere())
-Options8.ProgKheiProximity.Value=0;assert(__L3.bladeThreatDistance()==0)
-''')
-
-    def test_menu_pause_waits_for_old_worker_and_manual_play_preserving_progress(self):
-        pause=self.part('__L3.bladePauseForMenu=function(reason)', '        a1723.Maid:Give(function() __L3.bladeMenuPause')
-        self.run_luau(r'''
-local __L3={bladeCoreRunning=true,progStatusLabel={SetText=function() end},bladeLand=function() end}
-local tbl303={true};local tbl307={};local tbl308={};local Toggles8={};local game={JobId="job",PlaceId=1};local num274=2
-local save={phase="B1_XP",bladeDamage=4000,bladeFistDamage=0,bladeUnlockHits=2};local saves=0;local resumes=0;local menu=false;local spawned=false;local forced=0
-local a1723={State={mana={decharge=function() end}}}
-local stored={};local qResult3={get=function(key) return stored[key] end,set=function(key,value) stored[key]=value end}
-local fn531=function() end;local fn532=function() end;local fn542=function() saves+=1 end
-local fn497=function() return spawned end
-local v1009=function() tbl303[1]=false;stored.khei_run=nil end
-local jobs={};local task={spawn=function(fn) table.insert(jobs,coroutine.create(fn)) end,wait=function() coroutine.yield() end}
-local function step() for _,thread in table.clone(jobs) do if coroutine.status(thread)~="dead" then local ok,err=coroutine.resume(thread);assert(ok,err) end end end
-local vResult5={forceMenu=function(active) assert(active() and not __L3.bladeCoreRunning and not tbl303[1]);forced+=1;menu=true;return true end,startMenu=function() return menu end}
-__L3.fn648=function(resume)
- assert(resume and save.bladeDamage==4000 and save.bladeUnlockHits==2 and save.phase=="B1_XP")
- resumes+=1;tbl303[1]=true
-end
-'''+pause+r'''
-assert(__L3.bladePauseForMenu("Enemy"));assert(not __L3.bladePauseForMenu("Enemy again"))
-step();assert(forced==0 and resumes==0 and a1723.State.bladeManualMenu)
-__L3.bladeCoreRunning=false;step();assert(forced==1 and resumes==0 and saves==1)
-for i=1,10 do step() end;assert(resumes==0,"must not press Play automatically")
-menu=false;step();assert(resumes==0,"wait until character has spawned")
-spawned=true;step();assert(resumes==1 and __L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
-step();assert(resumes==1,"only one resumed worker")
-assert(__L3.bladePauseForMenu("Enemy"));step();assert(menu)
-__L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false;menu=false;step();assert(resumes==1,"Stop cancels pending resume")
--- A Gaia-to-Khei handoff resumes its own stage rather than restarting a completed Gaia run.
-tbl303[1]=true;stored.khei_run="true";spawned=true
-local handoffs=0;a1723.State.progKheiHandoff=function(resume) assert(resume and stored.khei_run=="true");handoffs+=1 end
-assert(__L3.bladePauseForMenu("Illusionist"));step();menu=false;step();assert(handoffs==1 and resumes==1)
-''')
-
-    def test_stay_server_menus_even_if_blade_hops_are_disabled(self):
-        action=self.part('local fn558 = function(', '        local fn559 = function()')
-        self.run_luau(r'''
-local tbl303={true};local tbl304={false};local __L3={bladeEnabled=function() return true end,bladeValue=function() return false end}
-local stays=true;local pauses=0;local hops=0
-__L3.bladeStayHere=function() return stays end;__L3.bladePauseForMenu=function() pauses+=1;return true end
-local fn557=function() hops+=1;return true end
-'''+action+r'''
-assert(fn558("Enemy") and pauses==1 and hops==0)
-stays=false;assert(not fn558("Enemy") and hops==0)
-__L3.bladeValue=function() return true end;assert(fn558("Enemy") and hops==1)
-''')
-
-
-    def test_illusionist_super_menu_and_world_skip_settings(self):
-        detect=self.part('local fn563 = function(', '        local fn564 = function(')
-        self.run_luau(r'''
-local tbl303={true};local LocalPlayer21={};local enemy={Name="Illu",Character={}};local game={PlaceId=1};local num274=2
-local a1723={State={}};local __L2={fn512=function() return false end};local super=false;local fn562=function() return super end
-local fn553=function() return false end;local GResult={isIllusionist=function() return true end}
-local Toggles8={ProgSkipIllusionist={Value=false},ProgMenuIllusionistSuper={Value=true},ProgKheiSkipIllusionist={Value=false}}
-local menus=0;local reactions=0;local __L3={bladePauseForMenu=function() menus+=1;return true end,bladeThreatDistance=function() return 50 end}
-local fn549=function(p) return p.Name end;local fn558=function() reactions+=1;return true end
-'''+detect+r'''
-assert(not fn563(enemy,true) and menus==0)
-super=true;assert(fn563(enemy,true) and menus==1 and reactions==0)
-game.PlaceId=num274;assert(not fn563(enemy,true) and menus==1)
-Toggles8.ProgKheiSkipIllusionist.Value=true;assert(fn563(enemy,true) and reactions==1)
-__L2.fn512=function() return true end;assert(not fn563(enemy,true) and reactions==1)
-''')
-
-    def test_proximity_watcher_keeps_stay_checks_and_excludes_allies_even_in_danger(self):
-        start='function(X, D, j, I, l, Z, g, x, i, y, Q, A, F, n, c, Y, f, r, H, e, h, q, s, proximityDistance)'
-        native=self.part(start,'  function(X, D, j)')
-        native=native.rstrip().removesuffix(',')
-        self.run_luau(VEC+r'''
-local tick=function() return 100 end
-local reported=0;local ally={Name="Ally"};local enemy={Name="Enemy"}
-local function character(x) return {FindFirstChild=function(_,key) if key=="HumanoidRootPart" then return {Position=Vector3.new(x,0,0)} end end} end
-ally.Character=character(5);enemy.Character=character(20)
-local self={Character=character(0)};local players={GetPlayers=function() return {self,ally,enemy} end}
-local factory='''+native+r'''
-local watcher=factory({HasTag=function() return true end},self,{ProgProximity={Value=0}},100,players,{RANGE={opalHold=0},allowed=function() return false end},{ProgStayInServer={Value=true}},function() end,{},function() end,function(_,p) return p==ally end,function(p) return p.Name end,{function() end},{0},{},function() return 0 end,function(reason) reported+=1;assert(reason:find("Enemy",1,true)) end,{0},{true},{0},{0},{true},function() return true end,function() return 50 end)
-watcher(0.1);assert(reported==1)
-''')
-
-    def test_only_manual_stop_cancels_menu_pause_while_previous_stage_unwinds(self):
-        stop=self.part('v1009 = function(a1824)', '        __L3.bladePauseForMenu=function(reason)')
-        self.run_luau(r'''
-local v1009;local tbl303={false};local __L3={bladeMenuPause={},bladePausing=false};local a1723={State={bladeManualMenu=true}}
-local fn531=function() end;local fn532=function() end
-'''+stop+r'''
-v1009();assert(__L3.bladeMenuPause and a1723.State.bladeManualMenu)
-v1009(true);assert(__L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
-''')
-
-    def test_ram_monitoring_and_experimental_guards_are_removed(self):
-        loader=(ROOT/'loader.lua').read_text()
-        for marker in ['__bootMark','__bootSession.report','blade23_ram_diagnostic','GetTotalMemoryUsageMb','Diagnostico Blade 23','capturesOnlyRunService','disabled-potassium','geometry exceeds memory limit']:
-            self.assertNotIn(marker,self.source)
-            self.assertNotIn(marker,loader)
-        self.assertIn('pairs(getreg_())',self.source)
-        self.assertIn('local createTable = table.create',self.source)
-        self.assertIn('__L3.bladePauseForMenu=function(reason)',self.source)
-        self.assertIn('"ServerAllies"',self.source)
-
-    def test_config_roundtrip_restores_alts_and_allies_including_offline_and_empty_lists(self):
-        parser=self.part('        Dropdown = {', '        ColorPicker = {')
-        methods=self.part('    function SaveManager:Save(name)', '    function SaveManager:Delete(name)')
-        setter=self.part('function Dropdown:SetValue(value)', '\tfunction Dropdown:GetValue()')
-        self.assertNotIn('"RotAlts"',self.part('local tbl732 = {','        for i135'))
-        self.assertNotIn('SetIgnoreIndexes({"ServerAllies"})',self.source)
-        self.run_luau(r'''
-local function clone(x) if type(x)~="table" then return x end;local t={};for k,v in x do t[k]=clone(v) end;return t end
-local disk={};local encoded
-local HttpService={JSONEncode=function(_,data) encoded=clone(data);return "json" end,JSONDecode=function() return clone(encoded) end}
-local writefile=function(path,value) disk[path]=value end;local readfile=function(path) return disk[path] end;local isfile=function(path) return disk[path]~=nil end
-local task={spawn=function(fn,...) fn(...) end,wait=function() end}
-local SaveManager={Folder="sentinel",Ignore={},Library={Toggles={},Options={}},CheckFolderTree=function() end,CheckSubFolder=function() return false end}
-local function option(values,value)
- local Dropdown={Type="Dropdown",Multi=true,Values=values,Value=value,Display=function() end,SetValues=function(obj,new) obj.Values=new end}
- local fire=function() end
-'''+setter+r'''
- return Dropdown
-end
-SaveManager.Parser={
-'''+parser+r'''
-}
-'''+methods+r'''
-local alts=option({"CurrentAlt"},{OfflineAlt=true})
-local allies=option({"Online [10]"},{["Offline [42]"]=true})
-SaveManager.Library.Options={RotAlts=alts,ServerAllies=allies}
-assert(SaveManager:Save("Bots"))
-alts.Value={};allies.Value={}
-assert(SaveManager:Load("Bots"))
-assert(alts.Value.OfflineAlt and allies.Value["Offline [42]"])
-assert(table.find(alts.Values,"OfflineAlt") and table.find(allies.Values,"Offline [42]"))
--- Saving an intentionally empty profile clears the lists when loaded later.
-alts.Value={};allies.Value={};assert(SaveManager:Save("Empty"))
-alts.Value.CurrentAlt=true;allies.Value["Online [10]"]=true
-assert(SaveManager:Load("Empty") and next(alts.Value)==nil and next(allies.Value)==nil)
-''')
-
-    def test_rot_refresh_preserves_offline_selection_and_supplier_role_does_not_clear_it(self):
-        refresh=self.part('local function rotRefreshPlayers()', '        local function rotCollectSelected()')
-        role=self.part('local fn670 = function()', '        local fn671 = function()')
-        self.assertNotIn('Options9.RotAlts:SetValue({})',self.source)
-        self.run_luau(r'''
-local Options9={RotAlts={Value={OfflineAlt=true},SetValues=function(obj,values) obj.Values=values end}}
-local LocalPlayer24={Name="Me"};local getResult26={GetPlayers=function() return {LocalPlayer24,{Name="OnlineAlt"}} end}
-local tbl368={};local tbl369={};local rotSupplier={explicitSupplier=true};local a1849={State={}}
-'''+refresh+role+r'''
-rotRefreshPlayers()
-assert(Options9.RotAlts.Value.OfflineAlt and table.find(Options9.RotAlts.Values,"OfflineAlt"))
-assert(not fn670(),"supplier role must not turn into a carrier just because a saved config has alts")
-rotSupplier.explicitSupplier=false;assert(fn670(),"receiver uses the preserved selection")
-rotSupplier.explicitSupplier=true;a1849.State.bladeRunAlts={OfflineAlt=true};assert(fn670(),"active Sigil receiver config remains authoritative")
-''')
-
-    def test_progression_loop_yields_when_a_stage_returns_immediately(self):
-        loop=self.part('          while tbl303[1] do\n            local phase = tbl308[1].phase', '        __L3.vector318 =')
-        self.run_luau(r'''
-local tbl303={true};local tbl308={{phase="B1_XP"}};local __L3={bladeEnabled=function() return true end}
-local clock=0;local frames=0;local calls=0;local previous
-local task={wait=function(dt) assert(dt>=0.05);clock+=dt;frames+=1;if frames==50 then tbl303[1]=false end end}
-__L3.bladeStep=function(phase)
- assert(phase=="B1_XP");calls+=1
- if previous then assert(clock>previous,"immediate stage retries must give the client a frame") end
- previous=clock
- if calls>100 then error("unbounded busy retry") end
-end
-local function run()
-'''+loop+r'''
-run();assert(calls==50 and frames==50 and clock>=4.9)
-''')
-
-    def test_progression_loop_preserves_stage_order_and_stops_at_completion(self):
-        loop=self.part('          while tbl303[1] do\n            local phase = tbl308[1].phase', '        __L3.vector318 =')
-        self.run_luau(r'''
-local tbl303={true};local tbl308={{phase="B1_SWORD"}};local phases={};local frames=0
-local __L3={bladeEnabled=function() return true end}
-local task={wait=function() frames+=1;assert(frames<10,"completed run must exit") end}
-local fn534=function() end
-__L3.bladeStep=function(phase)
- table.insert(phases,phase)
- if phase=="B1_SWORD" then tbl308[1].phase="B1_XP"
- elseif phase=="B1_XP" then tbl308[1].phase="B3_TRAIN"
- else tbl308[1].phase="P7" end
-end
-__L3.fn640=function() table.insert(phases,"P7");tbl308[1].phase="DONE" end
-local function run()
-'''+loop+r'''
-run();assert(table.concat(phases,",")=="B1_SWORD,B1_XP,B3_TRAIN,P7" and frames==4)
 ''')
 
 if __name__ == '__main__':
