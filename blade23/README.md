@@ -10,7 +10,7 @@ Pare a versão anterior em **Config → Unload** ou reentre no jogo. Execute:
 loadstring(game:HttpGet("https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/main/blade23/loader.lua", true))()
 ```
 
-A aba **blade 23** contém **Blade / Sigil**, **Rot** e **Filas**. A aba independente **Pontos do mapa** permanece disponível. Os controles antigos de conexão, rota, meta de dano, marcação de coleta e Cela XP ficam ocultos; suas funções foram preservadas internamente.
+A aba **blade 23** contém **Blade / Sigil**, **Rot** e **Filas**. Os controles antigos de conexão, rota, meta de dano, marcação de coleta e Cela XP ficam ocultos; suas funções foram preservadas internamente.
 
 ## Contas Blade / Sigil
 
@@ -92,7 +92,6 @@ O arquivo `routes/Blade.json` preserva os 14 pontos enviados. A automação usa 
 | PE13 | Espera da receptora |
 | P14 | Receptora ativa para Rots |
 
-A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do personagem em `sentinel/.cache/map_points.json`. Permite atualizar, exportar JSON, copiar `Vector3.new(...)` e excluir pontos. Salvar pontos não altera a rota nem movimenta o personagem.
 
 ## Validação
 
