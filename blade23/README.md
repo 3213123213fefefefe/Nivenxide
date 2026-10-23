@@ -69,7 +69,7 @@ Ao concluir, sai por P10 e espera o Danger desaparecer antes de avançar. A vaga
 
 ### Orderly e treino
 
-**Rots:** PG11 executa a marcação de spawn em **Renova Town**, sem lançar Gate. A conta segue P12 → PE13, espera sua vez e só então entra em P14. O Master troca automaticamente pela fila. O mínimo de Shriekers usa o valor atual configurado na interface, inclusive na retomada; cada participante verifica seu próprio mínimo. Após **16 entregas confirmadas**, avança para o treino e libera a próxima receptora.
+**Rots:** PG11 executa a marcação de spawn em **Renova Town**, sem lançar Gate. A conta segue P12 → PE13, espera sua vez e só então entra em P14. O Master troca automaticamente pela fila. O mínimo de Shriekers usa o valor atual configurado na interface, inclusive na retomada; cada participante verifica seu próprio mínimo. Após **16 entregas confirmadas**, avança para o treino e libera a próxima receptora. Cada entrega é vinculada ao personagem da vítima carregada. O contador só avança após observar **Jailed** nessa vítima e confirmar a liberação do colo por pelo menos 0,5 segundo; a frase do NPC sozinha não conta. A confirmação aguarda até 12 segundos, sem buscar outra vítima nesse intervalo. Eventos repetidos e replays do diálogo não somam novamente. Uma entrega pendente fica preservada durante a pausa por menu para ser resolvida na retomada. O progresso parcial é salvo em cada entrega e retomado na mesma execução; a interface diferencia a contagem da etapa (0–16) do total histórico. O botão de zerar total fica bloqueado com bots, fila ou entrega ativos. Contagens antigas não são corrigidas por estimativa.
 
 **Quests:** usa a sequência existente de missões e poções. O treino de Warrior compra apenas **Pommel Strike**, **Action Surge** e **Plate Training** com Alfric, com limite persistente de três compras confirmadas, considerando também skills já obtidas. Respostas de pagamento duplicadas no mesmo diálogo são bloqueadas antes do envio. Se faltar Silver, Orderly ou XP, permanece no trainer, coleta Silver próximo e tenta novamente após 15 segundos. Não refaz a estalagem e a viagem entre cada tentativa. Em Castle Sanctuary, visita Draug logo após marcar spawn, usa o diálogo existente e confirma a conversa antes de ir a Jagen. Aguarda a compra e a skill Ultra de Jagen antes de seguir ao treino existente de Mana Dash e depois Ya'alda/Khei. A rota Blade não desvia para o day farm em Santorini antes dessa compra.
 
@@ -106,9 +106,15 @@ O arquivo `routes/Blade.json` preserva os 14 pontos enviados. A automação usa 
 
 A remoção da aba de gravação de pontos não apaga arquivos de pontos existentes nem muda `routes/Blade.json`.
 
+## Estabilidade durante a execução
+
+O loop principal cede pelo menos 0,1 segundo após cada chamada de uma etapa Blade, mesmo quando uma falha de movimento ou personagem ausente retorna imediatamente. Isso limita a repetição de trabalho na mesma frame. A inspeção de funções no hook de `coroutine.wrap` reutiliza a decisão por até um segundo, guarda somente essa decisão (não os objetos capturados), usa chaves fracas e limita o cache a 512 entradas. Scripts internos do CoreGui/CorePackages e CoreScripts seguem a função original sem inspecionar suas capturas. As decisões das funções de jogo são reavaliadas após o prazo; o mecanismo existente de limpeza dos hooks permanece.
+
+Essas correções tratam caminhos identificados no código. Não medem o consumo do Roblox/Potassium e não comprovam que três clientes rodarão sem crash; a validação com as contas reais ainda é necessária.
+
 ## Validação
 
-O runtime passou pela compilação Luau. Quarenta e seis testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Cinquenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 

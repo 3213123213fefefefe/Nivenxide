@@ -481,7 +481,7 @@ assert(calls==5 and tbl308[1].bladeTraining.jagen.confirmed==1)
 ''')
 
     def test_supplier_approach_uses_flight_and_cleans_it_up(self):
-        flight=self.part('rotSupplier.flyTo=function', '        local fn703 =')
+        flight=self.part('rotSupplier.flyTo=function', '        rotDelivery.begin=')
         self.run_luau(VEC+r'''
 Vector3.zero=Vector3.new(0,0,0)
 local player={UserId=1};local target={Position=Vector3.new(10,20,30)}
@@ -1187,6 +1187,125 @@ local v738={FireServer=function(_,value) assert(value==false);fired+=1 end}
 '''+decharge+r'''
 decharge();assert(not keyHeld and releases==1 and fired==1)
 decharge();assert(releases==1 and fired==2)
+''')
+
+
+    def test_rot_counts_only_tracked_jail_after_carry_release_and_settles_once(self):
+        counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
+        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local active=true;local carrying=true;local jail=false
+local v1346=0;local saved;local updated=0;local fn692=function() end
+local qResult4={set=function(key,value) assert(key=="rotbot_count");saved=value end}
+local victim={};local other={};local rotCarriedCharacter=victim
+local v1345={HasTag=function(_,character,tag) return character==victim and jail end}
+local rotWalkStatus={SetText=function() end};local fn697=function() return active end;local fn699=function() return carrying end
+local onWait=function() end;local task={wait=function(dt) clock+=dt;onWait() end}
+'''+counter+ledger+r'''
+rotQueueOnCount=function() updated+=1 end
+local tx=rotDelivery.begin(victim);assert(tx and rotDelivery.begin(other)==nil)
+-- A dialogue success and a dropped carry alone are not evidence of prison.
+carrying=false;assert(not rotDelivery.await(tx) and v1346==0 and saved==nil)
+carrying=true;rotCarriedCharacter=victim;tx=rotDelivery.begin(victim)
+local start=clock
+onWait=function()
+ if clock-start>=2 then tx.jailed=true end -- Jailed event can be transient before rejoin.
+ if clock-start>=2.4 then carrying=false end
+end
+assert(rotDelivery.await(tx) and v1346==1 and saved==1 and updated==1 and clock-start>=2.9)
+assert(not rotDelivery.await(tx) and not fn693(victim) and v1346==1,"dialogue replay and duplicate tag cannot count twice")
+assert(rotDelivery.begin(victim)==nil)
+rotCarriedCharacter=other;carrying=true;local tx2=rotDelivery.begin(other);active=false
+assert(not rotDelivery.await(tx2) and v1346==1,"Stop must not presume pending delivery")
+assert(rotDelivery.pending==tx2,"menu pause must keep pending delivery evidence")
+active=true;carrying=false;tx2.jailed=true;onWait=function() end
+assert(rotDelivery.await(tx2) and v1346==2,"confirmed pending delivery is counted once on resume")
+''')
+
+    def test_rot_jail_event_does_not_count_master_or_unrelated_players(self):
+        counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
+        event=self.part('        Maid9:Give(v1345:GetInstanceAddedSignal("Jailed")', '        local fn694 = function()')
+        self.run_luau(r'''
+local v1346=0;local qResult4={set=function() end};local fn692=function() end
+local callback;local localCharacter={};local victim={};local stranger={};local LocalPlayer24={}
+local getResult26={GetPlayerFromCharacter=function(_,c) return c==localCharacter and LocalPlayer24 or {} end}
+local tbl365={true};local carrier=true;local fn670=function() return carrier end
+local v1345={GetInstanceAddedSignal=function() return {Connect=function(_,fn) callback=fn;return {} end} end}
+local Maid9={Give=function() end}
+'''+counter+event+r'''
+rotDelivery.pending={character=victim}
+callback(stranger);assert(v1346==0 and not rotDelivery.pending.jailed)
+callback(victim);assert(v1346==0 and rotDelivery.pending.jailed,"receiver event only marks its tracked transaction")
+callback(localCharacter);assert(v1346==0,"receiver being jailed is not a successful delivery")
+carrier=false;callback(stranger);assert(v1346==0,"a supplier cannot count someone else's jail")
+callback(localCharacter);callback(localCharacter);assert(v1346==1,"supplier own tag counts once")
+''')
+
+    def test_rot_queue_resumes_stage_count_after_menu_without_using_lifetime_total(self):
+        join=self.part('        local function queueJoin()', '        local function queueLeave(')
+        oncount=self.part('        rotQueueOnCount=function()', '        -- Blade/Sigil P2')
+        self.run_luau(r'''
+local rotSupplier={};local rotQueueEntry;local savedStage=7;local runId="run-1";local persisted
+local a1849={State={bladeRotProgress=function() return savedStage,runId end,onRotDeliveryConfirmed=function(n) savedStage=n end}}
+local previous={state="left",jobId="same",runId="run-1",progress=7,joined=10}
+local MResult={available=function() return true end,readJson=function() return previous end}
+local fn670=function() return true end;local fn672=function() error("unexpected queue error") end
+local Library9={Toggles={BlatantMode={Value=true}}};local LocalPlayer24={UserId=1,Name="Receiver"}
+local game={JobId="same"};local rotQueuePath="queue.json";local v1346=40
+local DateTime={now=function() return {UnixTimestampMillis=100} end};local os={time=function() return 100 end,clock=function() return 100 end}
+local queueWrite=function(entry) persisted=table.clone(entry);return true end
+local qResult4={set=function() end,remove=function() end};local rotQueueQuietSince=0;local fn692=function() end
+local rotQueueOwnerId=1;local rotQueueOnCount
+'''+join+oncount+r'''
+assert(queueJoin() and rotQueueEntry.progress==7 and rotQueueEntry.baseline==33)
+v1346+=1;rotQueueOnCount();assert(rotQueueEntry.progress==8 and savedStage==8 and persisted.progress==8)
+previous=table.clone(rotQueueEntry);previous.state="left";rotQueueEntry=nil
+assert(queueJoin() and rotQueueEntry.progress==8 and rotQueueEntry.baseline==33,"manual menu resumes 8/16, not zero or lifetime 41")
+rotQueueEntry=nil;savedStage=nil;runId="run-2"
+assert(queueJoin() and rotQueueEntry.progress==0 and rotQueueEntry.baseline==41,"new runs cannot inherit a previous run's count")
+rotQueueEntry=nil;runId="run-1";previous.jobId="other"
+assert(queueJoin() and rotQueueEntry.progress==0,"foreign server queue records cannot restore this count")
+''')
+
+
+    def test_blade_core_yields_when_stage_returns_immediately(self):
+        loop=self.part('          while tbl303[1] do\n            local phase = tbl308[1].phase', '        __L3.vector318 =')
+        loop=loop.rsplit('\n        end',1)[0]
+        self.run_luau(r'''
+local tbl303={true};local tbl308={{phase="B1_SWORD"}};local attempts=0;local waits=0;local seconds=0
+local __L3={bladeEnabled=function() return true end,bladeStep=function(phase) assert(phase=="B1_SWORD");attempts+=1 end}
+local task={wait=function(dt) assert(dt>=0.1);waits+=1;seconds+=dt;if waits>=200 then tbl303[1]=false end end}
+'''+loop+r'''
+assert(attempts==200 and waits==200 and seconds>=19.99,"an immediate retry must yield rather than spin until crash")
+''')
+
+    def test_wrap_inspection_cache_expires_is_bounded_and_does_not_retain_captures(self):
+        helper=self.part('          local wrapChecks=setmetatable', '          local v140\n')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local RunService={};local reads=0;local captured={}
+local uiRoot={};local packages={};local game={GetService=function() return uiRoot end,FindFirstChild=function() return packages end}
+local scriptFor={};local getfenv=function(fn) return {script=scriptFor[fn]} end
+local typeof=function(value) return type(value)=="table" and value.instance and "Instance" or type(value) end
+local getupvalues=function(fn) reads+=1;return captured[fn] or {} end
+'''+helper+r'''
+local target=function() end;captured[target]={RunService};assert(wrappedRunServiceOnly(target))
+for i=1,1000 do assert(wrappedRunServiceOnly(target)) end;assert(reads==1)
+captured[target]={RunService,{large="graph"}};clock=1.1
+assert(not wrappedRunServiceOnly(target) and reads==2,"cache must re-evaluate mutable captures")
+for i=1,2000 do local fn=function() return i end;captured[fn]={{large="graph"}};assert(not wrappedRunServiceOnly(fn)) end
+assert(wrapCheckCount<=512)
+for _,entry in wrapChecks do
+ assert(type(entry.at)=="number" and type(entry.blocked)=="boolean")
+ local n=0;for _ in entry do n+=1 end;assert(n==2,"cache must retain decisions only")
+end
+local ui=function() end
+scriptFor[ui]={instance=true,IsA=function() return false end,IsDescendantOf=function(_,root) return root==uiRoot end}
+local before=reads;assert(engineUI(ui) and reads==before,"Roblox UI must bypass expensive capture inspection")
+scriptFor[ui]={instance=true,IsA=function(_,class) return class=="CoreScript" end}
+assert(engineUI(ui))
+scriptFor[ui]={instance=true,IsA=function() return false end,IsDescendantOf=function(_,root) return root==packages end}
+assert(engineUI(ui),"CorePackages UI modules must bypass capture inspection too")
+scriptFor[ui]=nil;assert(not engineUI(ui))
 ''')
 
 if __name__ == '__main__':

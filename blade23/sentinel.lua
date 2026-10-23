@@ -21020,6 +21020,40 @@ __modules.m356b75b2d82b = function()
         else
           local fn108 = function() end
           local info = debug.info
+          local wrapChecks=setmetatable({}, {__mode="k"})
+          local wrapCheckCount=0
+          local uiRoot,packagesRoot
+          pcall(function() uiRoot=game:GetService("CoreGui") end)
+          pcall(function() packagesRoot=game:FindFirstChild("CorePackages") end)
+          local function engineUI(fn)
+            if not getfenv then return false end
+            local ok,env=pcall(getfenv,fn)
+            local script=ok and type(env)=="table" and env.script
+            if typeof(script)~="Instance" then return false end
+            local coreOk,core=pcall(script.IsA,script,"CoreScript")
+            if coreOk and core then return true end
+            if uiRoot then
+              local insideOk,inside=pcall(script.IsDescendantOf,script,uiRoot)
+              if insideOk and inside then return true end
+            end
+            if packagesRoot then
+              local insideOk,inside=pcall(script.IsDescendantOf,script,packagesRoot)
+              if insideOk and inside then return true end
+            end
+            return false
+          end
+          local function wrappedRunServiceOnly(fn)
+            local now=os.clock()
+            local cached=wrapChecks[fn]
+            if cached and now-cached.at<1 then return cached.blocked end
+            local values=getupvalues(fn)
+            local blocked=#values==1 and values[1]==RunService
+            -- Keep only the decision, never the inspected values/captured object graphs.
+            if wrapCheckCount>=512 then table.clear(wrapChecks);wrapCheckCount=0 end
+            if not wrapChecks[fn] then wrapCheckCount+=1 end
+            wrapChecks[fn]={at=now,blocked=blocked}
+            return blocked
+          end
           local v140
           v140 = install(
             coroutine.wrap,
@@ -21027,10 +21061,8 @@ __modules.m356b75b2d82b = function()
               if not active then return v140(a1193) end
               if not checkcaller() then
                 if type(a1193) == "function" and islclosure(a1193) then
-                  local getupvaluesResult2 = getupvalues(a1193)
-                  if #getupvaluesResult2 == 1 and getupvaluesResult2[1] == RunService then
-                    return v140(fn108)
-                  end
+                  if engineUI(a1193) then return v140(a1193) end
+                  if wrappedRunServiceOnly(a1193) then return v140(fn108) end
                 end
                 if info and info(5, "n") == "pcall" then
                   return
@@ -40066,6 +40098,17 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             __L3.bladePhase("B3_TRAIN")
           else task.wait(0.5) end
         end
+        a1723.State.bladeRotProgress=function()
+          local save=tbl308[1]
+          if not save or save.phase~="B2_ORDERLY" then return nil,nil end
+          return tonumber(save.bladeRotCount),save.runId
+        end
+        a1723.State.onRotDeliveryConfirmed=function(progress)
+          local save=tbl308[1]
+          if save and save.phase=="B2_ORDERLY" then
+            save.bladeRotCount=math.clamp(progress,0,16);fn542()
+          end
+        end
         __L3.bladeOrderly=function()
           local save=tbl308[1]
           if save.bladeOrderlyDone then a1723.State.bladeReceiverAtP14=false;__L3.bladePhase("B3_TRAIN");return end
@@ -40343,6 +40386,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
             if __L3.bladeEnabled() and phase:sub(1,1)=="B" then
               __L3.bladeStep(phase)
+              -- A missing character/NPC or failed movement may return without yielding.
+              -- Never let an immediate retry monopolize the frame and allocate without a bound.
+              task.wait(0.1)
             elseif phase == "P0" then
               fn543("P1")
             elseif phase == "P1" then
@@ -42559,36 +42605,33 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end,
           })
         end
+        local rotQueueEntry
         local fn692 = function()
           if v1347 then
             pcall(function()
               local v1372 = v1347
-              v1372:SetText("Rots: " .. v1346)
+              v1372:SetText(rotQueueEntry and string.format("Rots da etapa: %d/16 | total: %d",rotQueueEntry.progress,v1346) or ("Rots confirmados (total): "..v1346))
             end)
           end
         end
         local rotQueueOnCount
-        local fn693 = function()
+        local rotDelivery={pending=nil,counted=setmetatable({}, {__mode="k"})}
+        local fn693 = function(character)
+          if not character or rotDelivery.counted[character] then return false end
+          rotDelivery.counted[character]=true
           v1346 += 1
           qResult4.set("rotbot_count", v1346)
-          fn692()
           if rotQueueOnCount then rotQueueOnCount() end
+          fn692()
+          return true
         end
-        local obj7 = setmetatable({}, { __mode = "k" })
         local Maid9 = a1849.Maid
         Maid9:Give(v1345:GetInstanceAddedSignal("Jailed"):Connect(function(a1861)
-          if not tbl365[1] or obj7[a1861] then
-            return
-          end
-          local getPlayerFromCharacterResult3 = getResult26:GetPlayerFromCharacter(a1861)
-          if not getPlayerFromCharacterResult3 then
-            return
-          end
-          local res259 = fn671()
-          if getPlayerFromCharacterResult3 == LocalPlayer24 or res259 and getPlayerFromCharacterResult3 == res259 then
-            obj7[a1861] = true
-            fn693()
-          end
+          local pending=rotDelivery.pending
+          if pending and pending.character==a1861 then pending.jailed=true end
+          if not tbl365[1] or fn670() then return end
+          -- A supplier can count its own prison event, never another receiver's event.
+          if getResult26:GetPlayerFromCharacter(a1861)==LocalPlayer24 then fn693(a1861) end
         end))
         local fn694 = function()
           while tbl365[1] do
@@ -42699,10 +42742,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           tbl365[1] = false
           fn696()
         end)
-        v1347 = rotQueueTab:AddLabel("Rots: " .. v1346)
+        v1347 = rotQueueTab:AddLabel("Rots confirmados (total): " .. v1346)
         rotBotTab:AddButton({
           Text = "Reset Rot Count",
           Func = function()
+            if tbl365[1] or rotQueueEntry or rotDelivery.pending then
+              fn672("Pare os bots e saia da fila antes de zerar o contador Rot")
+              return
+            end
             v1346 = 0
             qResult4.set("rotbot_count", 0)
             fn692()
@@ -42757,7 +42804,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local fn699 = function()
           local Character76 = LocalPlayer24.Character
-          return Character76 ~= nil and Character76:FindFirstChild("Grabbing") ~= nil
+          local marker=Character76 and Character76:FindFirstChild("Grabbing")
+          if not marker then return false end
+          if marker:IsA("ObjectValue") then return marker.Value~=nil end
+          if marker:IsA("BoolValue") then return marker.Value end
+          return true
         end
         local fn700 = function()
           local Character77 = LocalPlayer24.Character
@@ -42798,7 +42849,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return closest, (root.Position-carrierRoot.Position).Magnitude
         end
         local rotCarriedCharacter
-        local rotDeliveredCharacters = setmetatable({}, {__mode="k"})
         local fn702 = function(a1863)
           local num426 = 0
           while true do
@@ -42958,6 +43008,44 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not ready then return false end
           return rotSupplier.flyTo(root.Position+Vector3.new(0,2,0))
         end
+        rotDelivery.begin=function(character)
+          local pending=rotDelivery.pending
+          if pending then return pending.character==character and pending or nil end
+          if not character or rotDelivery.counted[character] or v1345:HasTag(character,"Jailed") then return nil end
+          pending={character=character,jailed=false,started=os.clock()}
+          rotDelivery.pending=pending -- Arm before interacting; the tag can arrive before dialogue returns.
+          return pending
+        end
+        rotDelivery.await=function(pending)
+          if not pending or rotDelivery.pending~=pending then return false end
+          local deadline=os.clock()+12
+          local settled
+          while fn697() and rotDelivery.pending==pending and os.clock()<deadline do
+            if v1345:HasTag(pending.character,"Jailed") then pending.jailed=true end
+            if pending.jailed and not fn699() then
+              settled=settled or os.clock()
+              if os.clock()-settled>=0.5 then
+                local counted=fn693(pending.character)
+                rotDelivery.pending=nil
+                if rotCarriedCharacter==pending.character then rotCarriedCharacter=nil end
+                if counted then rotWalkStatus:SetText("Walk: Rot confirmado (vitima presa e entrega concluida)") end
+                return counted
+              end
+            else settled=nil end
+            rotWalkStatus:SetText(pending.jailed and "Walk: prisao confirmada; aguardando soltar a vitima" or "Walk: aguardando o jogo confirmar a prisao da vitima")
+            task.wait(0.1)
+          end
+          if not fn697() then
+            rotWalkStatus:SetText("Walk: entrega pendente preservada para a retomada")
+            return false
+          end
+          rotWalkStatus:SetText("Walk: entrega sem confirmacao; contador nao foi alterado")
+          if not fn699() then
+            if rotCarriedCharacter==pending.character then rotCarriedCharacter=nil end
+            if rotDelivery.pending==pending then rotDelivery.pending=nil end
+          end
+          return false
+        end
         local fn703 = function(a1864)
           local res265, officerDistance = fn701()
           if not res265 then
@@ -42987,6 +43075,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             fn672("Rot Bot: the carry dropped before the desk")
             return false
           end
+          local transaction=rotDelivery.begin(rotCarriedCharacter)
+          if not transaction then
+            rotWalkStatus:SetText("Walk: vitima nao identificada ou ja contabilizada; nenhuma nova entrega")
+            return false
+          end
           -- The dialogue helper opens the NPC itself. Do not pre-click and then
           -- make it close the dialogue it has just opened.
           FResult3.close(1)
@@ -42999,27 +43092,18 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             log = function(message) print("[Rot delivery] " .. tostring(message)) end,
           }))
           FResult3.close(1)
-          if not result[1] then
-            rotWalkStatus:SetText("Walk: delivery error: " .. tostring(result[2]))
-            return false
-          end
-          local runResult2, v1382, v1383, v1384, v1385, v1386 = table.unpack(result, 2, result.n)
-          if not v1386 then
-            rotWalkStatus:SetText("Walk: jail not confirmed; dialogue closed")
-          end
-          if v1386 then
-            if rotCarriedCharacter and not rotDeliveredCharacters[rotCarriedCharacter] then
-              rotDeliveredCharacters[rotCarriedCharacter] = true
-              fn693()
-            elseif not rotCarriedCharacter then
-              rotWalkStatus:SetText("Walk: jail seen without a tracked carry; count unchanged")
-            end
-            rotCarriedCharacter = nil
-            fn672("Rot Bot: rotted " .. tostring(a1864))
+          local confirmed=rotDelivery.await(transaction)
+          if confirmed then
+            fn672("Rot Bot: Rot confirmado de "..tostring(a1864))
             return true
           end
-          if v1383 and tostring(v1383):lower():find(str52, 1, true) then
-            fn672("Rot Bot: " .. tostring(a1864) .. " is not rottable")
+          if not result[1] then
+            fn672("Rot Bot: erro no dialogo; nenhuma entrega presumida: "..tostring(result[2]))
+            return false
+          end
+          local _,_,lastMessage=table.unpack(result,2,result.n)
+          if lastMessage and tostring(lastMessage):lower():find(str52,1,true) then
+            fn672("Rot Bot: "..tostring(a1864).." is not rottable")
           end
           return false
         end
@@ -43028,7 +43112,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             or v1345:HasTag(character, "Knocked"))
         end
         local rotWalkBusy = false
-        local rotQueueEntry
         local rotQueueOwner
         local rotQueueOwnerId
         local rotQueueQuietSince = os.clock()
@@ -43075,13 +43158,16 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             return false
           end
           local previous=MResult.readJson(rotQueuePath)
-          rotQueueEntry={userId=LocalPlayer24.UserId,name=LocalPlayer24.Name,jobId=game.JobId,
-            joined=DateTime.now().UnixTimestampMillis,at=os.time(),state="waiting",progress=0,baseline=v1346}
-          if previous and previous.state=="waiting" and previous.jobId==game.JobId then
-            rotQueueEntry.joined=previous.joined or rotQueueEntry.joined
-            rotQueueEntry.progress=math.clamp(tonumber(previous.progress) or 0,0,16)
-            rotQueueEntry.baseline=v1346-rotQueueEntry.progress
-          end
+          local savedProgress,runId
+          if a1849.State.bladeRotProgress then savedProgress,runId=a1849.State.bladeRotProgress() end
+          local resumePrevious=previous and previous.jobId==game.JobId and (previous.state=="waiting" or previous.state=="left")
+            and (not runId or not previous.runId or previous.runId==runId)
+          local progress=tonumber(savedProgress)
+          if progress==nil then progress=resumePrevious and tonumber(previous.progress) or 0 end
+          progress=math.clamp(progress or 0,0,16)
+          rotQueueEntry={userId=LocalPlayer24.UserId,name=LocalPlayer24.Name,jobId=game.JobId,runId=runId,
+            joined=DateTime.now().UnixTimestampMillis,at=os.time(),state="waiting",progress=progress,baseline=v1346-progress}
+          if resumePrevious then rotQueueEntry.joined=previous.joined or rotQueueEntry.joined end
           if not queueWrite(rotQueueEntry) then
             rotQueueEntry=nil
             fn672("Rot Queue: failed to write queue file")
@@ -43090,6 +43176,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           qResult4.set("rot_queue_joined","true")
           qResult4.remove("rot_queue_complete")
           rotQueueQuietSince=os.clock()
+          fn692()
           return true
         end
         local function queueLeave(state)
@@ -43115,6 +43202,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             rotQueueEntry.progress=math.clamp(v1346-rotQueueEntry.baseline,0,16)
             rotQueueEntry.at=os.time()
             queueWrite(rotQueueEntry)
+            if a1849.State.onRotDeliveryConfirmed then a1849.State.onRotDeliveryConfirmed(rotQueueEntry.progress) end
           end
         end
         -- Blade/Sigil P2 can call this without relying on UI or player guesses.
@@ -43256,6 +43344,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
         end
         local function rotCollectSelected()
+              if rotDelivery.pending and (rotDelivery.pending.jailed or not fn699()) then
+                rotDelivery.await(rotDelivery.pending)
+                return
+              end
               if fn699() then
                 fn703("carried account")
                 return
