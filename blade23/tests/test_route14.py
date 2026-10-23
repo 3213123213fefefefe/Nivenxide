@@ -805,13 +805,12 @@ __bootSession.coreCleanup()
 
     def test_potassium_skips_optional_leaderboard_registry_and_connection_inspection(self):
         registry=self.part('local fn1067 = function()', '        local fn1068 = function()')
-        labels=self.part('local fn1063 = function(a11222)', '        local fn1064 = function()')
         self.run_luau(r'''
 local __bootSession={report={executor="Potassium"}}
 local getreg_=function() error("registry must not be enumerated") end
 local getconnections_3=function() error("connections must not be inspected") end
-'''+registry+labels+r'''
-fn1067();fn1063(nil)
+'''+registry+r'''
+fn1067()
 assert(__bootSession.report.leaderboardInspection=="disabled-potassium")
 ''')
 
@@ -836,6 +835,165 @@ buffer.writeu32(payload,60-4,0xffffffff)
 local raw=buffer.create(64);buffer.copy(raw,0,payload);buffer.writeu32(raw,60,0xffffffff)
 ok,err=pcall(CSGPHS8.decodePayload,raw,0)
 assert(not ok and tostring(err):find("memory limit") and allocations==0)
+''')
+
+    def test_explicit_allies_and_rot_alts_override_enemy_filter_for_progression(self):
+        friendly=self.part('__L2.fn512 = function', '      __L2.fn513 = function')
+        self.run_luau(r'''
+local __L2={}
+'''+friendly+r'''
+local alice={UserId=10,Name="Alice"};local rot={UserId=20,Name="RotVictim"};local enemy={UserId=30,Name="Enemy"}
+local app={State={isFriend=function(p) return p==alice end,isFriendly=function() return false end},Library={Options={RotAlts={Value={RotVictim=true}}}}}
+assert(__L2.fn512(app,alice));assert(__L2.fn512(app,rot));assert(not __L2.fn512(app,enemy))
+app.State.bladeRunAlts={["30"]=true};assert(__L2.fn512(app,enemy))
+app.State.bladeRunAlts={};app.State.bladeTeam={[20]=true};assert(__L2.fn512(app,rot))
+assert(not __L2.fn512(app,nil))
+''')
+
+    def test_server_ally_selector_keeps_saved_offline_ids_and_refreshes_without_erasing(self):
+        refresh=self.part('local alliesUpdating=false', '        local toggleFriend')
+        ui=self.part('alliesUpdating=true -- AddDropdown', '        local addLeftGroupboxResult17')
+        self.run_luau(r'''
+local res464={[42]="Offline"};local Options17={};local saved;local events={};local self={UserId=1,Name="Self"};local alice={UserId=10,Name="Alice"}
+local LocalPlayer33=self;local players={self,alice}
+local signal={Connect=function(_,fn) table.insert(events,fn);return {} end}
+local getResult42={GetPlayers=function() return players end,PlayerAdded=signal,PlayerRemoving=signal}
+local fn1094=function(value) saved=table.clone(value) end
+local task={defer=function(fn) fn() end}
+local group={AddLabel=function() end,AddButton=function() end}
+function group:AddDropdown(name,settings)
+ local option={Value={},SetValues=function(obj,values) obj.Values=values end}
+ function option:SetValue(value) self.Value=value;settings.Callback(value) end
+ Options17[name]=option;settings.Callback(settings.Default)
+end
+local a11260={State={},Tabs={Blade23={AddRightGroupbox=function() return group end}},Maid={Give=function() end},SaveManager={SetIgnoreIndexes=function() end}}
+'''+refresh+ui+r'''
+assert(res464[42]=="Offline","constructing dropdown must not erase saved friends")
+assert(Options17.ServerAllies.Value["Offline [42]"])
+Options17.ServerAllies:SetValue({["Alice [10]"]=true,["Offline [42]"]=true})
+assert(saved[10]=="Alice" and saved[42]=="Offline")
+players={self};fn1104()
+assert(Options17.ServerAllies.Value["Alice [10]"] and res464[10]=="Alice")
+Options17.ServerAllies:SetValue({})
+assert(next(saved)==nil and next(res464)==nil)
+''')
+
+    def test_threat_settings_are_independent_between_gaia_and_khei(self):
+        helpers=self.part('__L3.bladeThreatDistance=function()', '        __L3.bladeEnabled=function()')
+        self.run_luau(r'''
+local __L3={};local a1723={State={}};local __L2={fn512=function() return false end};local num274=3541987450;local game={PlaceId=5208655184}
+local Options8={ProgProximity={Value=120},ProgKheiProximity={Value=650}}
+local Toggles8={ProgStayInServer={Value=true},ProgKheiStayInServer={Value=false}}
+'''+helpers+r'''
+assert(__L3.bladeThreatDistance()==120 and __L3.bladeStayHere())
+game.PlaceId=num274;assert(__L3.bladeThreatDistance()==650 and not __L3.bladeStayHere())
+Options8.ProgKheiProximity.Value=0;assert(__L3.bladeThreatDistance()==0)
+''')
+
+    def test_menu_pause_waits_for_old_worker_and_manual_play_preserving_progress(self):
+        pause=self.part('__L3.bladePauseForMenu=function(reason)', '        a1723.Maid:Give(function() __L3.bladeMenuPause')
+        self.run_luau(r'''
+local __L3={bladeCoreRunning=true,progStatusLabel={SetText=function() end},bladeLand=function() end}
+local tbl303={true};local tbl307={};local tbl308={};local Toggles8={};local game={JobId="job",PlaceId=1};local num274=2
+local save={phase="B1_XP",bladeDamage=4000,bladeFistDamage=0,bladeUnlockHits=2};local saves=0;local resumes=0;local menu=false;local spawned=false;local forced=0
+local a1723={State={mana={decharge=function() end}}}
+local stored={};local qResult3={get=function(key) return stored[key] end,set=function(key,value) stored[key]=value end}
+local fn531=function() end;local fn532=function() end;local fn542=function() saves+=1 end
+local fn497=function() return spawned end
+local v1009=function() tbl303[1]=false;stored.khei_run=nil end
+local jobs={};local task={spawn=function(fn) table.insert(jobs,coroutine.create(fn)) end,wait=function() coroutine.yield() end}
+local function step() for _,thread in table.clone(jobs) do if coroutine.status(thread)~="dead" then local ok,err=coroutine.resume(thread);assert(ok,err) end end end
+local vResult5={forceMenu=function(active) assert(active() and not __L3.bladeCoreRunning and not tbl303[1]);forced+=1;menu=true;return true end,startMenu=function() return menu end}
+__L3.fn648=function(resume)
+ assert(resume and save.bladeDamage==4000 and save.bladeUnlockHits==2 and save.phase=="B1_XP")
+ resumes+=1;tbl303[1]=true
+end
+'''+pause+r'''
+assert(__L3.bladePauseForMenu("Enemy"));assert(not __L3.bladePauseForMenu("Enemy again"))
+step();assert(forced==0 and resumes==0 and a1723.State.bladeManualMenu)
+__L3.bladeCoreRunning=false;step();assert(forced==1 and resumes==0 and saves==1)
+for i=1,10 do step() end;assert(resumes==0,"must not press Play automatically")
+menu=false;step();assert(resumes==0,"wait until character has spawned")
+spawned=true;step();assert(resumes==1 and __L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
+step();assert(resumes==1,"only one resumed worker")
+assert(__L3.bladePauseForMenu("Enemy"));step();assert(menu)
+__L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false;menu=false;step();assert(resumes==1,"Stop cancels pending resume")
+-- A Gaia-to-Khei handoff resumes its own stage rather than restarting a completed Gaia run.
+tbl303[1]=true;stored.khei_run="true";spawned=true
+local handoffs=0;a1723.State.progKheiHandoff=function(resume) assert(resume and stored.khei_run=="true");handoffs+=1 end
+assert(__L3.bladePauseForMenu("Illusionist"));step();menu=false;step();assert(handoffs==1 and resumes==1)
+''')
+
+    def test_stay_server_menus_even_if_blade_hops_are_disabled(self):
+        action=self.part('local fn558 = function(', '        local fn559 = function()')
+        self.run_luau(r'''
+local tbl303={true};local tbl304={false};local __L3={bladeEnabled=function() return true end,bladeValue=function() return false end}
+local stays=true;local pauses=0;local hops=0
+__L3.bladeStayHere=function() return stays end;__L3.bladePauseForMenu=function() pauses+=1;return true end
+local fn557=function() hops+=1;return true end
+'''+action+r'''
+assert(fn558("Enemy") and pauses==1 and hops==0)
+stays=false;assert(not fn558("Enemy") and hops==0)
+__L3.bladeValue=function() return true end;assert(fn558("Enemy") and hops==1)
+''')
+
+    def test_leaderboard_resolves_replicated_names_ids_and_ambiguous_names(self):
+        resolve=self.part('local function resolveLeaderboardPlayer(label)', '        local fn1063 = function(a11222)')
+        self.run_luau(r'''
+local alice={UserId=10,Name="Alice",DisplayName="Alice D",rogue="Valefor Brief, Knight"}
+local bob={UserId=20,Name="Bob",DisplayName="Bobby",rogue="Harold"}
+local roster={alice,bob};local getResult41={GetPlayers=function() return roster end};local fn1036=function(p) return p.rogue end
+local function label(text,name,id) return {Text=text,Name=name or "Row",GetAttribute=function(_,key) return key=="UserId" and id or nil end} end
+'''+resolve+r'''
+assert(resolveLeaderboardPlayer(label("<b>Valefor Brief</b>"))==alice)
+assert(resolveLeaderboardPlayer(label("Harold"))==bob)
+assert(resolveLeaderboardPlayer(label("anything","Row",10))==alice)
+assert(resolveLeaderboardPlayer(label("Alice"))==alice)
+roster[3]={UserId=30,Name="Other",DisplayName="Other",rogue="Harold"}
+assert(resolveLeaderboardPlayer(label("Harold"))==nil,"never spectate the wrong account for duplicate rogue names")
+assert(resolveLeaderboardPlayer(label("Unknown"))==nil)
+''')
+
+    def test_illusionist_super_menu_and_world_skip_settings(self):
+        detect=self.part('local fn563 = function(', '        local fn564 = function(')
+        self.run_luau(r'''
+local tbl303={true};local LocalPlayer21={};local enemy={Name="Illu",Character={}};local game={PlaceId=1};local num274=2
+local a1723={State={}};local __L2={fn512=function() return false end};local super=false;local fn562=function() return super end
+local fn553=function() return false end;local GResult={isIllusionist=function() return true end}
+local Toggles8={ProgSkipIllusionist={Value=false},ProgMenuIllusionistSuper={Value=true},ProgKheiSkipIllusionist={Value=false}}
+local menus=0;local reactions=0;local __L3={bladePauseForMenu=function() menus+=1;return true end,bladeThreatDistance=function() return 50 end}
+local fn549=function(p) return p.Name end;local fn558=function() reactions+=1;return true end
+'''+detect+r'''
+assert(not fn563(enemy,true) and menus==0)
+super=true;assert(fn563(enemy,true) and menus==1 and reactions==0)
+game.PlaceId=num274;assert(not fn563(enemy,true) and menus==1)
+Toggles8.ProgKheiSkipIllusionist.Value=true;assert(fn563(enemy,true) and reactions==1)
+__L2.fn512=function() return true end;assert(not fn563(enemy,true) and reactions==1)
+''')
+
+    def test_proximity_watcher_keeps_stay_checks_and_excludes_allies_even_in_danger(self):
+        start='function(X, D, j, I, l, Z, g, x, i, y, Q, A, F, n, c, Y, f, r, H, e, h, q, s, proximityDistance)'
+        native=self.part(start,'  function(X, D, j)')
+        native=native.rstrip().removesuffix(',')
+        self.run_luau(VEC+r'''
+local tick=function() return 100 end
+local reported=0;local ally={Name="Ally"};local enemy={Name="Enemy"}
+local function character(x) return {FindFirstChild=function(_,key) if key=="HumanoidRootPart" then return {Position=Vector3.new(x,0,0)} end end} end
+ally.Character=character(5);enemy.Character=character(20)
+local self={Character=character(0)};local players={GetPlayers=function() return {self,ally,enemy} end}
+local factory='''+native+r'''
+local watcher=factory({HasTag=function() return true end},self,{ProgProximity={Value=0}},100,players,{RANGE={opalHold=0},allowed=function() return false end},{ProgStayInServer={Value=true}},function() end,{},function() end,function(_,p) return p==ally end,function(p) return p.Name end,{function() end},{0},{},function() return 0 end,function(reason) reported+=1;assert(reason:find("Enemy",1,true)) end,{0},{true},{0},{0},{true},function() return true end,function() return 50 end)
+watcher(0.1);assert(reported==1)
+''')
+
+    def test_only_manual_stop_cancels_menu_pause_while_previous_stage_unwinds(self):
+        stop=self.part('v1009 = function(a1824)', '        __L3.bladePauseForMenu=function(reason)')
+        self.run_luau(r'''
+local v1009;local tbl303={false};local __L3={bladeMenuPause={},bladePausing=false};local a1723={State={bladeManualMenu=true}}
+local fn531=function() end;local fn532=function() end
+'''+stop+r'''
+v1009();assert(__L3.bladeMenuPause and a1723.State.bladeManualMenu)
+v1009(true);assert(__L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
 ''')
 
 if __name__ == '__main__':

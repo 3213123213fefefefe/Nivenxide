@@ -14,7 +14,7 @@ __bootSession.executing=true
 __bootSession.report=__bootSession.report or {version=1,jobId=game.JobId,placeId=game.PlaceId,samples={}}
 local function __bootMark(phase,sampleOnly)
   local report=__bootSession.report
-  report.version=2;report.build="ram-guard-3"
+  report.version=2;report.build="allies-menu-4"
   if not sampleOnly then __bootSession.phase=phase end
   local entry={phase=__bootSession.phase,event=phase,seconds=math.floor((os.clock()-__bootSession.started)*10)/10}
   pcall(function() entry.luaMB=math.floor(gcinfo()/1024*10)/10 end)
@@ -15895,10 +15895,11 @@ local __NATIVE = {
         return
       end
       local A, F
-      local n = (I.ProximityIgnoreAllies.Value and l.State.isFriendly)
+      local allyTest=l.State.bladeSafetyAlly or l.State.isFriendly
+      local n = (I.ProximityIgnoreAllies.Value and allyTest)
       for c, Y in j:GetPlayers() do
         local f = (((Y ~= X) and Y.Character) and Y.Character:FindFirstChild("HumanoidRootPart"))
-        if (f and not (n and l.State.isFriendly(Y))) and (not x(Y)) then
+        if (f and not (n and allyTest(Y))) and (not x(Y)) then
           local r = (Q.Position - f.Position).Magnitude
           if (r <= y) and ((not F) or (r < F)) then
             A, F = Y, r
@@ -16222,7 +16223,7 @@ local __NATIVE = {
       end
     end
   end,
-  function(X, D, j, I, l, Z, g, x, i, y, Q, A, F, n, c, Y, f, r, H, e, h, q, s)
+  function(X, D, j, I, l, Z, g, x, i, y, Q, A, F, n, c, Y, f, r, H, e, h, q, s, proximityDistance)
     return function(u)
       if not H[1] then
         return
@@ -16254,10 +16255,7 @@ local __NATIVE = {
           return
         end
       end
-      if g.ProgStayInServer and g.ProgStayInServer.Value then
-        return
-      end
-      local t = ((j.ProgProximity and j.ProgProximity.Value) or 0)
+      local t = proximityDistance and proximityDistance() or ((j.ProgProximity and j.ProgProximity.Value) or 0)
       local v = (tick() >= r[1])
       for a, W in l:GetPlayers() do
         if W ~= D then
@@ -16273,7 +16271,7 @@ local __NATIVE = {
                 return
               end
             end
-            if ((((t > 0) and v) and (B <= t)) and not L) and (not Q(i, W)) then
+            if (((t > 0) and v) and (B <= t)) and (not Q(i, W)) then
               f(string.format("%s within %.0f studs", A(W), B), o.Position, t)
               return
             end
@@ -29067,6 +29065,7 @@ __modules.m356b75b2d82b = function()
           if not a1525 or a1525 == LocalPlayer12 then
             return true
           end
+          if a1523.State.bladeSafetyAlly and a1523.State.bladeSafetyAlly(a1525) then return true end
           if a1523.State.isFriend and a1523.State.isFriend(a1525) then
             return true
           end
@@ -29238,7 +29237,7 @@ __modules.m356b75b2d82b = function()
           return true
         end
         local fn374 = function(a1535)
-          if flag27 or not flag28 or not fn360() or not fn361("SafeServerAutoPlay") then
+          if a1523.State.bladeManualMenu or flag27 or not flag28 or not fn360() or not fn361("SafeServerAutoPlay") then
             return
           end
           if not (vResult2.startMenu() and fn373(a1535)) then
@@ -29254,11 +29253,11 @@ __modules.m356b75b2d82b = function()
               task.wait(0.5)
               num160 += 0.5
             end
-            if fn360() and fn361("SafeServerAutoPlay") and fn373(nil) and vResult2.startMenu() then
+            if not a1523.State.bladeManualMenu and fn360() and fn361("SafeServerAutoPlay") and fn373(nil) and vResult2.startMenu() then
               flag28 = false
               fn369("resumed", nil, "Pressing Play, the bots stay stopped")
               for i34 = 1, num157 do
-                if not (fn360() and vResult2.startMenu()) then
+                if a1523.State.bladeManualMenu or not (fn360() and vResult2.startMenu()) then
                   break
                 end
                 vResult2.clickPlay()
@@ -29269,7 +29268,7 @@ __modules.m356b75b2d82b = function()
           end)
         end
         local fn375 = function()
-          if flag27 or not fn360() or not fn361("SafeServerMenuIntruder") or not fn367() then
+          if a1523.State.bladeManualMenu or flag27 or not fn360() or not fn361("SafeServerMenuIntruder") or not fn367() then
             return
           end
           local rootResult7 = sResult3.root()
@@ -34634,7 +34633,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         return __L2.fn509(tbl302)
       end
       __L2.fn512 = function(a1713, a2219)
-        if a1713.State.bladeTeam and a1713.State.bladeTeam[a2219.UserId] then return true end
+        if not a2219 then return false end
+        local state=a1713.State
+        if state.isFriend and state.isFriend(a2219) then return true end
+        local alts=state.bladeRunAlts or (a1713.Library.Options.RotAlts and a1713.Library.Options.RotAlts.Value) or {}
+        if alts[a2219.Name] or alts[tostring(a2219.UserId)] or alts[a2219.UserId] then return true end
+        if state.bladeTeam and state.bladeTeam[a2219.UserId] then return true end
         if a1713.State.isFriendly then
           return a1713.State.isFriendly(a2219) == true
         end
@@ -34814,6 +34818,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local Toggles8 = a1723.Library.Toggles
         local Options8 = a1723.Library.Options
+        __L3.bladeThreatDistance=function()
+          local key=game.PlaceId==num274 and "ProgKheiProximity" or "ProgProximity"
+          return math.max(0,tonumber(Options8[key] and Options8[key].Value) or 0)
+        end
+        a1723.State.bladeSafetyAlly=function(player) return __L2.fn512(a1723,player) end
+        __L3.bladeStayHere=function()
+          local key=game.PlaceId==num274 and "ProgKheiStayInServer" or "ProgStayInServer"
+          return Toggles8[key] and Toggles8[key].Value==true
+        end
         __L3.bladeEnabled=function()
           return true -- Merged Blade/Sigil GUI; original routines remain available internally.
         end
@@ -34881,7 +34894,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return Character43 ~= nil and v969:HasTag(Character43, "Danger")
         end
         local fn538 = function()
-          local v1016 = Options8.ProgProximity and Options8.ProgProximity.Value or 0
+          local v1016 = __L3.bladeThreatDistance()
           if v1016 <= 0 then
             return false
           end
@@ -34892,7 +34905,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local getPlayersResult18, v1018, v1019 = getResult23:GetPlayers()
           for k243, v1020 in getPlayersResult18, v1018, v1019 do
             local v1021 = v1020 ~= LocalPlayer21 and v1020.Character and v1020.Character:FindFirstChild("HumanoidRootPart")
-            if v1021 and (v1021.Position - v1017.Position).Magnitude <= v1016 then
+            if v1021 and not __L2.fn512(a1723,v1020) and (v1021.Position - v1017.Position).Magnitude <= v1016 then
               return true
             end
           end
@@ -35238,13 +35251,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local v1013
         local fn558 = function(a1741, a2230, a375, a430, a510)
+          if not tbl303[1] or tbl304[1] then return false end
+          if __L3.bladeStayHere() then
+            if __L3.bladePauseForMenu then return __L3.bladePauseForMenu(a1741) end
+            return false
+          end
           if __L3.bladeEnabled() and not __L3.bladeValue("BladeAllowHop",false) then return false end
-          if not tbl303[1] or tbl304[1] then
-            return false
-          end
-          if Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value then
-            return false
-          end
           return fn557(a1741, a2230, a375, a430) and true or false
         end
         local fn559 = function()
@@ -35262,12 +35274,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
         end
         local fn560 = function(a1742, a2231, a376)
+          if __L3.bladeStayHere() then return fn558(a1742,a2231,a376) end
           if __L3.bladeEnabled() and not __L3.bladeValue("BladeAllowHop",false) then return false end
           fn559()
           return fn557(a1742, a2231, a376)
         end
         local fn561 = function(a1743)
-          if Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value then
+          if __L3.bladeStayHere() then
             fn544("Moderator " .. a1743.Name .. " present")
             return
           end
@@ -35300,17 +35313,21 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             fn561(a1744)
             return false
           end
-          if
-            not (Toggles8.ProgSkipIllusionist and Toggles8.ProgSkipIllusionist.Value and fn562() and fn553(a1744))
-            or __L2.fn512(a1723, a1744)
-          then
-            return false
+          if __L2.fn512(a1723,a1744) then return false end
+          local khei=game.PlaceId==num274
+          local skipKey=khei and "ProgKheiSkipIllusionist" or "ProgSkipIllusionist"
+          local skip=Toggles8[skipKey] and Toggles8[skipKey].Value
+          local menu=not khei and Toggles8.ProgMenuIllusionistSuper and Toggles8.ProgMenuIllusionistSuper.Value and fn562()
+          local illusion=fn553(a1744) or GResult.isIllusionist(a1744)
+          if not illusion or not fn562() or not (skip or menu) then return false end
+          if menu and __L3.bladePauseForMenu then
+            return __L3.bladePauseForMenu("Illusionist "..fn549(a1744).." (Super)")
           end
           local v1037 = LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart")
           fn558(
             "Illusionist " .. fn549(a1744) .. (game.PlaceId == num274 and " carrying Observe" or " observing"),
             v1037 and v1037.Position,
-            Options8.ProgProximity and Options8.ProgProximity.Value or 700
+            __L3.bladeThreatDistance()
           )
           return true
         end
@@ -35360,7 +35377,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           { 0 },
           __L2.tbl280,
           __L2.tbl281,
-          fn562
+          fn562,
+          __L3.bladeThreatDistance
         )
         local fn566 = function(a1749)
           local Character46 = LocalPlayer21.Character
@@ -35441,7 +35459,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
           task.spawn(res183)
           newResult61:Connect(getResult23.PlayerAdded, fn565)
-          if game.PlaceId == num274 then
+          do
             newResult61:Give(task.spawn(function()
               while tbl303[1] do
                 task.wait(1)
@@ -35474,7 +35492,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               task.wait(num284)
               res191 = res191 * 0.8 + fn494() * 0.2
               local v1054 = Options8.ProgPing and Options8.ProgPing.Value or 0
-              if v1054 <= 0 or res191 <= v1054 or tbl304[1] or Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value then
+              if v1054 <= 0 or res191 <= v1054 or tbl304[1] or __L3.bladeStayHere() then
                 v1053 = nil
               end
               if not v1053 then
@@ -35503,7 +35521,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           newResult61:Connect(getResult23.PlayerAdded, function(a1757)
             task.wait(1)
             local v1055 = Toggles8.AvoidOtherBots == nil or Toggles8.AvoidOtherBots.Value
-            if tbl303[1] and v1055 and IResult.twinHere() == a1757 then
+            if tbl303[1] and v1055 and not __L2.fn512(a1723,a1757) and IResult.twinHere() == a1757 then
               fn558("another of your bots (" .. a1757.Name .. ") joined")
             end
           end)
@@ -35964,7 +35982,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not v1087 then
             return
           end
-          local v1088 = Options8.ProgProximity and Options8.ProgProximity.Value or 300
+          local v1088 = __L3.bladeThreatDistance()
           if v1088 <= 0 then
             return
           end
@@ -36242,7 +36260,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           fn534("setInn -> %s", tostring(a1781))
           local item52 = __L3.INN_ANCHORS[a1781]
-          local v1120 = Options8.ProgProximity and Options8.ProgProximity.Value or 0
+          local v1120 = __L3.bladeThreatDistance()
           if item52 and v1120 > 0 then
             local getPlayersResult23, v1121, v1122 = getResult23:GetPlayers()
             for k260, v1123 in getPlayersResult23, v1121, v1122 do
@@ -36306,7 +36324,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             tbl308[1].boundInn = nil
             fn542()
           end
-          if not a2249 and tbl303[1] and fn494() > 250 and not (Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value) then
+          if not a2249 and tbl303[1] and fn494() > 250 and not (__L3.bladeStayHere()) then
             fn560(string.format("setInn(%s) failed + %.0fms ping - hopping", tostring(a1781), fn494()))
           end
           return false
@@ -36747,7 +36765,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               fn543("P4")
               return
             end
-            if not (Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value) then
+            if not (__L3.bladeStayHere()) then
               break
             end
             fn534("P3: stay-in-server, looping crypt in 600s")
@@ -37064,7 +37082,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not Live17 then
             return nil
           end
-          local v1194 = Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value
+          local v1194 = __L3.bladeStayHere()
           local getPlayersResult24, v1195, v1196 = getResult23:GetPlayers()
           for k277, v1197 in getPlayersResult24, v1195, v1196 do
             if v1197 ~= LocalPlayer21 and (v1194 or __L2.fn512(a1723, v1197)) then
@@ -37851,7 +37869,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end)
               fn536(false)
               if not menuTeleResult2 then
-                if tbl303[1] and not (Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value) then
+                if tbl303[1] and not (__L3.bladeStayHere()) then
                   fn558("the menu teleport to Central Sanctuary did not take")
                 end
                 return
@@ -38198,7 +38216,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               fn534("finish: Yaalda not in workspace.NPCs (attempt %d/%d)", i67, num275)
             end
             task.wait(3)
-            if i67 >= num282 and fn494() > num283 and not (Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value) then
+            if i67 >= num282 and fn494() > num283 and not (__L3.bladeStayHere()) then
               fn534("finish: %.0fms ping after %d tries - hopping to retry the handoff elsewhere", fn494(), i67)
               if fn558(string.format("%.0fms ping stalling the Khei handoff", fn494())) then
                 return
@@ -38216,11 +38234,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             v1009()
           end
         end
-        a1723.State.progKheiHandoff = function()
+        a1723.State.progKheiHandoff = function(sameServerResume)
           if tbl303[1] then
             return
           end
-          local num378 = (tonumber(qResult3.get("khei_handoff_servers")) or 0) + 1
+          local num378 = (tonumber(qResult3.get("khei_handoff_servers")) or 0) + (sameServerResume and 0 or 1)
           qResult3.set("khei_handoff_servers", num378)
           if num378 > num276 then
             fn534("khei: handoff gave up after %d servers", num378 - 1)
@@ -38236,7 +38254,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           fn531(true)
           fn532(false)
           fn568()
-          task.spawn(a1723.State.progYaaldaHandoff)
+          __L3.bladeCoreRunning=true
+          task.spawn(function()
+            local ok,message=pcall(a1723.State.progYaaldaHandoff)
+            __L3.bladeCoreRunning=false
+            if not ok and not __L3.bladeMenuPause then
+              fn534("Yaalda handoff stopped: %s",tostring(message));v1009(true)
+            end
+          end)
         end
         __L3.fn636 = function()
           if not tbl303[1] then
@@ -38580,8 +38605,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if not near(v1266.spot, 60) then
               v1013(v1266.spot)
             end
-            if fn583(v1266.spot, Options8.ProgProximity and Options8.ProgProximity.Value or 300) then
-              fn558("player near the mana training ledge", v1266.spot, Options8.ProgProximity and Options8.ProgProximity.Value or 300)
+            if fn583(v1266.spot, __L3.bladeThreatDistance()) then
+              fn558("player near the mana training ledge", v1266.spot, __L3.bladeThreatDistance())
               return
             end
             local mana5 = a1723.State.mana
@@ -38632,7 +38657,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if (getServerValue("DaysSurvived") or 0) >= 1 then
               break
             end
-            if not (Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value) then
+            if not (__L3.bladeStayHere()) then
               local v1267 = LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart")
               if v1267 then
                 local getPlayersResult25, v1268, v1269 = getResult23:GetPlayers()
@@ -40254,7 +40279,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             and v1273 > 0
             and huge5 < math.huge
             and huge5 > v1273
-            and not (Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value)
+            and not (__L3.bladeStayHere())
           then
             fn534("runCore: %.0fms ping here, hopping for a closer server", huge5)
             if fn558(string.format("%.0fms ping on arrival", huge5)) then
@@ -40266,11 +40291,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             return
           end
           IResult.claim(game.JobId)
-          tbl308[1].boundInn = nil
+          if not __L3.bladeSameServerResume then tbl308[1].boundInn = nil end
+          __L3.bladeSameServerResume=nil
           local getJSONResult3 = qResult3.getJSON("prog_lastpos")
           if getJSONResult3 and tbl303[1] then
             task.wait(1.5)
-            local v1275 = Options8.ProgProximity and Options8.ProgProximity.Value or 0
+            local v1275 = __L3.bladeThreatDistance()
             if v1275 > 0 and tbl303[1] then
               local vector325 = Vector3.new(getJSONResult3.x, getJSONResult3.y, getJSONResult3.z)
               local getPlayersResult26, v1276, v1277 = getResult23:GetPlayers()
@@ -40464,7 +40490,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 flag73 = true
                 break
               end
-              if i73 >= num282 and fn494() > num283 and not (Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value) then
+              if i73 >= num282 and fn494() > num283 and not (__L3.bladeStayHere()) then
                 fn534("Khei: %.0fms ping after %d inn tries - hopping to retry in a closer server", fn494(), i73)
                 fn558(string.format("%.0fms ping stalling the Cavern Sanctuary bind", fn494()))
                 return
@@ -40504,7 +40530,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   break
                 end
               end
-              if i74 >= num282 and fn494() > num283 and not (Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value) then
+              if i74 >= num282 and fn494() > num283 and not (__L3.bladeStayHere()) then
                 fn534("Khei: %.0fms ping after %d spire tries - hopping to retry elsewhere", fn494(), i74)
                 fn558(string.format("%.0fms ping stalling the spire teleport", fn494()))
                 return
@@ -40776,9 +40802,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           fn531(true)
           fn532(false)
           fn568()
+          __L3.bladeCoreRunning=true
           task.spawn(function()
             local ok123, result118 = pcall(a1723.State.kheiSequence)
-            if not ok123 then
+            __L3.bladeCoreRunning=false
+            if not ok123 and not __L3.bladeMenuPause then
               fn534("khei sequence stopped on an error: %s", tostring(result118))
               xResult2.textBounded("@everyone Auto-Sigil stopped in Khei on an error: **" .. tostring(result118) .. "**")
               v1009()
@@ -40849,9 +40877,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             }
           end
           if __L3.bladeEnabled() and game.PlaceId~=num274 then
-            if Toggles8.ProgGoToKhei and not Toggles8.ProgGoToKhei.Value then
-              Toggles8.ProgGoToKhei:SetValue(true)
-            end
             tbl308[1].phase=tbl308[1].bladePhase or "B1_PREP"
             tbl308[1].bladePhase=tbl308[1].phase
             tbl308[1].bladeRunConfig=__L3.bladeRunConfig
@@ -40887,9 +40912,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           qResult3.set("progression_class", Options8.ProgClass and Options8.ProgClass.Value or "Sigil")
           IResult.claim(game.JobId)
           fn568()
+          __L3.bladeCoreRunning=true
           task.spawn(function()
             local ok124, result119 = pcall(__L3.fn642)
-            if not ok124 then
+            __L3.bladeCoreRunning=false
+            if not ok124 and not __L3.bladeMenuPause then
               fn534("run stopped on an error: %s", tostring(result119))
               xResult2.textBounded("@everyone Auto-Sigil stopped on an error: **" .. tostring(result119) .. "**")
               v1009(true)
@@ -40899,6 +40926,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
         end
         v1009 = function(a1824)
+          if __L3.bladeMenuPause and not __L3.bladePausing then
+            if a1824~=true then return end -- An unwinding stage must not cancel the requested pause.
+            __L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false
+            fn531(false);fn532(true)
+          end
           if not tbl303[1] then
             return
           end
@@ -40938,17 +40970,64 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
           end)
         end
+        __L3.bladePauseForMenu=function(reason)
+          if __L3.bladeMenuPause or not tbl303[1] then return false end
+          local pause={reason=reason,jobId=game.JobId,handoff=game.PlaceId~=num274 and qResult3.get("khei_run")=="true"}
+          __L3.bladeMenuPause=pause;a1723.State.bladeManualMenu=true
+          -- Run outside the watcher Maid: stopping must not cancel the callback doing the cleanup.
+          task.spawn(function()
+          if __L3.bladeMenuPause~=pause then return end
+          __L3.bladePausing=true
+          v1009(true)
+          __L3.bladePausing=false
+          if tbl307.tween then pcall(function() tbl307.tween:Cancel() end) end
+          if a1723.State.mana and a1723.State.mana.decharge then a1723.State.mana.decharge() end
+          fn531(true);fn532(false)
+          __L3.progStatusLabel:SetText("Sigil: pausado; indo ao menu | "..tostring(reason))
+            while __L3.bladeMenuPause==pause and __L3.bladeCoreRunning do task.wait(0.1) end
+            if __L3.bladeMenuPause~=pause then return end
+            fn542()
+            fn531(true);fn532(false)
+            if tbl308[1] and tbl308[1].phase=="DONE" and game.PlaceId~=num274 and Toggles8.ProgGoToKhei and Toggles8.ProgGoToKhei.Value then pause.handoff=true end
+            pcall(__L3.bladeLand)
+            -- forceMenu waits for Danger to clear; it never presses Play or hops.
+            local ok,entered=pcall(vResult5.forceMenu,function() return __L3.bladeMenuPause==pause end)
+            if __L3.bladeMenuPause~=pause then return end
+            if not ok or not entered then
+              __L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false
+              fn531(false);fn532(true)
+              __L3.progStatusLabel:SetText("Sigil pausado: nao foi possivel abrir o menu; Iniciar retoma o progresso")
+              return
+            end
+            __L3.progStatusLabel:SetText("Sigil: no menu; aguardando Play manual para retomar")
+            repeat task.wait(0.25) until __L3.bladeMenuPause~=pause or (not vResult5.startMenu() and fn497())
+            if __L3.bladeMenuPause~=pause then return end
+            __L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false
+            __L3.bladeSameServerResume=game.PlaceId~=num274
+            local resumed,message
+            if pause.handoff then
+              qResult3.set("khei_run","true")
+              resumed,message=pcall(a1723.State.progKheiHandoff,true)
+            else resumed,message=pcall(__L3.fn648,true) end
+            if not resumed then
+              pcall(v1009,true);fn531(false);fn532(true)
+              __L3.progStatusLabel:SetText("Sigil: erro ao retomar: "..tostring(message))
+            end
+          end)
+          return true
+        end
+        a1723.Maid:Give(function() __L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false end)
         a1723.State.registerBot({
           name = "Auto Sigil",
           running = function()
-            return tbl303[1] == true
+            return tbl303[1] == true or __L3.bladeMenuPause~=nil
           end,
           stop = function()
             v1009(true)
           end,
         })
-        __L3.tbl333 = { "ProgSkipIllusionist", "ProgStayInServer", "ProgGoToKhei", "BladeAllowHop", "BladeAimCamera" }
-        __L3.tbl334 = { "ProgProximity", "ProgPing", "ProgClass", "ProgRoute", "BladeOrderly", "BladeFarm", "BladeSpeed", "BladeDamageGoal", "BladeShrCount", "BladeM1Range", "BladeM1Arc", "BladeM1Step" }
+        __L3.tbl333 = { "ProgSkipIllusionist", "ProgMenuIllusionistSuper", "ProgStayInServer", "ProgKheiSkipIllusionist", "ProgKheiStayInServer", "ProgGoToKhei", "BladeAllowHop", "BladeAimCamera" }
+        __L3.tbl334 = { "ProgProximity", "ProgKheiProximity", "ProgPing", "ProgClass", "ProgRoute", "BladeOrderly", "BladeFarm", "BladeSpeed", "BladeDamageGoal", "BladeShrCount", "BladeM1Range", "BladeM1Arc", "BladeM1Step" }
         __L3.tbl335 = { false }
         __L3.fn649 = function()
           local tbl355 = { toggles = {}, options = {} }
@@ -41072,18 +41151,18 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           Tooltip = "Resume picks up where it left off",
         })
         progressionTab:AddToggle("ProgSkipIllusionist", {
-          Text = "Skip Illusionists",
+          Text = "Skip Illusionist Server (Gaia)",
           Default = false,
-          Tooltip = "Hops when someone observes, once you hold a Frey charge",
+          Tooltip = "Ao ter Super, reage a Illusionist nao aliado. Stay In Server usa menu; caso contrario segue Allow Hops",
         })
         progressionTab:AddSlider("ProgProximity", {
-          Text = "Proximity Check",
+          Text = "Proximity Check (Gaia)",
           Default = 300,
           Min = 0,
           Max = 1000,
           Rounding = 0,
           Suffix = " studs",
-          Tooltip = "Hops when someone gets this close, 0 = off",
+          Tooltip = "Distancia de nao aliados; Stay In Server pausa no menu. 0 desliga",
         })
         progressionTab:AddSlider("ProgPing", {
           Text = "Hop Above Ping",
@@ -41095,16 +41174,17 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           Tooltip = "0 = off",
         })
         progressionTab:AddToggle("ProgStayInServer", {
-          Text = "Stay In Server",
-          Default = false,
-          Tooltip = "Never hops, no threat checks",
-          Callback = function(a1825)
-            if a1825 and Toggles8.ProgGoToKhei and Toggles8.ProgGoToKhei.Value then
-              Toggles8.ProgGoToKhei:SetValue(false)
-              fn535("Auto Go To Khei turned off: it needs serverhopping")
-            end
-          end,
+          Text="Stay In Server (Gaia)",Default=false,
+          Tooltip="Ameacas pausam no menu; aguarda Play manual e retoma o progresso salvo",
         })
+        progressionTab:AddToggle("ProgMenuIllusionistSuper", {
+          Text="Menu por Illusionist quando Super (Gaia)",Default=false,
+          Tooltip="Ao ter Super, pausa no menu se detectar Illusionist nao aliado; aguarda Play manual",
+        })
+        progressionTab:AddDivider("Khei: protecoes separadas")
+        progressionTab:AddSlider("ProgKheiProximity",{Text="Proximity Check (Khei)",Default=300,Min=0,Max=1000,Rounding=0,Suffix=" studs",Tooltip="0 desliga; usa apenas em Khei"})
+        progressionTab:AddToggle("ProgKheiSkipIllusionist",{Text="Skip Illusionist Server (Khei)",Default=false})
+        progressionTab:AddToggle("ProgKheiStayInServer",{Text="Stay In Server (Khei)",Default=false,Tooltip="Pausa no menu e aguarda Play manual, em vez de trocar de servidor"})
         progressionTab:AddInput("ProgWebhook", {
           Text = "Progression Webhook",
           Tooltip = "Empty = your normal webhook",
@@ -41126,15 +41206,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         })
         __L2.str42 = Options8.ProgWebhook and Options8.ProgWebhook.Value or ""
         progressionTab:AddToggle("ProgGoToKhei", {
-          Text = "Auto Go To Khei",
-          Default = false,
-          Tooltip = "Goes to Khei when it's done",
-          Callback = function(a1827)
-            if a1827 and Toggles8.ProgStayInServer and Toggles8.ProgStayInServer.Value then
-              Toggles8.ProgStayInServer:SetValue(false)
-              fn535("Stay In Server turned off: going to Khei needs to leave")
-            end
-          end,
+          Text="Auto Go To Khei",Default=false,Tooltip="Segue para Khei ao concluir Gaia; protecoes de Khei sao independentes",
         })
         __L3.Maid7 = a1723.Maid
         __L3.Maid7:Give(v967.Heartbeat:Connect(__NATIVE[116]({ 0 }, a1723, { nil }, __L3.tbl335, function()
@@ -41155,6 +41227,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         __L3.progStartClick=function()
           if not __L3.bladeSetupReady then
             __L3.progStatusLabel:SetText("Sigil: aguarde carregar a configuracao salva antes de iniciar")
+            return
+          end
+          if __L3.bladeMenuPause or __L3.bladeCoreRunning then
+            __L3.progStatusLabel:SetText("Sigil: aguardando Play manual ou finalizacao da pausa")
             return
           end
           if tbl303[1] then
@@ -41203,7 +41279,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           Text = "Reset Progress",
           DoubleClick = true,
           Func = function()
-            if tbl303[1] then
+            if tbl303[1] or __L3.bladeMenuPause or __L3.bladeCoreRunning then
               fn535("stop the bot first")
               return
             end
@@ -58453,12 +58529,44 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           return a2385
         end
+        local function resolveLeaderboardPlayer(label)
+          local function clean(value)
+            return tostring(value or ""):gsub("<[^>]*>",""):gsub("‎",""):gsub("%s+"," "):match("^%s*(.-)%s*$"):lower()
+          end
+          local id=tonumber(label:GetAttribute("UserId") or label:GetAttribute("PlayerUserId"))
+          if id then
+            for _,player in getResult41:GetPlayers() do if player.UserId==id then return player end end
+          end
+          local text,name=clean(label.Text),clean(label.Name)
+          local found
+          for _,player in getResult41:GetPlayers() do
+            local rogue=clean(fn1036(player))
+            local base=rogue:match("^(.-),") or rogue
+            local matches=(name==clean(player.Name)) or text==clean(player.Name)
+              or (rogue~="" and rogue~="nil" and rogue~="unknown" and (text==rogue or text==base))
+              or (text~="" and text==clean(player.DisplayName))
+            if matches then
+              if found and found~=player then return nil end
+              found=player
+            end
+          end
+          return found
+        end
         local fn1063 = function(a11222)
-          if string.find(string.lower(tostring(__bootSession.report.executor or "")),"potassium",1,true) then
-            __bootSession.report.leaderboardInspection="disabled-potassium"
+          if not a11222 or not a11222:IsA("TextLabel") then
             return
           end
-          if not a11222:IsA("TextLabel") then
+          local player=resolveLeaderboardPlayer(a11222)
+          if not player and a11194.State.scrambleOn and a11194.State.scrambleOn() then player=obj10[a11222] end
+          if player then
+            fn1062(player,a11222);pcall(fn1060,player,a11222)
+            return
+          end
+          if string.find(string.lower(tostring(__bootSession.report.executor or "")),"potassium",1,true) then
+            __bootSession.report.leaderboardInspection="replicated-name-mapping"
+            tbl545[a11222]=nil
+            local button=a11222:FindFirstChild("SPB")
+            if button then button:Destroy() end
             return
           end
           task.spawn(function()
@@ -58492,11 +58600,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
           end)
         end
+        local leaderboardRows={}
         local fn1064 = function()
           local v2338 = fn1055() or v2257
           if not v2338 or v2256 == v2338 then
             return
           end
+          for label in leaderboardRows do newResult76[label]=nil end
+          table.clear(leaderboardRows)
           v2256 = v2338
           local ok182, result170 = pcall(function()
             return v2338:WaitForChild("MainFrame", 5):WaitForChild("ScrollingFrame", 5)
@@ -58508,16 +58619,21 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           for k533, v2341 in getChildrenResult88, v2339, v2340 do
             if v2341:IsA("TextLabel") then
               fn1063(v2341)
+              leaderboardRows[v2341]=true
+              newResult76[v2341]=v2341:GetPropertyChangedSignal("Text"):Connect(function() fn1063(v2341) end)
             end
           end
           newResult76.lbAdded = result170.ChildAdded:Connect(function(a11223)
             if a11223:IsA("TextLabel") then
               task.wait(0.1)
               fn1063(a11223)
+              leaderboardRows[a11223]=true
+              newResult76[a11223]=a11223:GetPropertyChangedSignal("Text"):Connect(function() fn1063(a11223) end)
             end
           end)
           newResult76.lbRemoved = result170.ChildRemoved:Connect(function(a11224)
             tbl545[a11224] = nil
+            newResult76[a11224]=nil;leaderboardRows[a11224]=nil
           end)
         end
         local fn1065 = function(a11225, a2386)
@@ -58629,7 +58745,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             return
           end
           v2257 = nil
-          if LocalPlayer32.Character then
+          if LocalPlayer32.Character and not vResult10.startMenu() then
             return
           end
           local LeaderboardGui = v2236:FindFirstChild("LeaderboardGui")
@@ -58824,9 +58940,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           Callback = Callback8,
         })
         addTabResult:AddDivider()
-        if getconnections_3 and v2238 then
-          task.spawn(fn1071)
-        end
+        task.spawn(fn1071)
         local newResult78 = dResult18.new()
         a11194.Maid:Give(newResult78)
         local v2258
@@ -59569,7 +59683,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         pcall(function()
           cResult8.ensureFor(FRIENDS)
-          writefile(FRIENDS, v2424:JSONEncode(a11253))
+          local saved={}
+          for id,name in a11253 do saved[tostring(id)]=name end
+          writefile(FRIENDS, v2424:JSONEncode(saved))
         end)
       end
       local tbl562 = {
@@ -59743,6 +59859,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           return false
         end
+        local alliesUpdating=false
         local fn1104 = function()
           local tbl598 = {}
           for k557, v2455 in res464 do
@@ -59751,6 +59868,24 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           table.sort(tbl598)
           if Options17.AllyList then
             Options17.AllyList:SetValues(tbl598)
+          end
+          if Options17.ServerAllies then
+            alliesUpdating=true
+            local values,selected,seen={},{},{}
+            for id,name in res464 do
+              local label=tostring(name).." ["..tostring(id).."]"
+              table.insert(values,label);seen[label]=true;selected[label]=true
+            end
+            for _,player in getResult42:GetPlayers() do
+              if player~=LocalPlayer33 then
+                local label=player.Name.." ["..tostring(player.UserId).."]"
+                if not seen[label] then table.insert(values,label);seen[label]=true end
+              end
+            end
+            table.sort(values)
+            Options17.ServerAllies:SetValues(values)
+            Options17.ServerAllies:SetValue(selected)
+            alliesUpdating=false
           end
         end
         local toggleFriend = function(a11262, a2392)
@@ -59841,6 +59976,27 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         )
         addRightGroupboxResult23:AddToggle("AutoFriendAlly", { Text = "Auto-Ally Roblox Friends", Default = false })
         addRightGroupboxResult23:AddToggle("AutoHousemateAlly", { Text = "Auto-Ally Housemates", Default = false })
+        alliesUpdating=true -- AddDropdown may invoke its default callback during construction.
+        local serverAllies=a11260.Tabs.Blade23:AddRightGroupbox("Aliados do servidor")
+        serverAllies:AddDropdown("ServerAllies",{Text="Selecionar aliados (salvo por UserId)",Values={},Default={},Multi=true,AllowNull=true,Callback=function(selected)
+          if alliesUpdating or a11260.State.loadingConfig then return end
+          table.clear(res464)
+          for label,on in selected do
+            if on then
+              local name,id=label:match("^(.-) %[(%d+)%]$")
+              id=tonumber(id)
+              if id and id>0 then res464[id]=name end
+            end
+          end
+          fn1094(res464);fn1104()
+        end})
+        if a11260.SaveManager and a11260.SaveManager.SetIgnoreIndexes then
+          a11260.SaveManager:SetIgnoreIndexes({"ServerAllies"})
+        end
+        serverAllies:AddLabel("Aliados e alts marcadas em RotAlts nao acionam o Proximity Check do Sigil. A lista permanece apos rejoin.",true)
+        serverAllies:AddButton({Text="Atualizar jogadores",Func=fn1104})
+        a11260.Maid:Give(getResult42.PlayerAdded:Connect(fn1104))
+        a11260.Maid:Give(getResult42.PlayerRemoving:Connect(function() task.defer(fn1104) end))
         fn1104()
         local addLeftGroupboxResult17 = Player:AddLeftGroupbox("Character")
         addLeftGroupboxResult17:AddToggle("AntiAfk", {

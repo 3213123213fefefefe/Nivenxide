@@ -96,7 +96,7 @@ A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do pers
 
 ## Validação
 
-O runtime passou pela compilação Luau. Trinta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Quarenta testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -124,8 +124,22 @@ Os testes simulam 100 ciclos de instalação e remoção de hooks, falha parcial
 
 ### Investigação do pico após carregar (ram-guard-3)
 
-O registro do Potassium mostrou o cliente saindo de aproximadamente 3,3 GB para 22 GB após a inicialização; ele não identifica sozinho a rotina causadora. Esta versão testa caminhos suspeitos: a inspeção normal de funções lê no máximo dois upvalues e guarda somente o resultado booleano em um cache de chaves fracas. No Potassium não usa enumeração completa como alternativa; uma API individual ausente aparece em `coreInspectionUnavailable`. A inspeção avançada da leaderboard por registry e conexões fica desativada nesse executor, afetando suas melhorias opcionais de interação, sem impedir a automação Blade.
+O registro do Potassium mostrou o cliente saindo de aproximadamente 3,3 GB para 22 GB após a inicialização; ele não identifica sozinho a rotina causadora. Esta versão testa caminhos suspeitos: a inspeção normal de funções lê no máximo dois upvalues e guarda somente o resultado booleano em um cache de chaves fracas. No Potassium não usa enumeração completa como alternativa; uma API individual ausente aparece em `coreInspectionUnavailable`. A varredura ampla da leaderboard por registry e conexões fica desativada nesse executor. A versão `allies-menu-4` restaura a associação das linhas por UserId ou nomes replicados, sem reativar a varredura ampla.
 
 O leitor de captcha rejeita contagens de geometria excessivas antes de criar tabelas e verifica o espaço disponível para as posições. O diagnóstico versão 2 inclui `build: ram-guard-3`, contagem das inspeções, opções ativas a cada amostra e eventos antes/depois de decodificar captcha ou varrer o registry. Os limites e a compatibilidade passaram por testes simulados; a causa do pico e a redução real de RAM ainda precisam de confirmação no cliente Potassium.
 
 Para comparar, encerre o cliente que já acumulou RAM, reabra e execute o loader atualizado uma vez. Observe inicialmente sem iniciar a automação e copie o novo diagnóstico após cerca de 60 segundos, ou antes se o consumo subir rapidamente.
+
+## Aliados, pausa no menu e proteções por mundo (allies-menu-4)
+
+Em **blade 23 → Aliados do servidor**, selecione os jogadores na lista múltipla. A lista usa UserIds, compartilha o arquivo de amigos existente e mantém aliados que saíram do servidor. Ela se atualiza ao entrar/sair um jogador e também pelo botão Atualizar jogadores. Não depende de salvar um perfil da interface. Aliados explicitamente salvos, alts selecionadas em RotAlts e membros reconhecidos das filas locais não acionam o Proximity Check do Sigil, mesmo com Ignore Friendly ativado para combate. Safe Server e o Proximity Notifier, quando este usa Ignore Allies, também reconhecem essas alts.
+
+Configure **Proximity Check (Gaia)** e **Stay In Server (Gaia)** antes de iniciar. Stay In Server mantém a verificação: ao detectar uma ameaça, encerra o trabalho corrente, salva o progresso e solicita o menu no mesmo servidor. Se houver Danger, o método de menu existente aguarda a liberação. O bot permanece no menu até você apertar Play; Safe Server Auto Play não deve interferir nessa pausa. Após o personagem estar pronto, ele retoma o progresso salvo sem criar dois trabalhadores simultâneos. Parar Sigil cancela a retomada pendente.
+
+XP de espada, desbloqueio de mana e XP de socos mantêm seus contadores. Ao retomar Shriekers, a conta volta à fila/ponto de espera e exige novamente a quantidade configurada, todos com HP cheio e três segundos estáveis antes da nova entrada. Essa checagem continua fora do combate. Compras usam as confirmações já salvas e as skills realmente presentes; Orderly retorna à fila de Rots. A transição por Ya'alda e as etapas salvas de Khei também podem ser retomadas.
+
+**Menu por Illusionist quando Super (Gaia)** pausa no menu quando uma conta com Super detecta um Illusionist não aliado por Observing ou pelo marcador MindMage. Esse menu não exige Allow Hops. **Skip Illusionist Server (Gaia)** segue a política de Stay In Server/Allow Hops. Em Khei existem controles independentes de **Proximity Check**, **Skip Illusionist Server** e **Stay In Server**. Auto Go To Khei agora respeita a escolha configurada, sem desativar Stay In Server ou ser forçado ao iniciar. Distância zero desliga a proximidade no respectivo mundo.
+
+**Leaderboard Observe**, **Better Leaderboard** e **Leaderboard in Menu** permanecem na aba Player. A associação usa UserId da linha quando disponível, username, DisplayName ou nome do personagem replicado. Nomes ambíguos sem identificação ficam sem associação para evitar observar a conta errada. Mudanças de texto/GUI refazem a associação e liberam os listeners anteriores. A leitura ampla do registry continua bloqueada no Potassium para preservar a investigação de RAM.
+
+Os 40 testes incluem seleções persistentes e aliados offline, exclusão de alts, políticas por mundo, pausa e cancelamento, espera pelo Play manual, retomada de contadores e do handoff, detecção de Illusionist e associação de nomes na leaderboard. A compilação e os testes simulados não substituem validar menu, física e diálogos no cliente.
