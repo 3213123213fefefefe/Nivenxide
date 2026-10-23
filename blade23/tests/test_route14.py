@@ -770,5 +770,294 @@ land=false;assert(not __L3.bladePlainPunch(function() return true end) and clock
 assert(not __L3.bladePlainPunch(function() return false end) and attacks==4)
 ''')
 
+    def test_explicit_allies_and_rot_alts_override_enemy_filter_for_progression(self):
+        friendly=self.part('__L2.fn512 = function', '      __L2.fn513 = function')
+        self.run_luau(r'''
+local __L2={}
+'''+friendly+r'''
+local alice={UserId=10,Name="Alice"};local rot={UserId=20,Name="RotVictim"};local enemy={UserId=30,Name="Enemy"}
+local app={State={isFriend=function(p) return p==alice end,isFriendly=function() return false end},Library={Options={RotAlts={Value={RotVictim=true}}}}}
+assert(__L2.fn512(app,alice));assert(__L2.fn512(app,rot));assert(not __L2.fn512(app,enemy))
+app.State.bladeRunAlts={["30"]=true};assert(__L2.fn512(app,enemy))
+app.State.bladeRunAlts={};app.State.bladeTeam={[20]=true};assert(__L2.fn512(app,rot))
+assert(not __L2.fn512(app,nil))
+''')
+
+
+    def test_server_ally_selector_keeps_saved_offline_ids_and_refreshes_without_erasing(self):
+        refresh=self.part('local alliesUpdating=false', '        local toggleFriend')
+        ui=self.part('alliesUpdating=true -- AddDropdown', '        local addLeftGroupboxResult17')
+        self.run_luau(r'''
+local res464={[42]="Offline"};local Options17={};local saved;local events={};local self={UserId=1,Name="Self"};local alice={UserId=10,Name="Alice"}
+local LocalPlayer33=self;local players={self,alice}
+local signal={Connect=function(_,fn) table.insert(events,fn);return {} end}
+local getResult42={GetPlayers=function() return players end,PlayerAdded=signal,PlayerRemoving=signal}
+local fn1094=function(value) saved=table.clone(value) end
+local task={defer=function(fn) fn() end}
+local group={AddLabel=function() end,AddButton=function() end}
+function group:AddDropdown(name,settings)
+ local option={Value={},SetValues=function(obj,values) obj.Values=values end}
+ function option:SetValue(value) self.Value=value;settings.Callback(value) end
+ Options17[name]=option;settings.Callback(settings.Default)
+end
+local a11260={State={},Tabs={Blade23={AddRightGroupbox=function() return group end}},Maid={Give=function() end},SaveManager={SetIgnoreIndexes=function() end}}
+'''+refresh+ui+r'''
+assert(res464[42]=="Offline","constructing dropdown must not erase saved friends")
+assert(Options17.ServerAllies.Value["Offline [42]"])
+a11260.State.loadingConfig=true
+Options17.ServerAllies:SetValue({["Alice [10]"]=true,["Offline [42]"]=true})
+assert(saved[10]=="Alice" and saved[42]=="Offline","loading a profile must update effective allies, not only the dropdown")
+a11260.State.loadingConfig=false
+players={self};fn1104()
+assert(Options17.ServerAllies.Value["Alice [10]"] and res464[10]=="Alice")
+Options17.ServerAllies:SetValue({})
+assert(next(saved)==nil and next(res464)==nil)
+''')
+
+
+    def test_threat_settings_are_independent_between_gaia_and_khei(self):
+        helpers=self.part('__L3.bladeThreatDistance=function()', '        __L3.bladeEnabled=function()')
+        self.run_luau(r'''
+local __L3={};local a1723={State={}};local __L2={fn512=function() return false end};local num274=3541987450;local game={PlaceId=5208655184}
+local Options8={ProgProximity={Value=120},ProgKheiProximity={Value=650}}
+local Toggles8={ProgStayInServer={Value=true},ProgKheiStayInServer={Value=false}}
+'''+helpers+r'''
+assert(__L3.bladeThreatDistance()==120 and __L3.bladeStayHere())
+game.PlaceId=num274;assert(__L3.bladeThreatDistance()==650 and not __L3.bladeStayHere())
+Options8.ProgKheiProximity.Value=0;assert(__L3.bladeThreatDistance()==0)
+''')
+
+
+    def test_menu_pause_waits_for_old_worker_and_manual_play_preserving_progress(self):
+        pause=self.part('__L3.bladePauseForMenu=function(reason)', '        a1723.Maid:Give(function() __L3.bladeMenuPause')
+        self.run_luau(r'''
+local __L3={bladeCoreRunning=true,progStatusLabel={SetText=function() end},bladeLand=function() end}
+local tbl303={true};local tbl307={};local tbl308={};local Toggles8={};local game={JobId="job",PlaceId=1};local num274=2
+local save={phase="B1_XP",bladeDamage=4000,bladeFistDamage=0,bladeUnlockHits=2};local saves=0;local resumes=0;local menu=false;local spawned=false;local forced=0
+local a1723={State={mana={decharge=function() end}}}
+local stored={};local qResult3={get=function(key) return stored[key] end,set=function(key,value) stored[key]=value end}
+local fn531=function() end;local fn532=function() end;local fn542=function() saves+=1 end
+local fn497=function() return spawned end
+local v1009=function() tbl303[1]=false;stored.khei_run=nil end
+local jobs={};local task={spawn=function(fn) table.insert(jobs,coroutine.create(fn)) end,wait=function() coroutine.yield() end}
+local function step() for _,thread in table.clone(jobs) do if coroutine.status(thread)~="dead" then local ok,err=coroutine.resume(thread);assert(ok,err) end end end
+local vResult5={forceMenu=function(active) assert(active() and not __L3.bladeCoreRunning and not tbl303[1]);forced+=1;menu=true;return true end,startMenu=function() return menu end}
+__L3.fn648=function(resume)
+ assert(resume and save.bladeDamage==4000 and save.bladeUnlockHits==2 and save.phase=="B1_XP")
+ resumes+=1;tbl303[1]=true
+end
+'''+pause+r'''
+assert(__L3.bladePauseForMenu("Enemy"));assert(not __L3.bladePauseForMenu("Enemy again"))
+step();assert(forced==0 and resumes==0 and a1723.State.bladeManualMenu)
+__L3.bladeCoreRunning=false;step();assert(forced==1 and resumes==0 and saves==1)
+for i=1,10 do step() end;assert(resumes==0,"must not press Play automatically")
+menu=false;step();assert(resumes==0,"wait until character has spawned")
+spawned=true;step();assert(resumes==1 and __L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
+step();assert(resumes==1,"only one resumed worker")
+assert(__L3.bladePauseForMenu("Enemy"));step();assert(menu)
+__L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false;menu=false;step();assert(resumes==1,"Stop cancels pending resume")
+-- A Gaia-to-Khei handoff resumes its own stage rather than restarting a completed Gaia run.
+tbl303[1]=true;stored.khei_run="true";spawned=true
+local handoffs=0;a1723.State.progKheiHandoff=function(resume) assert(resume and stored.khei_run=="true");handoffs+=1 end
+assert(__L3.bladePauseForMenu("Illusionist"));step();menu=false;step();assert(handoffs==1 and resumes==1)
+''')
+
+
+    def test_stay_server_menus_even_if_blade_hops_are_disabled(self):
+        action=self.part('local fn558 = function(', '        local fn559 = function()')
+        self.run_luau(r'''
+local tbl303={true};local tbl304={false};local __L3={bladeEnabled=function() return true end,bladeValue=function() return false end}
+local stays=true;local pauses=0;local hops=0
+__L3.bladeStayHere=function() return stays end;__L3.bladePauseForMenu=function() pauses+=1;return true end
+local fn557=function() hops+=1;return true end
+'''+action+r'''
+assert(fn558("Enemy") and pauses==1 and hops==0)
+stays=false;assert(not fn558("Enemy") and hops==0)
+__L3.bladeValue=function() return true end;assert(fn558("Enemy") and hops==1)
+''')
+
+
+    def test_illusionist_super_menu_and_world_skip_settings(self):
+        detect=self.part('local fn563 = function(', '        local fn564 = function(')
+        self.run_luau(r'''
+local tbl303={true};local LocalPlayer21={};local enemy={Name="Illu",Character={}};local game={PlaceId=1};local num274=2
+local a1723={State={}};local __L2={fn512=function() return false end};local super=false;local fn562=function() return super end
+local fn553=function() return false end;local GResult={isIllusionist=function() return true end}
+local Toggles8={ProgSkipIllusionist={Value=false},ProgMenuIllusionistSuper={Value=true},ProgKheiSkipIllusionist={Value=false}}
+local menus=0;local reactions=0;local __L3={bladePauseForMenu=function() menus+=1;return true end,bladeThreatDistance=function() return 50 end}
+local fn549=function(p) return p.Name end;local fn558=function() reactions+=1;return true end
+'''+detect+r'''
+assert(not fn563(enemy,true) and menus==0)
+super=true;assert(fn563(enemy,true) and menus==1 and reactions==0)
+game.PlaceId=num274;assert(not fn563(enemy,true) and menus==1)
+Toggles8.ProgKheiSkipIllusionist.Value=true;assert(fn563(enemy,true) and reactions==1)
+__L2.fn512=function() return true end;assert(not fn563(enemy,true) and reactions==1)
+''')
+
+
+    def test_proximity_watcher_keeps_stay_checks_and_excludes_allies_even_in_danger(self):
+        start='function(X, D, j, I, l, Z, g, x, i, y, Q, A, F, n, c, Y, f, r, H, e, h, q, s, proximityDistance)'
+        native=self.part(start,'  function(X, D, j)')
+        native=native.rstrip().removesuffix(',')
+        self.run_luau(VEC+r'''
+local tick=function() return 100 end
+local reported=0;local ally={Name="Ally"};local enemy={Name="Enemy"}
+local function character(x) return {FindFirstChild=function(_,key) if key=="HumanoidRootPart" then return {Position=Vector3.new(x,0,0)} end end} end
+ally.Character=character(5);enemy.Character=character(20)
+local self={Character=character(0)};local players={GetPlayers=function() return {self,ally,enemy} end}
+local factory='''+native+r'''
+local watcher=factory({HasTag=function() return true end},self,{ProgProximity={Value=0}},100,players,{RANGE={opalHold=0},allowed=function() return false end},{ProgStayInServer={Value=true}},function() end,{},function() end,function(_,p) return p==ally end,function(p) return p.Name end,{function() end},{0},{},function() return 0 end,function(reason) reported+=1;assert(reason:find("Enemy",1,true)) end,{0},{true},{0},{0},{true},function() return true end,function() return 50 end)
+watcher(0.1);assert(reported==1)
+''')
+
+
+    def test_only_manual_stop_cancels_menu_pause_while_previous_stage_unwinds(self):
+        stop=self.part('v1009 = function(a1824)', '        __L3.bladePauseForMenu=function(reason)')
+        self.run_luau(r'''
+local v1009;local tbl303={false};local __L3={bladeMenuPause={},bladePausing=false};local a1723={State={bladeManualMenu=true}}
+local fn531=function() end;local fn532=function() end
+'''+stop+r'''
+v1009();assert(__L3.bladeMenuPause and a1723.State.bladeManualMenu)
+v1009(true);assert(__L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
+''')
+
+
+    def test_config_roundtrip_restores_alts_and_allies_including_offline_and_empty_lists(self):
+        parser=self.part('        Dropdown = {', '        ColorPicker = {')
+        methods=self.part('    function SaveManager:Save(name)', '    function SaveManager:Delete(name)')
+        setter=self.part('function Dropdown:SetValue(value)', '\tfunction Dropdown:GetValue()')
+        self.assertNotIn('"RotAlts"',self.part('local tbl732 = {','        for i135'))
+        self.assertNotIn('SetIgnoreIndexes({"ServerAllies"})',self.source)
+        self.run_luau(r'''
+local function clone(x) if type(x)~="table" then return x end;local t={};for k,v in x do t[k]=clone(v) end;return t end
+local disk={};local encoded
+local HttpService={JSONEncode=function(_,data) encoded=clone(data);return "json" end,JSONDecode=function() return clone(encoded) end}
+local writefile=function(path,value) disk[path]=value end;local readfile=function(path) return disk[path] end;local isfile=function(path) return disk[path]~=nil end
+local task={spawn=function(fn,...) fn(...) end,wait=function() end}
+local SaveManager={Folder="sentinel",Ignore={},Library={Toggles={},Options={}},CheckFolderTree=function() end,CheckSubFolder=function() return false end}
+local function option(values,value)
+ local Dropdown={Type="Dropdown",Multi=true,Values=values,Value=value,Display=function() end,SetValues=function(obj,new) obj.Values=new end}
+ local fire=function() end
+'''+setter+r'''
+ return Dropdown
+end
+SaveManager.Parser={
+'''+parser+r'''
+}
+'''+methods+r'''
+local alts=option({"CurrentAlt"},{OfflineAlt=true})
+local allies=option({"Online [10]"},{["Offline [42]"]=true})
+SaveManager.Library.Options={RotAlts=alts,ServerAllies=allies}
+assert(SaveManager:Save("Bots"))
+alts.Value={};allies.Value={}
+assert(SaveManager:Load("Bots"))
+assert(alts.Value.OfflineAlt and allies.Value["Offline [42]"])
+assert(table.find(alts.Values,"OfflineAlt") and table.find(allies.Values,"Offline [42]"))
+-- Saving an intentionally empty profile clears the lists when loaded later.
+alts.Value={};allies.Value={};assert(SaveManager:Save("Empty"))
+alts.Value.CurrentAlt=true;allies.Value["Online [10]"]=true
+assert(SaveManager:Load("Empty") and next(alts.Value)==nil and next(allies.Value)==nil)
+''')
+
+
+    def test_rot_refresh_preserves_offline_selection_and_supplier_role_does_not_clear_it(self):
+        refresh=self.part('local function rotRefreshPlayers()', '        local function rotCollectSelected()')
+        role=self.part('local fn670 = function()', '        local fn671 = function()')
+        self.assertNotIn('Options9.RotAlts:SetValue({})',self.source)
+        self.run_luau(r'''
+local Options9={RotAlts={Value={OfflineAlt=true},SetValues=function(obj,values) obj.Values=values end}}
+local LocalPlayer24={Name="Me"};local getResult26={GetPlayers=function() return {LocalPlayer24,{Name="OnlineAlt"}} end}
+local tbl368={};local tbl369={};local rotSupplier={explicitSupplier=true};local a1849={State={}}
+'''+refresh+role+r'''
+rotRefreshPlayers()
+assert(Options9.RotAlts.Value.OfflineAlt and table.find(Options9.RotAlts.Values,"OfflineAlt"))
+assert(not fn670(),"supplier role must not turn into a carrier just because a saved config has alts")
+rotSupplier.explicitSupplier=false;assert(fn670(),"receiver uses the preserved selection")
+rotSupplier.explicitSupplier=true;a1849.State.bladeRunAlts={OfflineAlt=true};assert(fn670(),"active Sigil receiver config remains authoritative")
+''')
+
+
+
+    def test_blade_autosave_restores_all_control_types_and_never_starts_workers(self):
+        prefs=self.part('        local bladePrefs={', '        local function allowBladeProfileSettings()')
+        parsers=self.part('    SaveManager.Parser = {', '    function SaveManager:SetLibrary(library)')
+        self.run_luau(r'''
+local function clone(x) if type(x)~="table" then return x end;local t={};for k,v in x do t[k]=clone(v) end;return t end
+local function encode(x)
+ if type(x)~="table" then return tostring(x) end
+ local keys={};for k in x do table.insert(keys,k) end;table.sort(keys,function(a,b) return tostring(a)<tostring(b) end)
+ local out={};for _,k in keys do table.insert(out,tostring(k)..":"..encode(x[k])) end;return "{"..table.concat(out,"|").."}"
+end
+local dataByJSON,disk={},{};local writes=0;local warnings=0
+local http={JSONEncode=function(_,data) local json=encode(data);dataByJSON[json]=clone(data);return json end,JSONDecode=function(_,json) assert(dataByJSON[json],"bad json");return clone(dataByJSON[json]) end}
+local game={GetService=function(_,name) if name=="Players" then return {LocalPlayer={UserId=123}} end;return http end}
+local warn=function() warnings+=1 end
+local isfile=function(path) return disk[path]~=nil end;local readfile=function(path) return disk[path] end
+local writefile=function(path,value) writes+=1;disk[path]=value end
+local isfolder=function() return true end;local makefolder=function() end
+local tab={};local a11542={Tabs={Blade23={Container=tab}},State={}}
+local function color(hex) return {hex=hex,ToHex=function(self) return self.hex end} end
+local Color3={fromHex=color}
+local function control(kind,value,inside)
+ local c={Type=kind,Value=value,Values={"Online"},Mode="Press",Modifiers={"Ctrl"},Transparency=0.3}
+ c.ConfigInstance={IsDescendantOf=function(_,container) return inside~=false and container==tab end}
+ c.SetValues=function(self,v) self.Values=v end
+ c.SetValue=function(self,v) if kind=="Slider" then self.Value=tonumber(v) elseif kind=="KeyPicker" then self.Value=v[1];self.Mode=v[2];self.Modifiers=v[3] else self.Value=v end end
+ c.SetValueRGB=function(self,v,alpha) self.Value=v;self.Transparency=alpha end
+ return c
+end
+local Library23={Toggles={Stay=control("Toggle",true),RotBotEnabled=control("Toggle",true),RotReceiverQueue=control("Toggle",true)},Options={
+ Speed=control("Slider",100),Text=control("Input","url"),RotAlts=control("Dropdown",{Offline=true}),ServerAllies=control("Dropdown",{["Friend [42]"]=true}),
+ Stop=control("KeyPicker","F8"),Tint=control("ColorPicker",color("abcdef")),OtherTab=control("Input","outside",false)}}
+Library23.Options.RotAlts.Multi=true;Library23.Options.ServerAllies.Multi=true
+local SaveManager={Library=Library23}
+'''+parsers+prefs+r'''
+assert(bladePrefs.file:find("123",1,true))
+bladePrefs.ready=true;assert(bladePrefs.save() and writes==1)
+assert(bladePrefs.save() and writes==1,"unchanged settings must not keep writing files")
+local saved=clone(dataByJSON[disk[bladePrefs.file]])
+for _,row in saved.objects do assert(row.idx~="RotBotEnabled" and row.idx~="RotReceiverQueue" and row.idx~="OtherTab") end
+assert(#saved.objects==7,"all Blade control types, including keys, colors, offline selections")
+Library23.Toggles.Stay.Value=false;Library23.Toggles.RotBotEnabled.Value=false;Library23.Toggles.RotReceiverQueue.Value=false
+Library23.Options.Speed.Value=1;Library23.Options.Text.Value="changed";Library23.Options.RotAlts.Value={};Library23.Options.ServerAllies.Value={}
+Library23.Options.Stop.Value="F1";Library23.Options.Tint.Value=color("000000")
+assert(bladePrefs.restore() and a11542.State.bladeProfileLoaded and not a11542.State.loadingConfig)
+assert(Library23.Toggles.Stay.Value and not Library23.Toggles.RotBotEnabled.Value and not Library23.Toggles.RotReceiverQueue.Value)
+assert(Library23.Options.Speed.Value==100 and Library23.Options.Text.Value=="url")
+assert(Library23.Options.RotAlts.Value.Offline and table.find(Library23.Options.RotAlts.Values,"Offline"))
+assert(Library23.Options.ServerAllies.Value["Friend [42]"] and Library23.Options.Stop.Value=="F8" and Library23.Options.Stop.Mode=="Press")
+assert(Library23.Options.Tint.Value.hex=="abcdef" and Library23.Options.Tint.Transparency==0.3)
+a11542.State.loadingConfig=true;Library23.Options.Text.Value="pending";bladePrefs.save();assert(writes==1)
+a11542.State.loadingConfig=false;bladePrefs.save();assert(writes==2)
+Library23.Options.RotAlts.Value={};Library23.Options.ServerAllies.Value={};bladePrefs.save()
+Library23.Options.RotAlts.Value={Someone=true};Library23.Options.ServerAllies.Value={Someone=true};bladePrefs.restore()
+assert(next(Library23.Options.RotAlts.Value)==nil and next(Library23.Options.ServerAllies.Value)==nil)
+disk[bladePrefs.file]="invalid";assert(not bladePrefs.restore() and disk[bladePrefs.file]=="invalid" and warnings==1)
+''')
+
+    def test_latest_blade_preferences_are_loaded_before_workers_and_not_overwritten_by_legacy(self):
+        startup=self.part('        SaveManager:BuildConfigSection(Settings,', '        if cond50 and Library23.Toggles.ExecuteOnServerhop then')
+        self.assertLess(startup.index('SaveManager:LoadAutoloadConfig()'),startup.index('bladePrefs.restore()'))
+        self.assertLess(startup.index('bladePrefs.restore()'),startup.index('a11542.State.notificationsReady = true'))
+        legacy=self.part('__L3.fn650 = function()', '        __L3.hiddenSetup=')
+        self.assertIn('if a1723.State.bladeProfileLoaded then return end',legacy)
+        self.assertNotIn('MapPoints = CreateWindowResult:AddTab',self.source)
+        self.assertNotIn('pointsUI=',self.source)
+
+    def test_leaderboard_can_map_rows_without_executor_introspection(self):
+        helper=self.part('        local function leaderboardPlayerFromLabel(label)', '        local fn1063 = function(')
+        self.run_luau(r'''
+local alice={Name="Alice",UserId=1};local bob={Name="Bob",UserId=2}
+local getResult41={GetPlayers=function() return {alice,bob} end,GetPlayerByUserId=function(_,id) return id==1 and alice or id==2 and bob end}
+local names={[alice]="Rogue One",[bob]="Rogue Two"};local fn1036=function(player) return names[player] end
+local function label(name,text,id) return {Name=name,Text=text,GetAttribute=function(_,key) if key=="UserId" then return id end end} end
+'''+helper+r'''
+assert(leaderboardPlayerFromLabel(label("Row","<b>Alice</b>"))==alice)
+assert(leaderboardPlayerFromLabel(label("Row","Rogue Two"))==bob)
+assert(leaderboardPlayerFromLabel(label("Row","whatever",1))==alice)
+assert(leaderboardPlayerFromLabel(label("Row","unrelated"))==nil)
+names[bob]="Rogue One";assert(leaderboardPlayerFromLabel(label("Row","Rogue One"))==nil)
+''')
+
 if __name__ == '__main__':
     unittest.main()

@@ -10,7 +10,17 @@ Pare a versão anterior em **Config → Unload** ou reentre no jogo. Execute:
 loadstring(game:HttpGet("https://raw.githubusercontent.com/3213123213fefefefe/Nivenxide/main/blade23/loader.lua", true))()
 ```
 
-A aba **blade 23** contém **Blade / Sigil**, **Rot** e **Filas**. A aba independente **Pontos do mapa** permanece disponível. Os controles antigos de conexão, rota, meta de dano, marcação de coleta e Cela XP ficam ocultos; suas funções foram preservadas internamente.
+A aba **blade 23** contém **Blade / Sigil**, **Rot** e **Filas**. A aba **Pontos do mapa** foi removida; a rota fixa existente permanece. Os controles antigos de conexão, rota, meta de dano, marcação de coleta e Cela XP ficam ocultos; suas funções foram preservadas internamente.
+
+## Configurações, aliados e proteção
+
+Todas as configurações da aba **blade 23** são salvas automaticamente por conta em `sentinel/.cache/blade23_settings_<UserId>.json`, verificadas a cada segundo e gravadas somente quando mudam. Também entram no **Save Config**, incluindo teclas e seleções de contas offline. O último salvamento automático é restaurado após o autoload de perfil, antes de liberar a inicialização dos bots. Carregar manualmente outro perfil aplica suas opções e atualiza o salvamento automático. Iniciar/Parar e os estados internos dos trabalhadores não são configurações e não ligam o bot por causa desse arquivo. A retomada autorizada após hop continua usando o mecanismo existente.
+
+Em **Aliados do servidor**, selecione as contas presentes; a identificação salva usa UserId. Aliados selecionados e **Alts** de ROT ficam excluídos da verificação de proximidade, inclusive com Ignore Friendly ativo. As listas preservam contas offline até você removê-las. Para configurar outra conta, use o perfil desejado nessa conta; cada conta mantém seu próprio último ajuste automático.
+
+**Proximity Check**, **Skip Illusionist Server** e **Stay In Server** têm controles separados para Gaia e Khei. Com Stay In Server e uma ameaça configurada, o Sigil salva o progresso, encerra o trabalhador e vai ao menu no mesmo servidor. Aguarda **Play manual** e o personagem reaparecer antes de retomar a etapa salva. Ao retomar o XP, reaplica a espera de entrada da cela e dos mobs, preservando os contadores. **Parar Sigil** cancela a retomada pendente. A opção **Menu por Illusionist quando Super (Gaia)** pode solicitar esse menu mesmo sem Stay In Server.
+
+O leaderboard conserva as funções anteriores e inicializa mesmo sem as APIs de introspecção. Linhas podem ser associadas por UserId, nome de usuário ou nome de personagem único; nomes ambíguos não são atribuídos a uma conta por palpite. A integração anterior com o executor permanece como alternativa. A apresentação efetiva precisa de teste no cliente.
 
 ## Contas Blade / Sigil
 
@@ -92,11 +102,11 @@ O arquivo `routes/Blade.json` preserva os 14 pontos enviados. A automação usa 
 | PE13 | Espera da receptora |
 | P14 | Receptora ativa para Rots |
 
-A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do personagem em `sentinel/.cache/map_points.json`. Permite atualizar, exportar JSON, copiar `Vector3.new(...)` e excluir pontos. Salvar pontos não altera a rota nem movimenta o personagem.
+A remoção da aba de gravação de pontos não apaga arquivos de pontos existentes nem muda `routes/Blade.json`.
 
 ## Validação
 
-O runtime passou pela compilação Luau. Vinte e oito testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Quarenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
