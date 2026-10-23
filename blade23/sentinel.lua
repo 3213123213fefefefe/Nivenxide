@@ -31622,10 +31622,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
           end
           local decharge = function()
-            if not v738 then
-              fn436()
-              return
-            end
+            fn436() -- Release a held G even if the remote became available while charging.
+            if not v738 then return end
             if v739 == "table" then
               v738:FireServer()
             else
@@ -31667,6 +31665,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             task.wait(a1623 + math.min(num203, 150) / 2000 * (a2191 or 1))
           end
           local chargeUntil = function(a1624, a2192)
+            if a1593.State.bladeManaOwner and not a2192 then return false end
             local Character26 = LocalPlayer15.Character
             if not Character26 or Character26:FindFirstChildWhichIsA("ForceField") or not canUse() then
               return
@@ -31684,7 +31683,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             local tickResult4 = tick()
             local Value5 = Mana4.Value
             while true do
-              if not (not tbl220[1] and Mana4.Value < math.clamp(a1624, 0, 98) and (not a2192 or a2192())) then
+              if not (not tbl220[1] and Mana4.Value < math.clamp(a1624, 0, 98) and (not a2192 or a2192()) and (a2192 or not a1593.State.bladeManaOwner)) then
                 break
               end
               if Mana4.Value > Value5 then
@@ -31702,12 +31701,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 fn438(0.1, 1.2)
               end
             end
+            local reached=Mana4.Value>=math.clamp(a1624,0,98)
             if Character26:FindFirstChild("Charge") or flag40 then
               decharge()
               if not (Toggles7.SnapTrain and Toggles7.SnapTrain.Value) then
                 fn438(0.3, 1)
               end
             end
+            return reached -- Preserve success before release delay and passive mana decay.
           end
           a1593.State.mana = {
             chargeUntil = chargeUntil,
@@ -31837,6 +31838,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   break
                 end
                 local Character28 = LocalPlayer15.Character
+                if a1593.State.bladeManaOwner then continue end
                 local Value7 = Mana5.Value
                 if Toggles7.SnapTrain and Toggles7.SnapTrain.Value then
                   if Toggles7.AutoCharge and Toggles7.AutoCharge.Value then
@@ -31924,7 +31926,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                     else
                       task.wait(0.1)
                     end
-                    local v799 = Mana5.Value == 0 or not (Toggles7.TrainClimb and Toggles7.TrainClimb.Value)
+                    local v799 = a1593.State.bladeManaOwner or Mana5.Value == 0 or not (Toggles7.TrainClimb and Toggles7.TrainClimb.Value)
                     if v799 then
                       continue
                     end
@@ -34616,6 +34618,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       __L2.fn512 = function(a1713, a2219)
         if not a2219 then return false end
         local state=a1713.State
+        if state.bladeLocalClients and state.bladeLocalClients.isAlly(a2219) then return true end
         if state.isFriend and state.isFriend(a2219) then return true end
         local alts=state.bladeRunAlts or (a1713.Library.Options.RotAlts and a1713.Library.Options.RotAlts.Value) or {}
         if alts[a2219.Name] or alts[tostring(a2219.UserId)] or alts[a2219.UserId] then return true end
@@ -34799,6 +34802,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local Toggles8 = a1723.Library.Toggles
         local Options8 = a1723.Library.Options
+        a1723.State.bladeLocalClients=tbl44.M().localClients()
+        a1723.Maid:Give(function()
+          if a1723.State.bladeLocalClients then a1723.State.bladeLocalClients.stop();a1723.State.bladeLocalClients=nil end
+        end)
         __L3.bladeThreatDistance=function()
           local key=game.PlaceId==num274 and "ProgKheiProximity" or "ProgProximity"
           return math.max(0,tonumber(Options8[key] and Options8[key].Value) or 0)
@@ -39807,31 +39814,47 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local hum=character and character:FindFirstChildOfClass("Humanoid")
           local mana=character and character:FindFirstChild("Mana")
           local control=a1723.State.mana
-          if not hum or not mana or not control or not control.chargeUntil then
+          if not hum or not mana or not control or not control.chargeUntil or not running() then
             __L3.bladeStatus("Soco: aguardando personagem e controle de mana");return false
           end
-          hum:UnequipTools()
-          if character:FindFirstChildWhichIsA("Tool") then return false end
-          local chargeDeadline=os.clock()+8
-          if mana.Value<95 then
-            control.chargeUntil(95,function()
-              return running() and LocalPlayer21.Character==character and os.clock()<chargeDeadline
-            end)
-          end
-          if control.decharge then control.decharge() end
-          if not running() or mana.Value<94.9 then
-            __L3.bladeStatus("Soco: aguardando mana cheia");return false
-          end
-          for hit=1,4 do
-            if not running() or LocalPlayer21.Character~=character then break end
-            local deadline=os.clock()+1.5
-            while running() and fn576() and os.clock()<deadline do task.wait(0.03) end
-            if not running() then break end
-            __L3.bladeCounting=true
-            fn577()
-            task.wait(0.2)
-          end
-          return true
+          local previousOwner=a1723.State.bladeManaOwner
+          a1723.State.bladeManaOwner=true
+          local ok,result=pcall(function()
+            local live=function() return running() and LocalPlayer21.Character==character end
+            hum:UnequipTools()
+            local weaponDeadline=os.clock()+2
+            while live() and character:FindFirstChildWhichIsA("Tool") and os.clock()<weaponDeadline do task.wait(0.05) end
+            if not live() or character:FindFirstChildWhichIsA("Tool") then return false end
+            local reached=mana.Value>=94.9
+            if not reached then
+              local chargeDeadline=os.clock()+8
+              reached=control.chargeUntil(95,function() return live() and os.clock()<chargeDeadline end)==true or mana.Value>=94.9
+            end
+            if control.decharge then control.decharge() end
+            if not reached then
+              __L3.bladeStatus("Soco: carga ainda nao chegou a 95%; tentando novamente")
+              return false
+            end
+            -- Charge is released before M1. Do not demand 95% again after its release delay.
+            local releaseDeadline=os.clock()+2
+            while live() and character:FindFirstChild("Charge") and os.clock()<releaseDeadline do task.wait(0.05) end
+            if not live() or character:FindFirstChild("Charge") then
+              __L3.bladeStatus("Soco: aguardando soltar a carga de mana");return false
+            end
+            for hit=1,4 do
+              local deadline=os.clock()+1.5
+              while live() and fn576() and os.clock()<deadline do task.wait(0.05) end
+              if not live() or fn576() then return false end
+              __L3.bladeCounting=true
+              fn577()
+              task.wait(0.2)
+            end
+            return true
+          end)
+          if control.decharge then pcall(control.decharge) end
+          a1723.State.bladeManaOwner=previousOwner
+          if not ok then __L3.bladeStatus("Soco: erro ao executar sequencia: "..tostring(result));return false end
+          return result
         end
         __L3.bladeXPShriekers=function()
           local save=tbl308[1]
@@ -41842,6 +41865,61 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return rootOfResult2 and rootOfResult2.Position or nil
         end, a2277, a395)
         return tbl358.distanceTo(a1844)
+      end
+      tbl358.localClients=function()
+        local clients={members={},checked={},elapsed=0,closed=false,lease=8,
+          file="sentinel/.cache/blade_local_clients/p_"..tostring(LocalPlayer23.UserId)..".json"}
+        clients.valid=function(record,userId)
+          if type(record)~="table" or record.version~=1 or record.active~=true or record.userId~=userId
+            or record.jobId~=game.JobId or record.placeId~=game.PlaceId or type(record.at)~="number" then return false end
+          local age=os.time()-record.at
+          return age>=-2 and age<=clients.lease
+        end
+        clients.isAlly=function(player)
+          if clients.closed or not player then return false end
+          local id=player.UserId
+          if type(id)~="number" or id<=0 or id%1~=0 then return false end
+          local record=clients.members[id]
+          if clients.valid(record,id) then return true end
+          local now=os.clock()
+          if clients.checked[id] and now-clients.checked[id]<0.25 then return false end
+          clients.checked[id]=now
+          -- readJson below bypasses the optional HTTP transport: these records are local only.
+          record=readJson("sentinel/.cache/blade_local_clients/p_"..tostring(id)..".json")
+          if clients.valid(record,id) then clients.members[id]=record;return true end
+          clients.members[id]=nil
+          return false
+        end
+        clients.tick=function()
+          if clients.closed then return end
+          local written=writeJson(clients.file,{version=1,active=true,userId=LocalPlayer23.UserId,jobId=game.JobId,placeId=game.PlaceId,at=os.time()})
+          if not written and not clients.writeFailed then warn("[blade 23] Nao consegui anunciar esta conta no PC. Confira o acesso a pasta de arquivos do executor.") end
+          clients.writeFailed=not written
+          local present={}
+          for _,player in getResult25:GetPlayers() do
+            local id=player.UserId
+            present[id]=true
+            clients.checked[id]=nil
+            clients.members[id]=nil
+            clients.isAlly(player)
+          end
+          for id in clients.checked do if not present[id] then clients.checked[id]=nil;clients.members[id]=nil end end
+        end
+        clients.stop=function()
+          if clients.closed then return end
+          clients.closed=true
+          if clients.connection then clients.connection:Disconnect();clients.connection=nil end
+          pcall(writeJson,clients.file,{version=1,active=false,userId=LocalPlayer23.UserId,jobId=game.JobId,placeId=game.PlaceId,at=os.time()})
+          table.clear(clients.members);table.clear(clients.checked)
+        end
+        pcall(clients.tick)
+        clients.connection=v1317.Heartbeat:Connect(function(dt)
+          clients.elapsed+=dt
+          if clients.elapsed<1 or clients.closed then return end
+          clients.elapsed=0
+          pcall(clients.tick)
+        end)
+        return clients
       end
       tbl358.channel = function(a1845)
         local str51 = cResult5.CACHE .. "/altlink/" .. a1845
@@ -59959,6 +60037,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           fn1094(res464);fn1104()
         end})
         serverAllies:AddLabel("Toda a aba e salva automaticamente por conta e tambem no Save Config. Aliados e alts offline continuam selecionados.",true)
+        serverAllies:AddLabel("Contas com este Sentinel no mesmo PC e servidor sao reconhecidas automaticamente pela pasta compartilhada do executor, mesmo aguardando ou no menu.",true)
         serverAllies:AddButton({Text="Atualizar jogadores",Func=fn1104})
         a11260.Maid:Give(getResult42.PlayerAdded:Connect(fn1104))
         a11260.Maid:Give(getResult42.PlayerRemoving:Connect(function() task.defer(fn1104) end))
@@ -60747,37 +60826,94 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
         end
         a11260.Maid:Give(fn1133)
-        local obj12 = setmetatable({}, { __mode = "k" })
-        local fn1134 = function(a11287, a2397)
-          a11287.Text = a2397()
-          if obj12[a11287] then
-            return
-          end
-          obj12[a11287] = true
-          table.insert(
-            tbl574,
-            a11287:GetPropertyChangedSignal("Text"):Connect(function()
-              local res479 = a2397()
-              if a11287.Text ~= res479 then
-                a11287.Text = res479
-              end
+        -- Never rewrite CoreGui properties inside their own change callbacks.
+        -- Roblox's menu can rewrite them too; queue coalesced work with a frame budget instead.
+        local menuMasks={entries={},pending={},roots={}}
+        menuMasks.remove=function(object)
+          local entry=menuMasks.entries[object]
+          menuMasks.entries[object]=nil;menuMasks.pending[object]=nil
+          if not entry then return end
+          entry.changed:Disconnect();entry.destroying:Disconnect()
+        end
+        menuMasks.bind=function(object,property,read)
+          local entry=menuMasks.entries[object]
+          if not entry then
+            entry={property=property,read=read,applying=false,original=object[property]}
+            menuMasks.entries[object]=entry
+            entry.changed=object:GetPropertyChangedSignal(property):Connect(function()
+              if not entry.applying then menuMasks.pending[object]=true end
             end)
-          )
+            entry.destroying=object.Destroying:Connect(function() menuMasks.remove(object) end)
+          end
+          entry.read=read
+          menuMasks.pending[object]=true
+        end
+        menuMasks.flush=function()
+          local started=os.clock()
+          local count=0
+          for object in menuMasks.pending do
+            menuMasks.pending[object]=nil
+            local entry=menuMasks.entries[object]
+            if entry then
+              if not object.Parent then menuMasks.remove(object)
+              else
+                entry.applying=true
+                pcall(function()
+                  local value=entry.read()
+                  if object[entry.property]~=value then object[entry.property]=value end
+                end)
+                entry.applying=false
+              end
+            end
+            count+=1
+            if count>=32 or os.clock()-started>=0.002 then break end
+          end
+        end
+        menuMasks.watchRoot=function(root,onAdded)
+          local record=menuMasks.roots[root]
+          if record then return record end
+          record={scanned=false,scanning=false}
+          menuMasks.roots[root]=record
+          record.added=root.DescendantAdded:Connect(onAdded)
+          record.destroying=root.Destroying:Connect(function()
+            record.added:Disconnect();record.destroying:Disconnect();menuMasks.roots[root]=nil
+          end)
+          return record
+        end
+        menuMasks.walk=function(root,visit)
+          local stack={root}
+          local count=0
+          local started=os.clock()
+          while #stack>0 do
+            if not flag135 or not (Toggles16.StreamerMode and Toggles16.StreamerMode.Value) or not root.Parent then return false end
+            local node=table.remove(stack)
+            visit(node)
+            for _,child in node:GetChildren() do table.insert(stack,child) end
+            count+=1
+            if count>=40 or os.clock()-started>=0.002 then
+              count=0;task.wait();started=os.clock()
+            end
+          end
+          return true
+        end
+        menuMasks.clear=function()
+          for object,entry in menuMasks.entries do
+            menuMasks.remove(object)
+            pcall(function() if object.Parent then object[entry.property]=entry.original end end)
+          end
+          for root,record in menuMasks.roots do
+            record.added:Disconnect();record.destroying:Disconnect();menuMasks.roots[root]=nil
+          end
+          table.clear(menuMasks.pending)
+        end
+        a11260.Maid:Give(v2420.Heartbeat:Connect(function()
+          if Toggles16.StreamerMode and Toggles16.StreamerMode.Value then menuMasks.flush() end
+        end))
+        local fn1134 = function(a11287, a2397)
+          menuMasks.bind(a11287,"Text",a2397)
         end
         local fn1135 = function(a11288)
-          a11288.Image = str102
-          if obj12[a11288] then
-            return
-          end
-          obj12[a11288] = true
-          table.insert(
-            tbl574,
-            a11288:GetPropertyChangedSignal("Image"):Connect(function()
-              if a11288.Image ~= str102 then
-                a11288.Image = str102
-              end
-            end)
-          )
+          menuMasks.bind(a11288,"Image",function() return str102 end)
         end
         local fn1136 = function(a11289, ...)
           local v2533 = a11289
@@ -60924,11 +61060,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 if DisplayName and DisplayName:IsA("TextLabel") then
                   fn1134(DisplayName, v2564)
                 end
-                local getDescendantsResult22, v2566, v2567 = v2558:GetDescendants()
-                for k578, v2568 in getDescendantsResult22, v2566, v2567 do
-                  if (v2568:IsA("ImageLabel") or v2568:IsA("ImageButton")) and tostring(v2568.Image):find("rbxthumb", 1, true) then
-                    fn1135(v2568)
-                  end
+                local function maskAvatar(node)
+                  if (node:IsA("ImageLabel") or node:IsA("ImageButton")) and tostring(node.Image):find("rbxthumb",1,true) then fn1135(node) end
+                end
+                local record=menuMasks.watchRoot(v2558,maskAvatar)
+                if not record.scanned and not record.scanning then
+                  record.scanning=true
+                  record.scanned=menuMasks.walk(v2558,maskAvatar)
+                  record.scanning=false
                 end
                 flag144 = true
               end
@@ -60937,28 +61076,19 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return flag144
         end
         local fn1141 = function(a11294)
-          local v2569 = a11294 and fn1136(a11294, "peoplepage", "FocusRoot", "PeopleReactView", "People")
-          if not v2569 then
-            return
-          end
-          if obj12[v2569] then return end
-          obj12[v2569]=true
-          table.insert(tbl574,v2569.DescendantAdded:Connect(function(label)
+          local people=a11294 and fn1136(a11294,"peoplepage","FocusRoot","PeopleReactView","People")
+          if not people then return end
+          local function maskLabel(label)
             if label:IsA("TextLabel") and fn1137(label.Text) then
               local prefix=label.Text:sub(1,1)=="@" and "@" or ""
               fn1134(label,function() return prefix..fn1123() end)
             end
-          end))
-          local getDescendantsResult23, v2570, v2571 = v2569:GetDescendants()
-          for k579, v2572 in getDescendantsResult23, v2570, v2571 do
-            if k579%40==0 then task.wait() end
-            if v2572:IsA("TextLabel") and fn1137(v2572.Text) then
-              local v2573 = v2572.Text:sub(1, 1) == "@" and "@" or ""
-              fn1134(v2572, function()
-                return v2573 .. fn1123()
-              end)
-            end
           end
+          local record=menuMasks.watchRoot(people,maskLabel)
+          if record.scanned or record.scanning then return end
+          record.scanning=true
+          record.scanned=menuMasks.walk(people,maskLabel)
+          record.scanning=false
         end
         local fn1142 = function()
           if flag134 then
@@ -61177,6 +61307,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
         end
         local fn1149 = function()
+          flag135=false
+          menuMasks.clear()
           for k588, v2603 in tbl574 do
             pcall(function()
               v2603:Disconnect()

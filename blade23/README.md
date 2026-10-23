@@ -16,6 +16,8 @@ A aba **blade 23** contém **Blade / Sigil**, **Rot** e **Filas**. A aba **Ponto
 
 Todas as configurações da aba **blade 23** são salvas automaticamente por conta em `sentinel/.cache/blade23_settings_<UserId>.json`, verificadas a cada segundo e gravadas somente quando mudam. Também entram no **Save Config**, incluindo teclas e seleções de contas offline. O último salvamento automático é restaurado após o autoload de perfil, antes de liberar a inicialização dos bots. Carregar manualmente outro perfil aplica suas opções e atualiza o salvamento automático. Iniciar/Parar e os estados internos dos trabalhadores não são configurações e não ligam o bot por causa desse arquivo. A retomada autorizada após hop continua usando o mecanismo existente.
 
+Contas com a versão atual do Sentinel carregada no mesmo PC são anunciadas automaticamente por arquivos locais em `sentinel/.cache/blade_local_clients/`, independentemente de estarem em uma fila, rodando XP/ROT ou aguardando no menu. O proximity check reconhece UserId, servidor e mapa; anúncios vencem após 8 segundos sem atualização e ficam inativos no Unload. Atualize todas as contas e use a mesma pasta de arquivos do executor. Pastas isoladas não permitem identificar os outros clientes; nesse caso, selecione as contas manualmente como aliados. A identificação automática é temporária e não altera sua lista permanente de aliados.
+
 Em **Aliados do servidor**, selecione as contas presentes; a identificação salva usa UserId. Aliados selecionados e **Alts** de ROT ficam excluídos da verificação de proximidade, inclusive com Ignore Friendly ativo. As listas preservam contas offline até você removê-las. Para configurar outra conta, use o perfil desejado nessa conta; cada conta mantém seu próprio último ajuste automático.
 
 **Proximity Check**, **Skip Illusionist Server** e **Stay In Server** têm controles separados para Gaia e Khei. Com Stay In Server e uma ameaça configurada, o Sigil salva o progresso, encerra o trabalhador e vai ao menu no mesmo servidor. Aguarda **Play manual** e o personagem reaparecer antes de retomar a etapa salva. Ao retomar o XP, reaplica a espera de entrada da cela e dos mobs, preservando os contadores. **Parar Sigil** cancela a retomada pendente. A opção **Menu por Illusionist quando Super (Gaia)** pode solicitar esse menu mesmo sem Stay In Server.
@@ -59,7 +61,7 @@ Antes de iniciar o combate com Shriekers, a conta exige a quantidade mínima con
 - Cantos: `(2272.9111328125, 62.99999237060547, 791.964599609375)` e `(2265.51806640625, 62.99999237060547, 776.548583984375)`.
 - Mapa: `5208655184`.
 
-O farm soma as quedas individuais de HP até **6.700 de dano com espada**, depois desequipa a arma, confirma **3 socos sem carregar mana** para desbloqueá-la e faz **300 de dano com socos de mana**, em sequências de quatro M1 após cada carga até aproximadamente 95% de mana. O alcance dos socos é de aproximadamente 5 studs. Curas atualizam a referência de HP sem somar nem subtrair do contador. Os contadores de espada, socos sem mana (um por M1 confirmado, mesmo atingindo vários mobs) e dano com mana são salvos por conta para retomada. O dano dos três socos iniciais não é somado à meta dos socos de mana.
+O farm soma as quedas individuais de HP até **6.700 de dano com espada**, depois desequipa a arma, confirma **3 socos sem carregar mana** para desbloqueá-la e faz **300 de dano com socos de mana**, em sequências de quatro M1 após cada carga até aproximadamente 95% de mana. O alcance dos socos é de aproximadamente 5 studs. Curas atualizam a referência de HP sem somar nem subtrair do contador. Os contadores de espada, socos sem mana (um por M1 confirmado, mesmo atingindo vários mobs) e dano com mana são salvos por conta para retomada. O dano dos três socos iniciais não é somado à meta dos socos de mana. A confirmação de carga em 95% é capturada antes de soltar a mana e da espera de liberação; a queda passiva nesse intervalo não cancela a sequência. O bot espera o marcador Charge desaparecer antes dos quatro M1 e respeita o término de LightAttack entre eles. Auto Charge, Snap Train e Train Climb cedem o controle durante a sequência; a liberação também solta G caso a carga tenha começado pelo teclado. Os três socos normais existentes permanecem iguais.
 
 A mira procura atingir o maior número de alvos dentro do alcance estimado, usando a direção e pequenos ajustes de posição na cela. A geometria é uma estimativa; a eficácia física deve ser conferida no jogo.
 
@@ -106,7 +108,7 @@ A remoção da aba de gravação de pontos não apaga arquivos de pontos existen
 
 ## Validação
 
-O runtime passou pela compilação Luau. Quarenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Quarenta e seis testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -114,7 +116,7 @@ Para executar os testes de rota com o CLI oficial Luau instalado:
 LUAU_BIN=/caminho/para/luau python3 -m unittest discover -s tests -p test_route14.py -v
 ```
 
-A máscara de nomes do menu Esc evita repetir a varredura completa da árvore do menu a cada 0,25 segundo; a primeira varredura distribui o trabalho entre frames. A melhora física de desempenho precisa ser conferida no cliente.
+A máscara de nomes do Esc agrupa mudanças de Text/Image e aplica no máximo 32 atualizações ou 2 ms de trabalho por frame. Não reescreve a propriedade dentro do próprio evento, evitando realimentação com o menu do Roblox. A descoberta inicial da interface percorre os filhos por lotes de até 40 nós ou 2 ms, e os eventos de elementos destruídos são desconectados. Raízes já analisadas não repetem a busca completa a cada atualização. Os testes simulam conflito de escrita com o Roblox, 500 menus destruídos e limite de trabalho por frame. A melhora física de desempenho precisa ser conferida no cliente.
 
 Os testes usam trechos reais do runtime com serviços simulados. Movimentação física, hitboxes, diálogos e o fluxo completo com várias contas ainda precisam de teste dentro do jogo.
 

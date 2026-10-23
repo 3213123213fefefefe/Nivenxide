@@ -203,7 +203,7 @@ assert(__L3.bladeXPShriekers() and plainRemaining==1)
         self.run_luau(r'''
 local __L3={bladeStatus=function() end}
 local tool={};local mana={Value=10};local hum={UnequipTools=function() tool=nil end}
-local character={FindFirstChildOfClass=function() return hum end,FindFirstChild=function() return mana end,FindFirstChildWhichIsA=function() return tool end}
+local character={FindFirstChildOfClass=function() return hum end,FindFirstChild=function(_,key) if key=="Mana" then return mana end end,FindFirstChildWhichIsA=function() return tool end}
 local LocalPlayer21={Character=character};local charges,attacks=0,0
 local tbl308={{bladeFistDamage=0}}
 local fn576=function() return false end
@@ -1057,6 +1057,136 @@ assert(leaderboardPlayerFromLabel(label("Row","Rogue Two"))==bob)
 assert(leaderboardPlayerFromLabel(label("Row","whatever",1))==alice)
 assert(leaderboardPlayerFromLabel(label("Row","unrelated"))==nil)
 names[bob]="Rogue One";assert(leaderboardPlayerFromLabel(label("Row","Rogue One"))==nil)
+''')
+
+
+    def test_local_client_presence_is_independent_of_queues_and_rejects_stale_or_other_servers(self):
+        service=self.part('      tbl358.localClients=function()', '      tbl358.channel = function(')
+        self.run_luau(r'''
+local now=100;local os={time=function() return now end,clock=function() return now end}
+local function clone(t) local r={};for k,v in t do r[k]=v end;return r end
+local disk={};local reads=0;local writes=0
+local readJson=function(path) reads+=1;return disk[path] and clone(disk[path]) end
+local writeJson=function(path,value) writes+=1;disk[path]=clone(value);return true end
+local alice={UserId=1};local bob={UserId=2};local foreign={UserId=3};local inactive={UserId=4}
+local players={alice,bob,foreign,inactive}
+local function create(player,job,place)
+ local tbl358={};local LocalPlayer23=player;local game={JobId=job,PlaceId=place}
+ local getResult25={GetPlayers=function() return players end}
+ local v1317={Heartbeat={Connect=function(_,fn) return {Disconnect=function(self) self.disconnected=true end,fire=fn} end}}
+'''+service+r'''
+ return tbl358.localClients()
+end
+local a=create(alice,"same",10);local b=create(bob,"same",10);create(foreign,"other",10)
+a.tick();assert(a.isAlly(bob) and b.isAlly(alice),"idle loaded clients must be recognized without a worker/queue")
+assert(not a.isAlly(foreign) and not a.isAlly(inactive))
+local count=reads;for i=1,1000 do assert(a.isAlly(bob)) end;assert(reads==count,"hot proximity checks must use the cached presence")
+local filename="sentinel/.cache/blade_local_clients/p_2.json"
+disk[filename].placeId=11;a.tick();assert(not a.isAlly(bob))
+disk[filename].placeId=10;disk[filename].at=now+20;a.tick();assert(not a.isAlly(bob),"future records cannot mark enemies as local")
+b.tick();a.tick();assert(a.isAlly(bob))
+now+=9;assert(not a.isAlly(bob),"crashed accounts expire even if active=true was left on disk")
+b.tick();a.tick();assert(a.isAlly(bob))
+b.stop();a.tick();assert(not a.isAlly(bob) and not b.isAlly(alice))
+local w=writes;b.stop();assert(writes==w,"unload cleanup is idempotent")
+players={alice};a.tick();assert(next(a.members)==1 and a.checked[2]==nil)
+''')
+
+    def test_menu_masks_coalesce_events_cap_frame_work_and_release_destroyed_ui(self):
+        masks=self.part('        local menuMasks={', '        a11260.Maid:Give(v2420.Heartbeat:Connect(function()')
+        self.run_luau(r'''
+local task={wait=function() end};local flag135=true;local Toggles16={StreamerMode={Value=true}}
+local function signal()
+ local handlers={};local s={}
+ s.Connect=function(_,fn) local key={};handlers[key]=fn;return {Disconnect=function() handlers[key]=nil end} end
+ s.fire=function() local copy=table.clone(handlers);for key,fn in copy do if handlers[key] then fn() end end end
+ s.count=function() local n=0;for _ in handlers do n+=1 end;return n end
+ return s
+end
+local function object()
+ local changed=signal();local destroyed=signal();local added=signal();local value="Original";local writes=0
+ local result={Parent=true,Destroying=destroyed,DescendantAdded=added,GetPropertyChangedSignal=function() return changed end,GetChildren=function() return {} end}
+ setmetatable(result,{__index=function(_,key) if key=="Text" then return value elseif key=="writes" then return writes end end,__newindex=function(t,key,v) if key=="Text" then writes+=1;value=v;changed.fire() else rawset(t,key,v) end end})
+ return result,changed,destroyed
+end
+'''+masks+r'''
+local label,changed,destroyed=object()
+menuMasks.bind(label,"Text",function() return "Alias" end)
+for i=1,1000 do menuMasks.bind(label,"Text",function() return "Alias" end);changed.fire() end
+assert(changed.count()==1 and destroyed.count()==1 and label.writes==0,"binding/changing must queue, never recursively rewrite")
+menuMasks.flush();assert(label.Text=="Alias" and label.writes==1 and next(menuMasks.pending)==nil)
+-- Simulate Roblox enforcing the original text from its own callback.
+local enforce=changed:Connect(function() if label.Text~="Original" then label.Text="Original" end end)
+changed.fire();local before=label.writes;menuMasks.flush();assert(label.writes-before==2,"one bounded attempt, not an event feedback loop")
+enforce:Disconnect();destroyed.fire();assert(changed.count()==0 and destroyed.count()==0 and menuMasks.entries[label]==nil and menuMasks.pending[label]==nil)
+for i=1,500 do
+ local item,_,death=object();menuMasks.bind(item,"Text",function() return "x" end);menuMasks.watchRoot(item,function() end);death.fire()
+end
+assert(next(menuMasks.entries)==nil and next(menuMasks.roots)==nil,"destroyed menus cannot accumulate listeners")
+local labels={}
+for i=1,100 do local item=object();table.insert(labels,item);menuMasks.bind(item,"Text",function() return "Alias" end) end
+menuMasks.flush();local updates=0;for _,item in labels do updates+=item.writes end
+assert(updates>0 and updates<=32,"one frame must have bounded work")
+menuMasks.clear();assert(next(menuMasks.entries)==nil and next(menuMasks.pending)==nil)
+for _,item in labels do assert(item.Text=="Original") end
+''')
+
+
+    def test_charge_reports_success_before_release_decay_and_yields_to_blade_owner(self):
+        charge=self.part('          local chargeUntil = function(a1624, a2192)', '          a1593.State.mana = {')
+        self.run_luau(r'''
+local clock=0;local tick=function() return clock end
+local mana={Value=0};local charging=false;local charges=0;local releases=0
+local character={FindFirstChildWhichIsA=function() return nil end,FindFirstChild=function(_,key) if key=="Mana" then return mana elseif key=="Charge" then return charging end end}
+local LocalPlayer15={Character=character};local a1593={State={}};local canUse=function() return true end
+local Toggles7={};local tbl220={false};local flag40=false
+local decharge=function() releases+=1;charging=false;mana.Value-=0.7 end
+local fn438=function(seconds) clock+=seconds end
+local charge=function() charges+=1;charging=true;mana.Value=math.min(95,mana.Value+20);clock+=0.1 end
+'''+charge+r'''
+assert(chargeUntil(95,function() return true end)==true)
+assert(mana.Value<94.9 and releases==1,"success must survive decharge and its delay")
+a1593.State.bladeManaOwner=true;mana.Value=0;local before=charges
+assert(chargeUntil(95)==false and charges==before,"background calls must yield to Blade")
+assert(chargeUntil(95,function() return true end)==true and charges>before,"owned Blade charge is allowed")
+a1593.State.bladeManaOwner=false;mana.Value=0
+charge=function() charges+=1;charging=true;mana.Value=10;a1593.State.bladeManaOwner=true end
+before=charges;assert(chargeUntil(95)==false and charges==before+1,"an already-running background charge must exit on ownership")
+''')
+
+    def test_mana_punch_releases_charge_before_four_hits_even_after_mana_decays(self):
+        punch=self.part('__L3.bladeManaPunch=function', '__L3.bladeXPShriekers=function')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local __L3={bladeStatus=function() end}
+local mana={Value=10};local tool=true;local charging=false;local releaseAt;local cooldown=0;local attacks=0;local charges=0
+local hum={UnequipTools=function() tool=false end}
+local character={FindFirstChildOfClass=function() return hum end,FindFirstChildWhichIsA=function() return tool end,FindFirstChild=function(_,key) if key=="Mana" then return mana elseif key=="Charge" then return charging end end}
+local LocalPlayer21={Character=character};local a1723={State={}}
+local fn576=function() return clock<cooldown end
+local task={wait=function(seconds) clock+=math.max(0.05,math.ceil((seconds or 0)/0.05)*0.05);if releaseAt and clock>=releaseAt then charging=false;releaseAt=nil end end}
+a1723.State.mana={chargeUntil=function(target,active)
+ assert(target==95 and active() and a1723.State.bladeManaOwner);charges+=1
+ charging=true;mana.Value=94.3;return true -- The real controller reached 95 before releasing/returning.
+end,decharge=function() if charging and not releaseAt then releaseAt=clock+0.15 end end}
+local fn577=function() assert(not charging and not tool and not fn576() and a1723.State.bladeManaOwner);attacks+=1;cooldown=clock+0.35;mana.Value-=10 end
+'''+punch+r'''
+assert(__L3.bladeManaPunch(function() return true end) and attacks==4 and charges==1)
+assert(not a1723.State.bladeManaOwner)
+mana.Value=10;a1723.State.mana.chargeUntil=function() mana.Value=60;return false end
+assert(not __L3.bladeManaPunch(function() return true end) and attacks==4 and not a1723.State.bladeManaOwner)
+a1723.State.mana.chargeUntil=function() error("charge failed") end
+assert(not __L3.bladeManaPunch(function() return true end) and not a1723.State.bladeManaOwner)
+''')
+
+    def test_decharge_releases_held_key_even_after_remote_becomes_available(self):
+        decharge=self.part('          local decharge = function()', '          local canUse = function()')
+        self.run_luau(r'''
+local keyHeld=true;local releases=0;local fired=0;local v739="boolean"
+local fn436=function() if keyHeld then keyHeld=false;releases+=1 end end
+local v738={FireServer=function(_,value) assert(value==false);fired+=1 end}
+'''+decharge+r'''
+decharge();assert(not keyHeld and releases==1 and fired==1)
+decharge();assert(releases==1 and fired==2)
 ''')
 
 if __name__ == '__main__':
