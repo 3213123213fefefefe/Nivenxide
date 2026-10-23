@@ -815,8 +815,10 @@ local a11260={State={},Tabs={Blade23={AddRightGroupbox=function() return group e
 '''+refresh+ui+r'''
 assert(res464[42]=="Offline","constructing dropdown must not erase saved friends")
 assert(Options17.ServerAllies.Value["Offline [42]"])
+a11260.State.loadingConfig=true
 Options17.ServerAllies:SetValue({["Alice [10]"]=true,["Offline [42]"]=true})
-assert(saved[10]=="Alice" and saved[42]=="Offline")
+assert(saved[10]=="Alice" and saved[42]=="Offline","loading a profile must update effective allies, not only the dropdown")
+a11260.State.loadingConfig=false
 players={self};fn1104()
 assert(Options17.ServerAllies.Value["Alice [10]"] and res464[10]=="Alice")
 Options17.ServerAllies:SetValue({})
@@ -934,6 +936,59 @@ v1009(true);assert(__L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
         self.assertIn('local createTable = table.create',self.source)
         self.assertIn('__L3.bladePauseForMenu=function(reason)',self.source)
         self.assertIn('"ServerAllies"',self.source)
+
+    def test_config_roundtrip_restores_alts_and_allies_including_offline_and_empty_lists(self):
+        parser=self.part('        Dropdown = {', '        ColorPicker = {')
+        methods=self.part('    function SaveManager:Save(name)', '    function SaveManager:Delete(name)')
+        setter=self.part('function Dropdown:SetValue(value)', '\tfunction Dropdown:GetValue()')
+        self.assertNotIn('"RotAlts"',self.part('local tbl732 = {','        for i135'))
+        self.assertNotIn('SetIgnoreIndexes({"ServerAllies"})',self.source)
+        self.run_luau(r'''
+local function clone(x) if type(x)~="table" then return x end;local t={};for k,v in x do t[k]=clone(v) end;return t end
+local disk={};local encoded
+local HttpService={JSONEncode=function(_,data) encoded=clone(data);return "json" end,JSONDecode=function() return clone(encoded) end}
+local writefile=function(path,value) disk[path]=value end;local readfile=function(path) return disk[path] end;local isfile=function(path) return disk[path]~=nil end
+local task={spawn=function(fn,...) fn(...) end,wait=function() end}
+local SaveManager={Folder="sentinel",Ignore={},Library={Toggles={},Options={}},CheckFolderTree=function() end,CheckSubFolder=function() return false end}
+local function option(values,value)
+ local Dropdown={Type="Dropdown",Multi=true,Values=values,Value=value,Display=function() end,SetValues=function(obj,new) obj.Values=new end}
+ local fire=function() end
+'''+setter+r'''
+ return Dropdown
+end
+SaveManager.Parser={
+'''+parser+r'''
+}
+'''+methods+r'''
+local alts=option({"CurrentAlt"},{OfflineAlt=true})
+local allies=option({"Online [10]"},{["Offline [42]"]=true})
+SaveManager.Library.Options={RotAlts=alts,ServerAllies=allies}
+assert(SaveManager:Save("Bots"))
+alts.Value={};allies.Value={}
+assert(SaveManager:Load("Bots"))
+assert(alts.Value.OfflineAlt and allies.Value["Offline [42]"])
+assert(table.find(alts.Values,"OfflineAlt") and table.find(allies.Values,"Offline [42]"))
+-- Saving an intentionally empty profile clears the lists when loaded later.
+alts.Value={};allies.Value={};assert(SaveManager:Save("Empty"))
+alts.Value.CurrentAlt=true;allies.Value["Online [10]"]=true
+assert(SaveManager:Load("Empty") and next(alts.Value)==nil and next(allies.Value)==nil)
+''')
+
+    def test_rot_refresh_preserves_offline_selection_and_supplier_role_does_not_clear_it(self):
+        refresh=self.part('local function rotRefreshPlayers()', '        local function rotCollectSelected()')
+        role=self.part('local fn670 = function()', '        local fn671 = function()')
+        self.assertNotIn('Options9.RotAlts:SetValue({})',self.source)
+        self.run_luau(r'''
+local Options9={RotAlts={Value={OfflineAlt=true},SetValues=function(obj,values) obj.Values=values end}}
+local LocalPlayer24={Name="Me"};local getResult26={GetPlayers=function() return {LocalPlayer24,{Name="OnlineAlt"}} end}
+local tbl368={};local tbl369={};local rotSupplier={explicitSupplier=true};local a1849={State={}}
+'''+refresh+role+r'''
+rotRefreshPlayers()
+assert(Options9.RotAlts.Value.OfflineAlt and table.find(Options9.RotAlts.Values,"OfflineAlt"))
+assert(not fn670(),"supplier role must not turn into a carrier just because a saved config has alts")
+rotSupplier.explicitSupplier=false;assert(fn670(),"receiver uses the preserved selection")
+rotSupplier.explicitSupplier=true;a1849.State.bladeRunAlts={OfflineAlt=true};assert(fn670(),"active Sigil receiver config remains authoritative")
+''')
 
 if __name__ == '__main__':
     unittest.main()

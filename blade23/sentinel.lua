@@ -8215,6 +8215,19 @@ local SaveManager = {} do
             Load = function(idx, data)
                 local object = SaveManager.Library.Options[idx]
                 if object and object.Value ~= data.value then
+                    if (idx=="RotAlts" or idx=="ServerAllies") and type(data.value)=="table" then
+                        local values,seen={},{}
+                        for _,name in object.Values or {} do
+                            if not seen[name] then seen[name]=true;table.insert(values,name) end
+                        end
+                        for key,on in data.value do
+                            local name=type(key)=="number" and on or key
+                            if on and type(name)=="string" and not seen[name] then
+                                seen[name]=true;table.insert(values,name)
+                            end
+                        end
+                        table.sort(values);object:SetValues(values)
+                    end
                     object:SetValue(data.value)
                 end
             end,
@@ -42011,6 +42024,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           qResult4.setJSON("blade23_rot_supplier",rotSupplier.settings)
         end
         local fn670 = function()
+          if rotSupplier.explicitSupplier and not a1849.State.bladeRunAlts then return false end
           local pairsResult5, v1350, v1351 = pairs(a1849.State.bladeRunAlts or (Options9.RotAlts and Options9.RotAlts.Value or {}))
           for k305, v1352 in pairsResult5, v1350, v1351 do
             if v1352 then
@@ -42938,6 +42952,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return entries
         end
         local function queueJoin()
+          rotSupplier.explicitSupplier=false
           if rotQueueEntry then return true end
           if not MResult.available() then
             fn672("Rot Queue: configure shared files or Remote HTTP")
@@ -43107,6 +43122,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   table.insert(tbl372, player.Name)
                 end
               end
+              local seen={}
+              for _,name in tbl372 do seen[name]=true end
+              for name,on in pairs(Options9.RotAlts and Options9.RotAlts.Value or {}) do
+                if on and type(name)=="string" and not seen[name] then
+                  seen[name]=true;table.insert(tbl372,name)
+                end
+              end
               table.sort(tbl372)
               if #tbl372 ~= #tbl368 then
                 flag79 = true
@@ -43256,7 +43278,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             fn672("Pare o Sigil e saia da fila de receptoras antes de iniciar uma fornecedora Rot")
             return
           end
-          if Options9.RotAlts then Options9.RotAlts:SetValue({}) end
+          rotSupplier.explicitSupplier=true
           Library9.Toggles.RotBotEnabled:SetValue(true)
         end})
         rotHidden:AddToggle("RotBotEnabled", {
@@ -43459,7 +43481,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           task.wait(2)
           if not rotSupplier.stopped and Library9.Toggles.RotSupplierResume.Value then
-            if Options9.RotAlts then Options9.RotAlts:SetValue({}) end
+            rotSupplier.explicitSupplier=true
             Library9.Toggles.RotBotEnabled:SetValue(true)
           end
         end)
@@ -59867,7 +59889,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         alliesUpdating=true -- AddDropdown may invoke its default callback during construction.
         local serverAllies=a11260.Tabs.Blade23:AddRightGroupbox("Aliados do servidor")
         serverAllies:AddDropdown("ServerAllies",{Text="Selecionar aliados (salvo por UserId)",Values={},Default={},Multi=true,AllowNull=true,Callback=function(selected)
-          if alliesUpdating or a11260.State.loadingConfig then return end
+          if alliesUpdating then return end
           table.clear(res464)
           for label,on in selected do
             if on then
@@ -59878,10 +59900,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           fn1094(res464);fn1104()
         end})
-        if a11260.SaveManager and a11260.SaveManager.SetIgnoreIndexes then
-          a11260.SaveManager:SetIgnoreIndexes({"ServerAllies"})
-        end
-        serverAllies:AddLabel("Aliados e alts marcadas em RotAlts nao acionam o Proximity Check do Sigil. A lista permanece apos rejoin.",true)
+        serverAllies:AddLabel("Aliados e alts sao incluidos no Save Config; use Set autoload para restaurar o perfil ao entrar. Contas offline continuam selecionadas.",true)
         serverAllies:AddButton({Text="Atualizar jogadores",Func=fn1104})
         a11260.Maid:Give(getResult42.PlayerAdded:Connect(fn1104))
         a11260.Maid:Give(getResult42.PlayerRemoving:Connect(function() task.defer(fn1104) end))
@@ -70367,7 +70386,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           "GripBotEnabled",
           "GripTargets",
           "GripMaster",
-          "RotAlts",
         }
         for i135 = 1, 12 do
           table.insert(tbl732, "MacroTrigger" .. i135)
