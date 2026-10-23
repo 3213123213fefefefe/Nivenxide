@@ -96,7 +96,7 @@ A aba **Pontos do mapa** salva nome, observação, mapa, XYZ e direção do pers
 
 ## Validação
 
-O runtime passou pela compilação Luau. Quarenta testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Trinta e sete testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -108,28 +108,6 @@ A máscara de nomes do menu Esc evita repetir a varredura completa da árvore do
 
 Os testes usam trechos reais do runtime com serviços simulados. Movimentação física, hitboxes, diálogos e o fluxo completo com várias contas ainda precisam de teste dentro do jogo.
 
-## Diagnóstico de RAM na execução
-
-O loader bloqueia outro carregamento enquanto a mesma instância está carregando ou ativa. Para atualizar, use Unload antes. O descarregamento restaura os hooks iniciais após limpar os recursos das funcionalidades e remove o evento de respawn; chamadas repetidas de Unload não repetem a limpeza.
-
-**Settings → Diagnostico Blade 23 → Copiar diagnostico de RAM** copia um relatório local com executor, etapas de inicialização, memória Lua, memória total do cliente quando as APIs estão disponíveis e nomes das opções ativas. O histórico mantém no máximo 64 amostras, com atualização de 5 segundos após carregar. O relatório não é enviado automaticamente.
-
-Se o Roblox fechar antes de abrir a interface, o último registro está em `sentinel/.cache/blade23_ram_diagnostic.json`. Antes de carregar novamente o bot, copie esse registro pelo executor:
-
-```lua
-setclipboard(readfile("sentinel/.cache/blade23_ram_diagnostic.json"))
-```
-
-Os testes simulam 100 ciclos de instalação e remoção de hooks, falha parcial, execução duplicada, histórico limitado e Unload reentrante. Eles não medem o pico real de RAM do Roblox ou do executor.
-
-### Investigação do pico após carregar (ram-guard-3)
-
-O registro do Potassium mostrou o cliente saindo de aproximadamente 3,3 GB para 22 GB após a inicialização; ele não identifica sozinho a rotina causadora. Esta versão testa caminhos suspeitos: a inspeção normal de funções lê no máximo dois upvalues e guarda somente o resultado booleano em um cache de chaves fracas. No Potassium não usa enumeração completa como alternativa; uma API individual ausente aparece em `coreInspectionUnavailable`. A varredura ampla da leaderboard por registry e conexões fica desativada nesse executor. A versão `allies-menu-4` restaura a associação das linhas por UserId ou nomes replicados, sem reativar a varredura ampla.
-
-O leitor de captcha rejeita contagens de geometria excessivas antes de criar tabelas e verifica o espaço disponível para as posições. O diagnóstico versão 2 inclui `build: ram-guard-3`, contagem das inspeções, opções ativas a cada amostra e eventos antes/depois de decodificar captcha ou varrer o registry. Os limites e a compatibilidade passaram por testes simulados; a causa do pico e a redução real de RAM ainda precisam de confirmação no cliente Potassium.
-
-Para comparar, encerre o cliente que já acumulou RAM, reabra e execute o loader atualizado uma vez. Observe inicialmente sem iniciar a automação e copie o novo diagnóstico após cerca de 60 segundos, ou antes se o consumo subir rapidamente.
-
 ## Aliados, pausa no menu e proteções por mundo (allies-menu-4)
 
 Em **blade 23 → Aliados do servidor**, selecione os jogadores na lista múltipla. A lista usa UserIds, compartilha o arquivo de amigos existente e mantém aliados que saíram do servidor. Ela se atualiza ao entrar/sair um jogador e também pelo botão Atualizar jogadores. Não depende de salvar um perfil da interface. Aliados explicitamente salvos, alts selecionadas em RotAlts e membros reconhecidos das filas locais não acionam o Proximity Check do Sigil, mesmo com Ignore Friendly ativado para combate. Safe Server e o Proximity Notifier, quando este usa Ignore Allies, também reconhecem essas alts.
@@ -140,6 +118,10 @@ XP de espada, desbloqueio de mana e XP de socos mantêm seus contadores. Ao reto
 
 **Menu por Illusionist quando Super (Gaia)** pausa no menu quando uma conta com Super detecta um Illusionist não aliado por Observing ou pelo marcador MindMage. Esse menu não exige Allow Hops. **Skip Illusionist Server (Gaia)** segue a política de Stay In Server/Allow Hops. Em Khei existem controles independentes de **Proximity Check**, **Skip Illusionist Server** e **Stay In Server**. Auto Go To Khei agora respeita a escolha configurada, sem desativar Stay In Server ou ser forçado ao iniciar. Distância zero desliga a proximidade no respectivo mundo.
 
-**Leaderboard Observe**, **Better Leaderboard** e **Leaderboard in Menu** permanecem na aba Player. A associação usa UserId da linha quando disponível, username, DisplayName ou nome do personagem replicado. Nomes ambíguos sem identificação ficam sem associação para evitar observar a conta errada. Mudanças de texto/GUI refazem a associação e liberam os listeners anteriores. A leitura ampla do registry continua bloqueada no Potassium para preservar a investigação de RAM.
+**Leaderboard Observe**, **Better Leaderboard** e **Leaderboard in Menu** permanecem na aba Player. A inspeção original de conexões, upvalues e registry foi restaurada também no Potassium. A abertura da leaderboard no menu continua aceitando o personagem temporário do menu.
 
-Os 40 testes incluem seleções persistentes e aliados offline, exclusão de alts, políticas por mundo, pausa e cancelamento, espera pelo Play manual, retomada de contadores e do handoff, detecção de Illusionist e associação de nomes na leaderboard. A compilação e os testes simulados não substituem validar menu, física e diálogos no cliente.
+Os 37 testes incluem seleções persistentes e aliados offline, exclusão de alts, políticas por mundo, pausa e cancelamento, espera pelo Play manual, retomada de contadores e do handoff, detecção de Illusionist e restauração da inspeção original. A compilação e os testes simulados não substituem validar menu, física e diálogos no cliente.
+
+## Remoção das alterações experimentais de RAM
+
+Foram retirados o grupo de diagnóstico, a coleta periódica de memória, os checkpoints de memória no carregamento e a gravação do relatório JSON. Também foram revertidos o cache/limite da inspeção de funções, as restrições de inspeção da leaderboard no Potassium e os limites experimentais no leitor de captcha. A proteção contra execução duplicada e a limpeza normal de Unload continuam funcionando. Aliados, pausa/retomada manual, configurações separadas de Khei e o restante da automação permanecem.

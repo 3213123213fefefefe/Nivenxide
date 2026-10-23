@@ -1,4 +1,4 @@
--- Blade 23 session lifecycle and bounded local RAM diagnostics.
+-- Blade 23 session lifecycle.
 local __bootEnv=(getgenv and getgenv()) or shared
 local __bootPrevious=__bootEnv.__BLADE23_SESSION
 if __bootPrevious and __bootPrevious.jobId==game.JobId and (__bootPrevious.executing or __bootPrevious.state=="running") then
@@ -7,34 +7,10 @@ if __bootPrevious and __bootPrevious.jobId==game.JobId and (__bootPrevious.execu
 end
 local __bootSession=__bootPrevious
 if not __bootSession or __bootSession.jobId~=game.JobId or __bootSession.state~="loading" then
-  __bootSession={state="loading",jobId=game.JobId,started=os.clock()}
+  __bootSession={state="loading",jobId=game.JobId}
   __bootEnv.__BLADE23_SESSION=__bootSession
 end
 __bootSession.executing=true
-__bootSession.report=__bootSession.report or {version=1,jobId=game.JobId,placeId=game.PlaceId,samples={}}
-local function __bootMark(phase,sampleOnly)
-  local report=__bootSession.report
-  report.version=2;report.build="allies-menu-4"
-  if not sampleOnly then __bootSession.phase=phase end
-  local entry={phase=__bootSession.phase,event=phase,seconds=math.floor((os.clock()-__bootSession.started)*10)/10}
-  pcall(function() entry.luaMB=math.floor(gcinfo()/1024*10)/10 end)
-  pcall(function() entry.clientMB=math.floor(game:GetService("Stats"):GetTotalMemoryUsageMb()*10)/10 end)
-  if not report.executor then
-    pcall(function() report.executor=tostring(identifyexecutor and identifyexecutor() or getexecutorname and getexecutorname() or "unknown") end)
-  end
-  if #report.samples>=64 then table.remove(report.samples,1) end
-  table.insert(report.samples,entry)
-  report.state=__bootSession.state;report.phase=__bootSession.phase
-  if writefile then pcall(function()
-    if makefolder and isfolder then
-      if not isfolder("sentinel") then makefolder("sentinel") end
-      if not isfolder("sentinel/.cache") then makefolder("sentinel/.cache") end
-    end
-    writefile("sentinel/.cache/blade23_ram_diagnostic.json",game:GetService("HttpService"):JSONEncode(report))
-  end) end
-end
-__bootMark("runtime-entry")
-
 
 local __UI_FILES = {
 	lib = [=[
@@ -8704,12 +8680,7 @@ local EncodingService = cloneref(game:GetService("EncodingService"))
 
 local CSGPHS8 = {}
 local newVector3 = Vector3.new
--- Corrupt mesh counts must fail before allocating a multi-gigabyte table.
-local function createTable(count, value)
-  assert(type(count)=="number" and count==count and count>=0 and count%1==0 and count<=600000,
-    "captcha geometry count exceeds memory limit")
-  return table.create(count,value)
-end
+local createTable = table.create
 local min = math.min
 local max = math.max
 
@@ -9186,7 +9157,6 @@ end
 function CSGPHS8.decodePayload(payload, geomType)
 	local r = { data = payload, at = 0 }
 	local hullCount, positionCount, faceCount = u32(r), u32(r), u32(r)
-  assert(hullCount<=2048 and positionCount<=200000 and faceCount<=200000,"captcha geometry exceeds memory limit")
 	u32(r) -- first hull position count
 	u32(r) -- first hull face count
 	local rawLength = u32(r)
@@ -9202,8 +9172,6 @@ function CSGPHS8.decodePayload(payload, geomType)
 	local clersAt = r.at
 	r.at += clersLength
 	local positionValueCount = positionCount * 3
-  assert(clersAt+clersLength<=buffer.len(payload) and positionValueCount*4<=buffer.len(payload)-r.at,
-    "captcha geometry counts exceed payload length")
 	local positions = createTable(positionValueCount)
 	for i = 1, positionValueCount do
 		positions[i] = f32(r)
@@ -20369,7 +20337,6 @@ __modules.m6de19a4ba64c = function()
 end
 __modules.m356b75b2d82b = function()
   return function(a1163)
-    __bootMark("bootstrap-services")
     local newResult4 = requireModule("m193359c7f004").new()
     local startResult = requireModule("m692c800c763f").start(a1163, { onRevoke = newResult4 })
     requireModule("m849ca4e850e4").start(a1163, {
@@ -20879,33 +20846,6 @@ __modules.m356b75b2d82b = function()
         if not (hookfunction and checkcaller and newcclosure and islclosure and getupvalues) then
           return
         end
-        -- Inspect at most two upvalues, never materialize every captured value on Potassium.
-        local executorName=string.lower(tostring(__bootSession.report and __bootSession.report.executor or ""))
-        local potassium=string.find(executorName,"potassium",1,true)~=nil
-        local readUpvalue=getupvalue or (debug and debug.getupvalue)
-        local inspected=setmetatable({},{__mode="k"})
-        local function capturesOnlyRunService(fn)
-          local cached=inspected[fn]
-          if cached~=nil then return cached end
-          local report=__bootSession.report
-          if report then report.coreInspections=(report.coreInspections or 0)+1 end
-          local matches=false
-          if type(readUpvalue)=="function" then
-            local ok,first=pcall(readUpvalue,fn,1)
-            if ok and first==RunService then
-              local okSecond,second=pcall(readUpvalue,fn,2)
-              local missing=not okSecond and (tostring(second):find("out of range",1,true) or tostring(second):find("invalid upvalue index",1,true))
-              matches=(okSecond and second==nil) or not not missing
-            end
-          elseif not potassium then
-            local ok,values=pcall(getupvalues,fn)
-            matches=ok and type(values)=="table" and #values==1 and values[1]==RunService
-          elseif report then
-            report.coreInspectionUnavailable=true
-          end
-          inspected[fn]=matches
-          return matches
-        end
         local active=true
         local hooks={}
         local connections={}
@@ -21047,7 +20987,8 @@ __modules.m356b75b2d82b = function()
               if not active then return v140(a1193) end
               if not checkcaller() then
                 if type(a1193) == "function" and islclosure(a1193) then
-                  if capturesOnlyRunService(a1193) then
+                  local getupvaluesResult2 = getupvalues(a1193)
+                  if #getupvaluesResult2 == 1 and getupvaluesResult2[1] == RunService then
                     return v140(fn108)
                   end
                 end
@@ -44267,12 +44208,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return nil, "PhysicalConfigData unreadable"
         end
         local v1451
-        __bootMark("captcha-decode:begin",true)
         local ok135, result129 = pcall(function()
           v1451 = res282.decode(res283)
         end)
-        __bootSession.report.captchaDecode=ok135 and "ok" or tostring(result129):sub(1,200)
-        __bootMark("captcha-decode:end",true)
         if not (ok135 and v1451) then
           return nil, "failed to decode CSG: " .. tostring(result129)
         end
@@ -58529,44 +58467,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           return a2385
         end
-        local function resolveLeaderboardPlayer(label)
-          local function clean(value)
-            return tostring(value or ""):gsub("<[^>]*>",""):gsub("‎",""):gsub("%s+"," "):match("^%s*(.-)%s*$"):lower()
-          end
-          local id=tonumber(label:GetAttribute("UserId") or label:GetAttribute("PlayerUserId"))
-          if id then
-            for _,player in getResult41:GetPlayers() do if player.UserId==id then return player end end
-          end
-          local text,name=clean(label.Text),clean(label.Name)
-          local found
-          for _,player in getResult41:GetPlayers() do
-            local rogue=clean(fn1036(player))
-            local base=rogue:match("^(.-),") or rogue
-            local matches=(name==clean(player.Name)) or text==clean(player.Name)
-              or (rogue~="" and rogue~="nil" and rogue~="unknown" and (text==rogue or text==base))
-              or (text~="" and text==clean(player.DisplayName))
-            if matches then
-              if found and found~=player then return nil end
-              found=player
-            end
-          end
-          return found
-        end
         local fn1063 = function(a11222)
-          if not a11222 or not a11222:IsA("TextLabel") then
-            return
-          end
-          local player=resolveLeaderboardPlayer(a11222)
-          if not player and a11194.State.scrambleOn and a11194.State.scrambleOn() then player=obj10[a11222] end
-          if player then
-            fn1062(player,a11222);pcall(fn1060,player,a11222)
-            return
-          end
-          if string.find(string.lower(tostring(__bootSession.report.executor or "")),"potassium",1,true) then
-            __bootSession.report.leaderboardInspection="replicated-name-mapping"
-            tbl545[a11222]=nil
-            local button=a11222:FindFirstChild("SPB")
-            if button then button:Destroy() end
+          if not a11222:IsA("TextLabel") then
             return
           end
           task.spawn(function()
@@ -58600,14 +58502,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
           end)
         end
-        local leaderboardRows={}
         local fn1064 = function()
           local v2338 = fn1055() or v2257
           if not v2338 or v2256 == v2338 then
             return
           end
-          for label in leaderboardRows do newResult76[label]=nil end
-          table.clear(leaderboardRows)
           v2256 = v2338
           local ok182, result170 = pcall(function()
             return v2338:WaitForChild("MainFrame", 5):WaitForChild("ScrollingFrame", 5)
@@ -58619,21 +58518,16 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           for k533, v2341 in getChildrenResult88, v2339, v2340 do
             if v2341:IsA("TextLabel") then
               fn1063(v2341)
-              leaderboardRows[v2341]=true
-              newResult76[v2341]=v2341:GetPropertyChangedSignal("Text"):Connect(function() fn1063(v2341) end)
             end
           end
           newResult76.lbAdded = result170.ChildAdded:Connect(function(a11223)
             if a11223:IsA("TextLabel") then
               task.wait(0.1)
               fn1063(a11223)
-              leaderboardRows[a11223]=true
-              newResult76[a11223]=a11223:GetPropertyChangedSignal("Text"):Connect(function() fn1063(a11223) end)
             end
           end)
           newResult76.lbRemoved = result170.ChildRemoved:Connect(function(a11224)
             tbl545[a11224] = nil
-            newResult76[a11224]=nil;leaderboardRows[a11224]=nil
           end)
         end
         local fn1065 = function(a11225, a2386)
@@ -58663,10 +58557,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return nil
         end
         local fn1067 = function()
-          if string.find(string.lower(tostring(__bootSession.report.executor or "")),"potassium",1,true) then
-            __bootSession.report.leaderboardInspection="disabled-potassium"
-            return
-          end
           if not (getreg_ and v2238 and v2242 and getfenv_ and v2239 and v2241) then
             return
           end
@@ -58684,7 +58574,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               collectgarbage("collect")
             end)
             task.wait(0.1)
-            __bootMark("leaderboard-registry:begin",true)
             local pairsResult18, v2350, v2351 = pairs(getreg_())
             for k536, v2352 in pairsResult18, v2350, v2351 do
               if typeof(v2352) == "function" and v2239(v2352) and not (v2240 and v2240(v2352)) then
@@ -58720,7 +58609,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
             end
           end)
-          __bootMark("leaderboard-registry:end",true)
         end
         local fn1068 = function()
           local res458, v2359 = fn1055()
@@ -70701,7 +70589,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       pcall(function()
         tbl44.e().preloadKeyHandler()
       end)
-      __bootMark("core-hooks")
       tbl44.f()("Normal")
       local str149 = "https://git.fable.bz/zyu/sentinel-ui/raw/branch/main/"
       local str150 = "https://stella.heroinhound.cc/stella.lua"
@@ -70729,7 +70616,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       local fn1432 = function(a11598, a2485)
         return __UI_FILES[a11598] or ""
       end
-      __bootMark("interface")
       local res653 = loadstring(fn1432("lib", "Library.lua"))()
       __bootSession.library=res653
       local res654 = loadstring(fn1432("theme", "dependencies/ThemeManager.lua"))()
@@ -70742,7 +70628,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         pcall(function() newResult107:DoCleaning() end)
         if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
         __bootSession.state="unloaded"
-        __bootMark("unloaded")
         __bootSession.library=nil
         if __bootEnv.__BLADE23_SESSION==__bootSession then __bootEnv.__BLADE23_SESSION=nil end
         if cleardrawcache then
@@ -70776,40 +70661,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         },
       }
       cResult.migrate()
-      do
-        local diagnostic=tbl743.Tabs.Settings:AddRightGroupbox("Diagnostico Blade 23")
-        local function report()
-          __bootMark("snapshot",true)
-          local toggles={}
-          for name,toggle in res653.Toggles do
-            if toggle.Value==true and #toggles<100 then table.insert(toggles,tostring(name)) end
-          end
-          table.sort(toggles)
-          __bootSession.report.activeToggles=toggles
-          return aResult.HttpService:JSONEncode(__bootSession.report)
-        end
-        diagnostic:AddLabel("Diagnostico local: RAM do cliente, memoria Lua e ultima etapa de carregamento.",true)
-        diagnostic:AddButton({Text="Copiar diagnostico de RAM",Func=function()
-          local ok,value=pcall(report)
-          if ok and setclipboard then setclipboard(value);res653:Notify({Title="Blade 23",Description="Diagnostico copiado; cole na conversa."})
-          elseif ok then print("[blade23 diagnostic] "..value) end
-        end})
-        local elapsed=0
-        newResult107:Give(aResult.RunService.Heartbeat:Connect(function(dt)
-          elapsed+=dt
-          if elapsed<5 then return end
-          elapsed=0
-          if __bootSession.state~="unloaded" and __bootSession.state~="failed" then
-            local toggles={}
-            for name,toggle in res653.Toggles do
-              if toggle.Value==true and #toggles<100 then table.insert(toggles,tostring(name)) end
-            end
-            table.sort(toggles)
-            __bootSession.report.activeToggles=toggles
-            __bootMark("sample",true)
-          end
-        end))
-      end
       -- Map coordinate recorder: local named points, independent of the automation.
       do
         local pointsUI={app=tbl743,file="sentinel/.cache/map_points.json",labels={},data={version=1,points={}},elapsed=0}
@@ -71017,78 +70868,34 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           pcall(tbl743.State.onModeratorsLoaded)
         end
       end)
-      __bootMark("module:l")
-      task.wait()
       tbl44.l()(tbl743)
-      __bootMark("module:p")
-      task.wait()
       tbl44.p()(tbl743)
-      __bootMark("module:r")
-      task.wait()
       tbl44.r()(tbl743)
-      __bootMark("module:w")
-      task.wait()
       tbl44.w()(tbl743)
-      __bootMark("module:A")
-      task.wait()
       tbl44.A()(tbl743)
-      __bootMark("module:E")
-      task.wait()
       tbl44.E()(tbl743)
-      __bootMark("module:K")
-      task.wait()
       tbl44.K()(tbl743)
-      __bootMark("module:N")
-      task.wait()
       tbl44.N()(tbl743)
-      __bootMark("module:O")
-      task.wait()
       tbl44.O()(tbl743)
-      __bootMark("module:P")
-      task.wait()
       tbl44.P()(tbl743)
-      __bootMark("module:T")
-      task.wait()
       tbl44.T()(tbl743)
-      __bootMark("module:U")
-      task.wait()
       tbl44.U()(tbl743)
-      __bootMark("module:V")
-      task.wait()
       tbl44.V()(tbl743)
-      __bootMark("module:X")
-      task.wait()
       tbl44.X()(tbl743)
-      __bootMark("module:Y")
-      task.wait()
       tbl44.Y()(tbl743)
-      __bootMark("module:Z")
-      task.wait()
       tbl44.Z()(tbl743)
-      __bootMark("module:_")
-      task.wait()
       tbl44._()(tbl743)
-      __bootMark("module:aa")
-      task.wait()
       tbl44.aa()(tbl743)
-      __bootMark("module:ab")
-      task.wait()
       tbl44.ab()(tbl743)
-      __bootMark("module:ac")
-      task.wait()
       tbl44.ac()(tbl743)
-      __bootMark("module:af")
-      task.wait()
       tbl44.af()(tbl743)
       __bootSession.state="running"
-      __bootMark("ready")
       res653:Notify({ Title = "sentinel.bz", Description = "rogue lineage loaded" })
     end, debug.traceback)
     if not ok46 then
       if __bootSession.library and __bootSession.library.Unload then pcall(function() __bootSession.library:Unload() end) end
       if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
       __bootSession.state="failed"
-      __bootMark("failed: "..tostring(result50):sub(1,300))
       getgenv()[res42] = nil
       warn("[sentinel] load failed: " .. tostring(result50))
     end
@@ -71133,9 +70940,9 @@ __bootSession.executing=false
 if not __ok then
   if __bootSession.library and __bootSession.library.Unload then pcall(function() __bootSession.library:Unload() end) end
   if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
-  __bootSession.state="failed";__bootMark("entry-error: "..tostring(__err):sub(1,300))
+  __bootSession.state="failed"
   warn("[blade 23] entry error: "..tostring(__err))
 elseif __bootSession.state=="loading" then
-  __bootSession.state="failed";__bootMark("entry-returned-before-ready")
+  __bootSession.state="failed"
 end
 return __ok and __bootSession.state=="running"

@@ -715,23 +715,6 @@ assert(not execute() and env.__BLADE23_SESSION.state=="failed")
 broken=false;assert(execute() and runs==3)
 ''')
 
-    def test_startup_memory_journal_is_bounded_and_keeps_last_phase(self):
-        startup=self.source[:self.source.index('local __UI_FILES =')]
-        self.run_luau(r'''
-local env={};local getgenv=function() return env end
-local game={JobId="job",PlaceId=1,GetService=function(_,name)
- if name=="Stats" then return {GetTotalMemoryUsageMb=function() return 1234.5 end} end
- return {JSONEncode=function() return "report" end}
-end}
-local gcinfo=function() return 65536 end;local identifyexecutor=function() return "test-executor" end
-local writes=0;local writefile=function() writes+=1 end
-'''+startup+r'''
-__bootSession.state="running";__bootMark("ready")
-for i=1,1000 do __bootMark("sample",true) end
-assert(#__bootSession.report.samples==64 and __bootSession.report.phase=="ready")
-assert(__bootSession.report.samples[1].luaMB==64 and __bootSession.report.samples[1].clientMB==1234.5)
-assert(__bootSession.report.executor=="test-executor" and writes==1002)
-''')
 
     def test_unload_is_reentrant_and_releases_callback_references(self):
         unload=self.part('function Library:Unload()', 'Library:GiveSignal(UserInputService.WindowFocused:')
@@ -770,7 +753,7 @@ land=false;assert(not __L3.bladePlainPunch(function() return true end) and clock
 assert(not __L3.bladePlainPunch(function() return false end) and attacks==4)
 ''')
 
-    def test_core_potassium_inspects_two_values_and_caches_without_enumeration(self):
+    def test_core_restores_full_function_inspection_on_potassium(self):
         core=self.part('local fn44 = function()', '    tbl44.f = function()')
         self.run_luau(r'''
 local __bootSession={report={executor="Potassium"}};local tbl44={};local replacements={}
@@ -781,9 +764,9 @@ local services={Players={LocalPlayer=player},RunService={}}
 tbl44.a=function() return services end;tbl44.e=function() return {keyHandlerEnabled=function() return false end} end
 local getgenv=function() return {} end;local checkcaller=function() return false end
 local newcclosure=function(fn) return fn end;local islclosure=function() return true end
-local getupvalues=function() error("must not enumerate captured tables on Potassium") end
 local captures={};local reads=0
-local getupvalue=function(fn,index) reads+=1;assert(index<=2);return captures[fn][index] end
+local getupvalues=function(fn) reads+=1;return captures[fn] end
+local getupvalue=function() error("must use the original full inspection") end
 local hookfunction=function(target,replacement) local original=replacements[target] or target;replacements[target]=replacement;return original end
 local task={spawn=function(fn) fn() end,wait=function() end}
 '''+core+r'''
@@ -793,49 +776,11 @@ local two=function() return "two" end;captures[two]={services.RunService,{}}
 local other=function() return "other" end;captures[other]={{}}
 local wrap=replacements[coroutine.wrap]
 for i=1,100 do assert(wrap(one)()==nil);assert(wrap(two)()=="two");assert(wrap(other)()=="other") end
-assert(reads==5 and __bootSession.report.coreInspections==3)
-__bootSession.coreCleanup()
-getupvalue=function(fn,index) if index==2 then error("upvalue index out of range") end;return services.RunService end
-fn44()("Normal");assert(replacements[coroutine.wrap](one)()==nil);__bootSession.coreCleanup()
-getupvalue=nil;fn44()("Normal")
-assert(replacements[coroutine.wrap](one)()=="one")
-assert(__bootSession.report.coreInspectionUnavailable)
+assert(reads==300,"original inspection should run without the experimental cache")
 __bootSession.coreCleanup()
 ''')
 
-    def test_potassium_skips_optional_leaderboard_registry_and_connection_inspection(self):
-        registry=self.part('local fn1067 = function()', '        local fn1068 = function()')
-        self.run_luau(r'''
-local __bootSession={report={executor="Potassium"}}
-local getreg_=function() error("registry must not be enumerated") end
-local getconnections_3=function() error("connections must not be inspected") end
-'''+registry+r'''
-fn1067()
-assert(__bootSession.report.leaderboardInspection=="disabled-potassium")
-''')
 
-    def test_captcha_rejects_oversized_counts_before_table_allocation(self):
-        decoder=self.part('local EncodingService = cloneref(game:GetService("EncodingService"))','return CSGPHS8\n]=],')
-        self.run_luau(VEC+r'''
-local cloneref=function(x) return x end;local game={GetService=function() return {} end}
-local allocations=0;local realCreate=table.create
-local table=table.clone(table)
-table.create=function(count,value) allocations+=1;assert(count<=600000);return realCreate(count,value) end
-'''+decoder+r'''
-local payload=buffer.create(60)
-buffer.writeu32(payload,0,1);buffer.writeu32(payload,4,0xffffffff)
-local ok,err=pcall(CSGPHS8.decodePayload,payload,0)
-assert(not ok and tostring(err):find("memory limit") and allocations==0)
-buffer.writeu32(payload,4,1);buffer.writeu32(payload,8,1)
-ok,err=pcall(CSGPHS8.decodePayload,payload,0)
-assert(not ok and tostring(err):find("payload length") and allocations==0)
-buffer.writeu32(payload,4,0);buffer.writeu32(payload,8,0);buffer.writeu32(payload,20,1)
-buffer.writeu32(payload,60-4,0xffffffff)
--- Raw data starts at byte 60, so allocate a larger malformed payload for that branch.
-local raw=buffer.create(64);buffer.copy(raw,0,payload);buffer.writeu32(raw,60,0xffffffff)
-ok,err=pcall(CSGPHS8.decodePayload,raw,0)
-assert(not ok and tostring(err):find("memory limit") and allocations==0)
-''')
 
     def test_explicit_allies_and_rot_alts_override_enemy_filter_for_progression(self):
         friendly=self.part('__L2.fn512 = function', '      __L2.fn513 = function')
@@ -937,22 +882,6 @@ stays=false;assert(not fn558("Enemy") and hops==0)
 __L3.bladeValue=function() return true end;assert(fn558("Enemy") and hops==1)
 ''')
 
-    def test_leaderboard_resolves_replicated_names_ids_and_ambiguous_names(self):
-        resolve=self.part('local function resolveLeaderboardPlayer(label)', '        local fn1063 = function(a11222)')
-        self.run_luau(r'''
-local alice={UserId=10,Name="Alice",DisplayName="Alice D",rogue="Valefor Brief, Knight"}
-local bob={UserId=20,Name="Bob",DisplayName="Bobby",rogue="Harold"}
-local roster={alice,bob};local getResult41={GetPlayers=function() return roster end};local fn1036=function(p) return p.rogue end
-local function label(text,name,id) return {Text=text,Name=name or "Row",GetAttribute=function(_,key) return key=="UserId" and id or nil end} end
-'''+resolve+r'''
-assert(resolveLeaderboardPlayer(label("<b>Valefor Brief</b>"))==alice)
-assert(resolveLeaderboardPlayer(label("Harold"))==bob)
-assert(resolveLeaderboardPlayer(label("anything","Row",10))==alice)
-assert(resolveLeaderboardPlayer(label("Alice"))==alice)
-roster[3]={UserId=30,Name="Other",DisplayName="Other",rogue="Harold"}
-assert(resolveLeaderboardPlayer(label("Harold"))==nil,"never spectate the wrong account for duplicate rogue names")
-assert(resolveLeaderboardPlayer(label("Unknown"))==nil)
-''')
 
     def test_illusionist_super_menu_and_world_skip_settings(self):
         detect=self.part('local fn563 = function(', '        local fn564 = function(')
@@ -995,6 +924,16 @@ local fn531=function() end;local fn532=function() end
 v1009();assert(__L3.bladeMenuPause and a1723.State.bladeManualMenu)
 v1009(true);assert(__L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
 ''')
+
+    def test_ram_monitoring_and_experimental_guards_are_removed(self):
+        loader=(ROOT/'loader.lua').read_text()
+        for marker in ['__bootMark','__bootSession.report','blade23_ram_diagnostic','GetTotalMemoryUsageMb','Diagnostico Blade 23','capturesOnlyRunService','disabled-potassium','geometry exceeds memory limit']:
+            self.assertNotIn(marker,self.source)
+            self.assertNotIn(marker,loader)
+        self.assertIn('pairs(getreg_())',self.source)
+        self.assertIn('local createTable = table.create',self.source)
+        self.assertIn('__L3.bladePauseForMenu=function(reason)',self.source)
+        self.assertIn('"ServerAllies"',self.source)
 
 if __name__ == '__main__':
     unittest.main()
