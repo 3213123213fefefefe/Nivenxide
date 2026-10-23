@@ -95,7 +95,7 @@ O arquivo `routes/Blade.json` preserva os 14 pontos enviados. A automação usa 
 
 ## Validação
 
-O runtime passou pela compilação Luau. Trinta e nove testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Quarenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -119,7 +119,7 @@ XP de espada, desbloqueio de mana e XP de socos mantêm seus contadores. Ao reto
 
 **Leaderboard Observe**, **Better Leaderboard** e **Leaderboard in Menu** permanecem na aba Player. A inspeção original de conexões, upvalues e registry foi restaurada também no Potassium. A abertura da leaderboard no menu continua aceitando o personagem temporário do menu.
 
-Os 39 testes incluem seleções persistentes e aliados offline, exclusão de alts, políticas por mundo, pausa e cancelamento, espera pelo Play manual, retomada de contadores e do handoff, detecção de Illusionist e restauração da inspeção original. A compilação e os testes simulados não substituem validar menu, física e diálogos no cliente.
+Os 41 testes incluem seleções persistentes e aliados offline, exclusão de alts, políticas por mundo, pausa e cancelamento, espera pelo Play manual, retomada de contadores e do handoff, detecção de Illusionist e restauração da inspeção original. A compilação e os testes simulados não substituem validar menu, física e diálogos no cliente.
 
 ## Remoção das alterações experimentais de RAM
 
@@ -130,3 +130,7 @@ Foram retirados o grupo de diagnóstico, a coleta periódica de memória, os che
 As seleções **Alts (RotAlts)** e **Aliados do servidor (ServerAllies)** fazem parte do Save Config. Selecione as contas, salve/crie o perfil em Config → Configuration e use Set autoload nesse perfil para restaurar automaticamente ao executar novamente. O perfil conserva as seleções de contas que não estejam no servidor; elas continuam disponíveis para desmarcar. Carregar outro perfil aplica a lista de aliados daquele perfil, inclusive uma lista vazia salva de propósito. Perfis antigos que não continham essas opções precisam ser salvos novamente.
 
 Iniciar uma fornecedora Rot ou retomá-la após rejoin não apaga mais Alts: o papel de fornecedora é separado da seleção. Ao entrar na fila como receptora, o bot volta a usar as alts selecionadas. Os arquivos do perfil permanecem na pasta do executor até serem alterados ou apagados.
+
+## Pausa entre etapas
+
+O controlador de progressão sempre cede 0,1 segundo após executar uma etapa. Isso evita repetir sem pausa uma rotina que retorna imediatamente, por exemplo enquanto um objeto necessário não está disponível, bloqueando o processamento dos frames. A correção mantém as etapas, os critérios de conclusão e as esperas de compra existentes. Os testes verificam retornos imediatos repetidos, parada e ordem das etapas; não reproduzem o travamento nativo do cliente ou do executor.

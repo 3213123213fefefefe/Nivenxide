@@ -40329,6 +40329,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 task.wait(1)
               end
             end
+            -- Every stage may return immediately while waiting for replicated objects.
+            -- Always yield here so retries cannot monopolize the client thread.
+            task.wait(0.1)
           end
         end
         __L3.vector318 = Vector3.new(-3622, 1220, 2241)

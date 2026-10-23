@@ -990,5 +990,41 @@ rotSupplier.explicitSupplier=false;assert(fn670(),"receiver uses the preserved s
 rotSupplier.explicitSupplier=true;a1849.State.bladeRunAlts={OfflineAlt=true};assert(fn670(),"active Sigil receiver config remains authoritative")
 ''')
 
+    def test_progression_loop_yields_when_a_stage_returns_immediately(self):
+        loop=self.part('          while tbl303[1] do\n            local phase = tbl308[1].phase', '        __L3.vector318 =')
+        self.run_luau(r'''
+local tbl303={true};local tbl308={{phase="B1_XP"}};local __L3={bladeEnabled=function() return true end}
+local clock=0;local frames=0;local calls=0;local previous
+local task={wait=function(dt) assert(dt>=0.05);clock+=dt;frames+=1;if frames==50 then tbl303[1]=false end end}
+__L3.bladeStep=function(phase)
+ assert(phase=="B1_XP");calls+=1
+ if previous then assert(clock>previous,"immediate stage retries must give the client a frame") end
+ previous=clock
+ if calls>100 then error("unbounded busy retry") end
+end
+local function run()
+'''+loop+r'''
+run();assert(calls==50 and frames==50 and clock>=4.9)
+''')
+
+    def test_progression_loop_preserves_stage_order_and_stops_at_completion(self):
+        loop=self.part('          while tbl303[1] do\n            local phase = tbl308[1].phase', '        __L3.vector318 =')
+        self.run_luau(r'''
+local tbl303={true};local tbl308={{phase="B1_SWORD"}};local phases={};local frames=0
+local __L3={bladeEnabled=function() return true end}
+local task={wait=function() frames+=1;assert(frames<10,"completed run must exit") end}
+local fn534=function() end
+__L3.bladeStep=function(phase)
+ table.insert(phases,phase)
+ if phase=="B1_SWORD" then tbl308[1].phase="B1_XP"
+ elseif phase=="B1_XP" then tbl308[1].phase="B3_TRAIN"
+ else tbl308[1].phase="P7" end
+end
+__L3.fn640=function() table.insert(phases,"P7");tbl308[1].phase="DONE" end
+local function run()
+'''+loop+r'''
+run();assert(table.concat(phases,",")=="B1_SWORD,B1_XP,B3_TRAIN,P7" and frames==4)
+''')
+
 if __name__ == '__main__':
     unittest.main()
