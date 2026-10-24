@@ -754,7 +754,7 @@ assert(calls==1 and destroyed==1 and #Library.UnloadSignals==0 and Library.Unloa
         self.run_luau(r'''
 local __L3={};local clock=0;local os={clock=function() return clock end}
 local tool={};local hum={UnequipTools=function() tool=nil end}
-local character={FindFirstChildOfClass=function() return hum end,FindFirstChildWhichIsA=function() return tool end}
+local character={FindFirstChild=function() end,FindFirstChildOfClass=function() return hum end,FindFirstChildWhichIsA=function() return tool end}
 local LocalPlayer21={Character=character};local attacks=0;local releases=0;local pending
 local a1723={State={mana={chargeUntil=function() error("ordinary punch must never charge mana") end,decharge=function() releases+=1 end}}}
 local land=true
@@ -765,7 +765,7 @@ local task={wait=function(t)
 end}
 '''+plain+r'''
 for i=1,3 do assert(__L3.bladePlainPunch(function() return true end)) end
-assert(attacks==3 and releases==3 and __L3.bladeUnlockAwaiting==nil)
+assert(attacks==3 and releases==6 and __L3.bladeUnlockAwaiting==nil)
 land=false;assert(not __L3.bladePlainPunch(function() return true end) and clock<2.1)
 assert(not __L3.bladePlainPunch(function() return false end) and attacks==4)
 ''')
@@ -1611,7 +1611,7 @@ local function add(name,id,distance,opts)
 end
 local far=add("Far",1,30);local jailed=add("Jailed",2,1,{jailed=true})
 local near=add("Near",3,3);local carried=add("Carried",4,1,{carried={IsA=function() return false end}})
-local asleep=add("Awake",5,1,{down=false});local counted=add("Counted",6,1)
+local asleep=add("Awake",5,1,{down=false});local counted=add("Counted",6,1,{jailed=true})
 local queued=add("Receiver",7,1);rotDelivery.counted[counted.Character]=true
 local queueRoster=function() return {{userId=7}} end
 local fn698=function() return names end
@@ -1645,7 +1645,7 @@ rotCollectSelected();assert(walks==2)
         self.run_luau(r"""
 local clock=0;local os={clock=function() return clock end};local active=true;local grabbing=false;local sent={}
 local character={tags={Unconscious=true},FindFirstChild=function() end};local player={Parent=true,Character=character}
-local rotCarriedCharacter;local fn697=function() return active end;local fn699=function() return grabbing end
+local rotDelivery={begin=function() end};local rotCarriedCharacter;local fn697=function() return active end;local fn699=function() return grabbing end
 local v1345={HasTag=function(_,c,tag) return c.tags[tag] end};local distance=3
 local MResult={distanceTo=function() return distance end}
 local fn700=function() return {FireServer=function() table.insert(sent,clock) end} end
@@ -1687,6 +1687,136 @@ local FResult3={close=function() closed+=1 end,run=function(npc,answers,opts)
 end}
 """+delivery+r"""
 assert(fn703("Victim") and confirmed==1 and closed==2)
+-- Positive marker is the sixth run result, i.e. seventh value in the pcall tuple.
+tx.jailed=false;carrying=true;jail=false
+FResult3.run=function()
+ carrying=false;victim.Parent=nil
+ return false,false,nil,true,{},true
+end
+rotDelivery.await=function(t) assert(t.dialogueSucceeded==true and not t.jailed);confirmed+=1;return true end
+assert(fn703("Victim") and confirmed==2)
+""")
+
+
+    def test_four_rot_alts_can_each_confirm_four_deliveries_without_character_dedup_loss(self):
+        counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
+        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
+        self.run_luau(r"""
+local clock=0;local os={clock=function() return clock end};local active=true;local carrying=true
+local fn697=function() return active end;local fn699=function() return carrying end
+local fn692=function() end;local saved=0;local v1346=0;local rotCarriedCharacter
+local qResult4={set=function(_,value) saved=value end};local rotWalkStatus={SetText=function() end}
+local players={};local tags={};local v1345={HasTag=function(_,c) return tags[c]==true end}
+local getResult26={GetPlayerFromCharacter=function(_,c) return players[c] end}
+local task={wait=function(dt) clock+=dt end}
+"""+counter+ledger+r"""
+local alts={}
+for i=1,4 do local c={Parent=true};players[c]={Character=c};table.insert(alts,c) end
+local updates=0;rotQueueOnCount=function() updates+=1 end
+for round=1,4 do
+ for _,character in alts do
+  character.Parent=true;players[character].Character=character;tags[character]=false
+  carrying=true;rotCarriedCharacter=character
+  local tx=rotDelivery.begin(character,true);assert(tx,"each new confirmed pickup has its own transaction")
+  -- Existing NPC lookup uses the already armed transaction rather than creating another one.
+  assert(rotDelivery.begin(character)==tx)
+  if round==4 then
+   -- Fast wipe/rejoin can remove the model before the receiver observes its Jailed tag.
+   tx.dialogueSucceeded=true;character.Parent=nil;players[character].Character={}
+  else
+   tx.jailed=true -- latches a transient Jailed event from this pickup even if the tag is gone now
+  end
+  carrying=false;local before=clock
+  assert(rotDelivery.await(tx) and clock-before>=0.5)
+  assert(not fn693(character,tx) and not rotDelivery.await(tx),"duplicate callbacks cannot count a delivery twice")
+  character.Parent=true;players[character].Character=character
+  assert(rotDelivery.begin(character)==nil,"NPC/dialogue replay alone cannot rearm a counted delivery")
+ end
+end
+assert(v1346==16 and saved==16 and updates==16,"four deliveries for each of four alts must produce sixteen")
+""")
+
+    def test_rot_respawn_fallback_requires_positive_npc_ack_and_release(self):
+        counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
+        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
+        self.run_luau(r"""
+local clock=0;local os={clock=function() return clock end};local carrying=true
+local fn697=function() return true end;local fn699=function() return carrying end
+local fn692=function() end;local v1346=0;local qResult4={set=function() end}
+local character={Parent=true};local player={Character=character}
+local getResult26={GetPlayerFromCharacter=function() return player end}
+local v1345={HasTag=function() return false end};local rotWalkStatus={SetText=function() end}
+local task={wait=function(dt) clock+=dt end};local rotCarriedCharacter
+"""+counter+ledger+r"""
+local tx=rotDelivery.begin(character,true);tx.dialogueSucceeded=true;carrying=false
+assert(not rotDelivery.await(tx) and v1346==0,"NPC success alone plus dropping carry is insufficient while victim stays present")
+tx=rotDelivery.begin(character,true);player.Character={}
+assert(not rotDelivery.await(tx) and v1346==0,"respawn alone without positive NPC acknowledgement is insufficient")
+player.Character=character;tx=rotDelivery.begin(character,true);tx.dialogueSucceeded=true;player.Character={};carrying=true
+assert(not rotDelivery.await(tx) and v1346==0,"positive acknowledgement and respawn cannot count before carry is released")
+carrying=false;assert(rotDelivery.await(tx) and v1346==1)
+""")
+
+    def test_plain_punch_owns_mana_waits_for_tool_and_charge_and_cleans_up_on_failure(self):
+        plain=self.part('__L3.bladePlainPunch=function', '__L3.bladeManaPunch=function')
+        self.run_luau(r"""
+local clock=0;local os={clock=function() return clock end};local __L3={bladeStatus=function() end}
+local tool=true;local charging=true;local active=true;local attacks=0;local fail=false
+local hum={UnequipTools=function() end}
+local character={FindFirstChildOfClass=function() return hum end,
+ FindFirstChildWhichIsA=function() return tool end,FindFirstChild=function(_,name) return name=="Charge" and charging end}
+local LocalPlayer21={Character=character};local a1723={State={mana={decharge=function() end,
+ chargeUntil=function() error("ordinary punches must not charge") end}}}
+local landedAt
+local fn577=function()
+ assert(not tool and not charging and a1723.State.bladeManaOwner)
+ if fail then error("temporary input failure") end
+ attacks+=1;landedAt=clock+0.1
+end
+local task={wait=function(dt)
+ assert(a1723.State.bladeManaOwner,"Auto Charge must stay excluded throughout tool release and hit confirmation")
+ clock+=dt
+ if clock>=0.4 then tool=false end
+ if clock>=0.6 then charging=false end
+ if landedAt and clock>=landedAt then __L3.bladeUnlockAwaiting=false;landedAt=nil end
+end}
+"""+plain+r"""
+for i=1,3 do
+ assert(__L3.bladePlainPunch(function() return active end))
+ assert(a1723.State.bladeManaOwner==nil and __L3.bladeUnlockAwaiting==nil)
+end
+assert(attacks==3)
+fail=true;assert(not __L3.bladePlainPunch(function() return active end))
+assert(a1723.State.bladeManaOwner==nil and __L3.bladeUnlockAwaiting==nil)
+fail=false;assert(__L3.bladePlainPunch(function() return active end) and attacks==4,"a transient input failure must permit a later retry")
+""")
+
+    def test_displaced_unlock_farm_walks_back_without_restarting_hp_gate(self):
+        attack=self.part('        __L3.bladeAttack=function(', '        a1723.Maid:Give(function() if __L3.bladeCombatCleanup')
+        self.run_luau(VEC+r"""
+local clock=0;local os={clock=function() return clock end};local tbl303={true};local hits=0;local returns=0
+local anchor=Vector3.new(0,0,0);local root={Parent=true,Position=Vector3.new(5,0,0)}
+local hum={Parent=true,Health=100,AutoRotate=true,MoveTo=function(_,position)
+ if (position-anchor).Magnitude<0.01 and (root.Position-anchor).Magnitude>4 then returns+=1 end
+ root.Position=position
+end}
+local character={FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end}
+local LocalPlayer21={Character=character}
+local __L3={bladeFarmAssigned="shriekers",bladeCombatMode="unlock",bladeAimLabel={SetText=function() end},
+ bladeCellBounds=function() return {},anchor,Vector3.new(0,0,1) end,
+ bladeValue=function(_,fallback) return fallback end,
+ bladeAimPlan=function(_,current) return {count=1,position=current,direction=Vector3.new(0,0,1)} end,
+ bladePlainPunch=function() hits+=1;return true end}
+local fn536=function() end;local fn576=function() return false end
+local RaycastParams={new=function() return {} end};local Enum={RaycastFilterType={Exclude=true}}
+local v966={FindFirstChild=function() end,Raycast=function(_,position,direction)
+ if direction.Y==-9 then return {Position=Vector3.new(position.X,0,position.Z),Normal=Vector3.new(0,1,0)} end
+end}
+local CFrame={lookAt=function() return {} end}
+local task={wait=function(dt) clock+=dt;assert(clock<10,"displaced farm cannot idle indefinitely") end}
+"""+attack+r"""
+__L3.bladeAttack(function() return hits==3 end,function() return {} end,{})
+assert(returns==1 and hits==3 and hum.AutoRotate and __L3.bladeCombatCleanup==nil)
 """)
 
 if __name__ == '__main__':

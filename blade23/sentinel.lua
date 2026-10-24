@@ -39701,7 +39701,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               local current=root.Position
               local flatOffset=Vector3.new(current.X-anchor.X,0,current.Z-anchor.Z).Magnitude
               if flatOffset>__L3.bladeValue("BladeM1Step",1.5)+3 or math.abs(current.Y-anchor.Y)>4 then
-                __L3.bladeAimLabel:SetText("M1 pausado: fora do ponto marcado; confira a cela e o piso")
+                __L3.bladeAimLabel:SetText("M1: fora do ponto; tentando voltar andando ao ataque")
+                if canStand(anchor) then
+                  hum:MoveTo(anchor)
+                  local recoverDeadline=os.clock()+1.5
+                  while running() and not done() and (root.Position-anchor).Magnitude>1 and os.clock()<recoverDeadline do task.wait(0.05) end
+                  if root.Parent then hum:MoveTo(root.Position) end
+                  plan=nil;nextPlan=0
+                end
                 task.wait(0.3)
                 continue
               end
@@ -39712,7 +39719,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   __L3.bladeAimLabel:SetText(string.format("M1: alcance estimado %d alvos | passo max. %.1f studs",plan.count,__L3.bladeValue("BladeM1Step",1.5)))
                 end
               end
-              if plan.count==0 then task.wait(0.2); continue end
+              if plan.count==0 then
+                if __L3.bladeCombatMode=="unlock" then __L3.bladeAimLabel:SetText("Soco normal: sem alvo visivel ao alcance de 5 studs") end
+                task.wait(0.2);continue
+              end
               if (root.Position-plan.position).Magnitude>0.5 and canStand(plan.position) then
                 hum:MoveTo(plan.position)
                 local deadline=os.clock()+0.8
@@ -39903,17 +39913,34 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local character=LocalPlayer21.Character
           local hum=character and character:FindFirstChildOfClass("Humanoid")
           if not hum or not running() then return false end
-          hum:UnequipTools()
-          if character:FindFirstChildWhichIsA("Tool") then return false end
           local control=a1723.State.mana
-          if control and control.decharge then control.decharge() end
-          __L3.bladeCounting=true;__L3.bladeUnlockAwaiting=true
-          fn577()
-          local deadline=os.clock()+1.5
-          while running() and LocalPlayer21.Character==character and __L3.bladeUnlockAwaiting and os.clock()<deadline do task.wait(0.05) end
-          local confirmed=__L3.bladeUnlockAwaiting==false
+          local previousOwner=a1723.State.bladeManaOwner
+          a1723.State.bladeManaOwner=true
+          local live=function() return running() and LocalPlayer21.Character==character end
+          local ok,result=pcall(function()
+            hum:UnequipTools()
+            local deadline=os.clock()+2
+            while live() and character:FindFirstChildWhichIsA("Tool") and os.clock()<deadline do task.wait(0.05) end
+            if not live() or character:FindFirstChildWhichIsA("Tool") then
+              __L3.bladeStatus("Soco normal: aguardando desequipar a espada");return false
+            end
+            if control and control.decharge then control.decharge() end
+            deadline=os.clock()+2
+            while live() and character:FindFirstChild("Charge") and os.clock()<deadline do task.wait(0.05) end
+            if not live() or character:FindFirstChild("Charge") then
+              __L3.bladeStatus("Soco normal: aguardando soltar a carga");return false
+            end
+            __L3.bladeCounting=true;__L3.bladeUnlockAwaiting=true
+            fn577()
+            deadline=os.clock()+1.5
+            while live() and __L3.bladeUnlockAwaiting and os.clock()<deadline do task.wait(0.05) end
+            return __L3.bladeUnlockAwaiting==false
+          end)
           __L3.bladeUnlockAwaiting=nil
-          return confirmed
+          if control and control.decharge then pcall(control.decharge) end
+          a1723.State.bladeManaOwner=previousOwner
+          if not ok then __L3.bladeStatus("Soco normal: falha temporaria; tentando novamente: "..tostring(result));return false end
+          return result
         end
         __L3.bladeManaPunch=function(running)
           local character=LocalPlayer21.Character
@@ -42694,8 +42721,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local rotQueueOnCount
         local rotDelivery={pending=nil,counted=setmetatable({}, {__mode="k"})}
-        local fn693 = function(character)
-          if not character or rotDelivery.counted[character] then return false end
+        local fn693 = function(character,transaction)
+          if not character then return false end
+          if transaction then
+            if transaction.character~=character or transaction.counted then return false end
+            transaction.counted=true -- Deduplicate this delivery, not every delivery of this character forever.
+          elseif rotDelivery.counted[character] then return false end
           rotDelivery.counted[character]=true
           v1346 += 1
           qResult4.set("rotbot_count", v1346)
@@ -42934,7 +42965,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local nextAttempt=0
           while fn697() and os.clock()<deadline do
             if a1863.Character~=character or not a1863.Parent then return false end
-            if fn699() then rotCarriedCharacter=character;return true end
+            if fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
             local carried=character:FindFirstChild("Carried")
             if carried and (not carried:IsA("BoolValue") or carried.Value)
               and (not carried:IsA("ObjectValue") or carried.Value~=nil) then return false end
@@ -42946,11 +42977,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               local remote=fn700()
               if remote then pcall(function() remote:FireServer() end) end
               nextAttempt=os.clock()+0.25
-              if fn699() then rotCarriedCharacter=character;return true end
+              if fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
             end
             task.wait(0.05)
           end
-          if a1863.Character==character and fn699() then rotCarriedCharacter=character;return true end
+          if a1863.Character==character and fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
           return false
         end
         local rotWalkStatus = rotQueueTab:AddLabel("Walk: disabled (select Alts, then enable)")
@@ -43085,11 +43116,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not ready then return false end
           return rotSupplier.flyTo(root.Position+Vector3.new(0,2,0))
         end
-        rotDelivery.begin=function(character)
+        rotDelivery.begin=function(character,fromPickup)
           local pending=rotDelivery.pending
           if pending then return pending.character==character and pending or nil end
-          if not character or rotDelivery.counted[character] or v1345:HasTag(character,"Jailed") then return nil end
-          pending={character=character,jailed=false,started=os.clock()}
+          if not character or (rotDelivery.counted[character] and not fromPickup) or v1345:HasTag(character,"Jailed") then return nil end
+          local player=getResult26 and getResult26:GetPlayerFromCharacter(character)
+          pending={character=character,player=player,jailed=false,started=os.clock()}
           rotDelivery.pending=pending -- Arm before interacting; the tag can arrive before dialogue returns.
           return pending
         end
@@ -43099,13 +43131,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local settled
           while fn697() and rotDelivery.pending==pending and os.clock()<deadline do
             if v1345:HasTag(pending.character,"Jailed") then pending.jailed=true end
-            if pending.jailed and not fn699() then
+            local retired=pending.character.Parent==nil or (pending.player and pending.player.Character~=pending.character)
+            local confirmed=pending.jailed or (pending.dialogueSucceeded and retired)
+            if confirmed and not fn699() then
               settled=settled or os.clock()
               if os.clock()-settled>=0.5 then
-                local counted=fn693(pending.character)
+                local counted=fn693(pending.character,pending)
                 rotDelivery.pending=nil
                 if rotCarriedCharacter==pending.character then rotCarriedCharacter=nil end
-                if counted then rotWalkStatus:SetText("Walk: Rot confirmado (vitima presa e entrega concluida)") end
+                if counted then rotWalkStatus:SetText("Walk: Rot confirmado (entrega individual concluida)") end
                 return counted
               end
             else settled=nil end
@@ -43171,6 +43205,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             holdPosition = false, timeout = 5, silence = 2, maxReplays = 1,
             log = function(message) print("[Rot delivery] " .. tostring(message)) end,
           }))
+          -- Sixth run return is the server's positive success marker (seventh after pcall).
+          if result[1] and result[7]==true then transaction.dialogueSucceeded=true end
           FResult3.close(1)
           local confirmed=rotDelivery.await(transaction)
           if confirmed then
@@ -43445,7 +43481,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             local character=player and player.Character
             if player and player.Parent and not queuedUsers[player.UserId] and rotTargetDown(character)
               and not activeMarker(character,"Carried") and not v1345:HasTag(character,"Jailed")
-              and not rotDelivery.counted[character] and (rotPickupRetry[character] or 0)<=os.clock() then
+              and (rotPickupRetry[character] or 0)<=os.clock() then
               local distance=MResult.distanceTo(player)
               if distance then table.insert(candidates,{player=player,character=character,distance=distance}) end
             end
