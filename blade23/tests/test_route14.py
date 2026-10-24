@@ -486,7 +486,7 @@ assert(calls==5 and tbl308[1].bladeTraining.jagen.confirmed==1)
 Vector3.zero=Vector3.new(0,0,0)
 local player={UserId=1};local target={Position=Vector3.new(10,20,30)}
 local root={Anchored=true};local char={};local LocalPlayer24={Character=char}
-local rotSupplier={masterReady=function(id) assert(id==1);return player,target end,status={SetText=function() end}}
+local rotSupplier={jailBlocked=function() return false end,masterReady=function(id) assert(id==1);return player,target end,status={SetText=function() end}}
 local disconnected=0;local cleared=0;local clipped=0;local destination
 local fn676=function() return {Disconnect=function() disconnected+=1 end} end
 local fn677=function(p,speed) destination=p;assert(speed==100) end
@@ -1230,6 +1230,7 @@ assert(rotDelivery.await(tx2) and v1346==2,"confirmed pending delivery is counte
         event=self.part('        Maid9:Give(v1345:GetInstanceAddedSignal("Jailed")', '        local fn694 = function()')
         self.run_luau(r'''
 local v1346=0;local qResult4={set=function() end};local fn692=function() end
+local rotSupplier={}
 local callback;local localCharacter={};local victim={};local stranger={};local LocalPlayer24={}
 local getResult26={GetPlayerFromCharacter=function(_,c) return c==localCharacter and LocalPlayer24 or {} end}
 local tbl365={true};local carrier=true;local fn670=function() return carrier end
@@ -1242,6 +1243,7 @@ callback(victim);assert(v1346==0 and rotDelivery.pending.jailed,"receiver event 
 callback(localCharacter);assert(v1346==0,"receiver being jailed is not a successful delivery")
 carrier=false;callback(stranger);assert(v1346==0,"a supplier cannot count someone else's jail")
 callback(localCharacter);callback(localCharacter);assert(v1346==1,"supplier own tag counts once")
+assert(rotSupplier.jailCharacter==localCharacter,"supplier jail event is latched independently of later tag removal")
 ''')
 
     def test_rot_queue_resumes_stage_count_after_menu_without_using_lifetime_total(self):
@@ -2359,6 +2361,50 @@ assert(not fn702(player) and #sent==3 and armed==0)
 for i=2,#sent do assert(sent[i]-sent[i-1]>=1.59,"retry must allow high-ping replication before resending Carry") end
 clock=0;sent={};onWait=function() active=false end
 assert(not fn702(player) and #sent==1 and armed==0,"Stop cannot arm a delivery while waiting for acknowledgement")
+''')
+
+
+    def test_supplier_jail_recovery_requires_new_healthy_character_even_after_tag_disappears_and_timeout(self):
+        recovery=self.part('        rotSupplier.jailBlocked=function()', '        local fn681 = function()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local tbl365={true};local jail=true;local resets=0
+local root={};local hum={Health=100};local new={FindFirstChild=function() return clock>=32 and root or nil end,
+ FindFirstChildOfClass=function() return hum end}
+local old={FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end}
+local LocalPlayer24={Character=old};local rotSupplier={status={SetText=function() end}}
+local v1345={HasTag=function() return jail end}
+local sResult10={clearVeil=function() end,kill=function() resets+=1 end}
+local task={wait=function(t)
+ clock+=t;jail=false
+ if clock>=31 then LocalPlayer24.Character=new end
+end}
+'''+recovery+r'''
+assert(rotSupplier.jailBlocked() and rotSupplier.jailCharacter==old)
+assert(rotSupplier.recoverJail() and clock>=32.5 and resets>=10)
+assert(rotSupplier.jailCharacter==nil and not rotSupplier.jailBlocked())
+-- Stop preserves the old-character latch; a restart cannot fly the jailed avatar away.
+LocalPlayer24.Character=old;rotSupplier.jailCharacter=old;clock=0
+task.wait=function(t) clock+=t;tbl365[1]=false end
+assert(not rotSupplier.recoverJail() and rotSupplier.jailCharacter==old)
+''')
+
+    def test_supplier_flight_cancels_when_jail_arrives_during_tween(self):
+        move=self.part('        local fn677 = function(', '        local fn678 = function(')
+        self.run_luau(VEC+r'''
+local tbl365={true};local blocked=false;local cancelled=0;local destroyed=0;local disconnected=0
+local rotSupplier={jailBlocked=function() return blocked end}
+local task={wait=function() blocked=true end}
+local sResult10={awaitPlaced=function() return true end,root=function() return {Position=Vector3.new(0,0,0)} end}
+local fn675=function() return 3 end;local fn672=function() end;local num406=100
+local TweenInfo={new=function() return {} end};local Enum={EasingStyle={Linear=1}}
+local CFrame={new=function(p) return p end}
+local v1343={Create=function()
+ return {Completed={Connect=function() return {Disconnect=function() disconnected+=1 end} end},
+ Play=function() end,Cancel=function() cancelled+=1 end,Destroy=function() destroyed+=1 end}
+end}
+'''+move+r'''
+assert(fn677(Vector3.new(10,0,0),100)==false)
+assert(cancelled==1 and destroyed==1 and disconnected==1)
 ''')
 
 

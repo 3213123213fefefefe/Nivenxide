@@ -130,7 +130,7 @@ As opções e as rotinas de XP, mana, ROT, skills, movimentação e segurança f
 
 ## Validação
 
-O runtime passou pela compilação Luau. Noventa testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Noventa e dois testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -164,7 +164,7 @@ Ao marcar spawn em Khei, a progressão não executa mais o reset deliberado usad
 
 A entrega de ROT aproxima a conta do Bounty Officer, espera o movimento assentar e dá mais tempo para respostas do servidor. A navegação usa também MoveToFinished para não perder a chegada entre frames a 15 FPS, e libera caminhos e conexões ao terminar ou recalcular. A contagem continua exigindo confirmação de entrega.
 
-Validação: compilação Luau e 90 testes de regressão simulados. Ainda é necessário conferir a física e as respostas reais no jogo.
+Validação: compilação Luau e 92 testes de regressão simulados. Ainda é necessário conferir a física e as respostas reais no jogo.
 
 Em servidor lagado, o diálogo de ROT termina assim que recebe a mensagem positiva do Officer. Se o diálogo falhar com a vítima ainda carregada e sem evidência de entrega, a próxima tentativa fica disponível após 0,5 s, sem a espera extra de 12 s. Uma resposta positiva ou prisão já detectada mantém a espera pela confirmação e soltura; o contador não presume entregas. As outras conversas mantêm o comportamento anterior.
 
@@ -181,3 +181,5 @@ Na aba Blade 23, o toggle **23** salva automaticamente como aliados os jogadores
 Com 23 ativo, a receptora não exige seleção em Alts: na etapa ROT, procura o downado livre mais próximo em até 30 studs, excluindo ela mesma, personagens já carregados/presos e contas na fila de receptoras. A vítima com função explícita de fornecedora continua sendo fornecedora. Permanecem a entrega no Officer de Renova, a confirmação individual e a meta de 16. Desligado, o fluxo usa a seleção manual de Alts.
 
 A coleta ROT adapta o intervalo de nova tentativa ao ping (0,8–3 s), com no máximo três envios por tentativa. A primeira coleta continua imediata e a confirmação é consultada a cada 0,05 s. Se Carried aparecer na vítima após o comando antes de Grabbing aparecer na receptora, aguarda até 8 s sem reenviar Carry; uma vítima já carregada antes de tentar continua excluída. O XP mantém a fila de uma conta por vaga de Shriekers/Scrooms, full HP só na entrada e 3 s de estabilização.
+
+A vítima de ROT mantém a prisão registrada mesmo se o tag Jailed desaparecer por replicação. Cancela o voo ao ser presa, pede reset e só libera a ida ao ponto depois de detectar outro personagem vivo, com root e sem Jailed, estável por 0,5 s. O prazo antigo de 20 s não libera mais o mesmo avatar para voar; reset sem resposta é tentado novamente no máximo a cada 3 s. Stop conserva a pendência para a próxima retomada.

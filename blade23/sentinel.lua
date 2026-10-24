@@ -42477,10 +42477,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               tbl370[1] = true
             end)
             CreateResult5:Play()
-            __NATIVE[119](tbl370, tbl365)()
-            if not tbl365[1] then CreateResult5:Cancel() end
+            while tbl365[1] and not tbl370[1] do
+              if rotSupplier.jailBlocked and rotSupplier.jailBlocked() then break end
+              task.wait(0.05)
+            end
+            local jailed=rotSupplier.jailBlocked and rotSupplier.jailBlocked()
+            if not tbl365[1] or jailed then CreateResult5:Cancel() end
             completedConnection:Disconnect();CreateResult5:Destroy()
-            if not tbl365[1] then return end
+            if not tbl365[1] or jailed then return false end
             if v1353 == a1851 then
               return
             end
@@ -42550,6 +42554,40 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
             v1360 = not tbl365[1]
           until v1360
+        end
+        rotSupplier.jailBlocked=function()
+          if rotSupplier.jailCharacter then return true end
+          local character=LocalPlayer24.Character
+          if character and v1345:HasTag(character,"Jailed") then
+            rotSupplier.jailCharacter=character
+            return true
+          end
+          return false
+        end
+        rotSupplier.recoverJail=function()
+          if not rotSupplier.jailBlocked() then return true end
+          local old=rotSupplier.jailCharacter
+          local nextReset=0
+          local stable
+          while tbl365[1] do
+            local current=LocalPlayer24.Character
+            local root=current and current:FindFirstChild("HumanoidRootPart")
+            local hum=current and current:FindFirstChildOfClass("Humanoid")
+            if current and current~=old and root and hum and hum.Health>0 and not v1345:HasTag(current,"Jailed") then
+              stable=stable or os.clock()
+              if os.clock()-stable>=0.5 then rotSupplier.jailCharacter=nil;return true end
+            else
+              stable=nil
+              if current and (current==old or v1345:HasTag(current,"Jailed")) and os.clock()>=nextReset then
+                nextReset=os.clock()+3
+                sResult10.clearVeil()
+                if not hum or hum.Health>0 then pcall(sResult10.kill) end
+              end
+            end
+            rotSupplier.status:SetText("Fornecedor: jail detectada; aguardando reset e NOVO personagem")
+            task.wait(0.1)
+          end
+          return false -- Stop keeps the latch; restarting must finish this recovery before flying.
         end
         local fn681 = function()
           local Character73 = LocalPlayer24.Character
@@ -42745,6 +42783,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
           end
           while tbl365[1] do
+            if rotSupplier.jailBlocked() then
+              if not rotSupplier.recoverJail() then return nil end
+              continue
+            end
             if sResult10.near(vector328, 75) and (fn675() or 0) <= 0 then
               return "ferryman"
             end
@@ -42757,8 +42799,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if not v1366 then
               task.wait(0.3)
             elseif v1345:HasTag(Character74, "Jailed") then
-              sResult10.kill()
-              fn680(Character74, 20)
+              rotSupplier.jailCharacter=Character74
+              if not rotSupplier.recoverJail() then return nil end
             elseif v1345:HasTag(Character74, "Unconscious") or v1345:HasTag(Character74,"Knocked") then
               task.wait(0.4)
             elseif not v1367 then
@@ -42790,7 +42832,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 local deadline=os.clock()+5
                 while tbl365[1] and os.clock()<deadline do
                   local character=LocalPlayer24.Character
-                  if not character or v1345:HasTag(character,"Unconscious") or v1345:HasTag(character,"Knocked") then break end
+                  if not character or rotSupplier.jailBlocked() or v1345:HasTag(character,"Unconscious") or v1345:HasTag(character,"Knocked") then break end
                   local current,currentRoot=rotSupplier.masterReady(master.UserId)
                   local root=sResult10.root()
                   if not current or not root or (root.Position-currentRoot.Position).Magnitude>10 then break end
@@ -42843,7 +42885,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if pending and pending.character==a1861 then pending.jailed=true end
           if not tbl365[1] or fn670() then return end
           -- A supplier can count its own prison event, never another receiver's event.
-          if getResult26:GetPlayerFromCharacter(a1861)==LocalPlayer24 then fn693(a1861) end
+          if getResult26:GetPlayerFromCharacter(a1861)==LocalPlayer24 then
+            rotSupplier.jailCharacter=a1861 -- Latch even if lag removes Jailed before the supplier loop polls it.
+            fn693(a1861)
+          end
         end))
         local fn694 = function()
           while tbl365[1] do
@@ -43236,6 +43281,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return ok and success
         end
         rotSupplier.flyTo=function(position)
+          if rotSupplier.jailBlocked() then return false end
           local connection=fn676()
           local ok,err=pcall(fn677,position,100)
           connection:Disconnect()
@@ -43247,7 +43293,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local hum=sResult10.humanoid()
           if hum then hum:SetStateEnabled(5,true);hum:ChangeState(5) end
           if not ok then rotSupplier.status:SetText("Fornecedor: falha no voo "..tostring(err)) end
-          return ok
+          return ok and err~=false
         end
         rotSupplier.approach=function(master)
           local ready,root=rotSupplier.masterReady(master.UserId)
