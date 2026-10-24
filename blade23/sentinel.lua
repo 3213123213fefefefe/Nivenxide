@@ -38372,7 +38372,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             return
           end
           local v1251 = Toggles8.ProgGoToKhei and Toggles8.ProgGoToKhei.Value
-          if v1251 and not fn492() then
+          if v1251 and not __L3.bladeEnabled() and not fn492() then
             fn534("P7: no Mana Dash, refusing the Khei handoff")
             task.spawn(function()
               __L2.fn521("no Mana Dash, stopping")
@@ -38618,6 +38618,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if not __L3.bladeTrainerApproach("jagen","Castle Sanctuary",__L3.tbl330) then return end
             if not __L3.bladeTrainPurchase("jagen","Jagen",Vector3.new(6857,1411,-164),{"Please train me.","Here is 350 Silver."},__L2.tbl282,1) then return end
             if not __L2.fn503(__L2.tbl282) then __L3.bladeTrainWait("Jagen: aguardando confirmar skill Ultra");return end
+            if not tbl303[1] then return end
+            fn546()
+            local mana=a1723.State.mana
+            if mana and mana.decharge then pcall(mana.decharge) end
+            tbl308[1].p7dash=nil;tbl308[1].p7side=nil
+            fn542()
+            fn534("P7: Ultra confirmada; seguindo sem treino ou espera de Mana Dash")
+            __L3.fn636()
+            return
           end
           fn534("P7: section 1 (day >= 1)")
           if __L2.fn504(__L2.tbl282) then

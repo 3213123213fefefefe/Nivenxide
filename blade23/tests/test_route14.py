@@ -1819,5 +1819,33 @@ __L3.bladeAttack(function() return hits==3 end,function() return {} end,{})
 assert(returns==1 and hits==3 and hum.AutoRotate and __L3.bladeCombatCleanup==nil)
 """)
 
+
+    def test_blade_ultra_skips_dash_training_and_handoff_does_not_require_dash(self):
+        ultra=self.part('        __L3.fn638 = function()', '        __L3.fn639 = function()')
+        finish=self.part('        __L3.fn636 = function()', '          tbl308[1] = tbl308[1] or {}')+'          return true\n        end\n'
+        self.run_luau(r"""
+local __L3={bladeEnabled=function() return true end};local tbl303={true};local tbl308={{p7dash=true,p7side=2}}
+local confirmed=true;local purchase=true;local visited=true;local approached=true;local finishes=0;local saves=0;local releases=0
+local fn534=function() end;local fn546=function() end;local fn542=function() saves+=1 end
+local Vector3={new=function() return {} end};local __L2={tbl282={},fn503=function() return confirmed end,fn504=function() return confirmed end}
+local fn492=function() error("Blade handoff must not inspect or wait for Mana Dash") end
+local task={spawn=function(fn) fn() end}
+local Toggles8={ProgGoToKhei={Value=true}}
+local a1723={State={mana={chargeUntil=function() error("must not charge after Ultra") end,decharge=function() releases+=1 end}}}
+__L3.bladeDraugVisit=function() return visited end
+__L3.bladeTrainerApproach=function() return approached end
+__L3.bladeTrainPurchase=function() return purchase end
+__L3.bladeTrainWait=function() end
+"""+finish+r"""
+local finishGuard=__L3.fn636
+__L3.fn636=function() assert(finishGuard());finishes+=1 end
+"""+ultra+r"""
+__L3.fn638();assert(finishes==1 and releases==1 and tbl308[1].p7dash==nil and tbl308[1].p7side==nil and saves==1)
+confirmed=false;__L3.fn638();assert(finishes==1,"Ultra confirmation remains required")
+confirmed=true;purchase=false;__L3.fn638();assert(finishes==1,"failed purchase cannot advance")
+purchase=true;visited=false;__L3.fn638();assert(finishes==1,"Draug visit remains required")
+visited=true;tbl303[1]=false;__L3.fn638();assert(finishes==1,"stopped bot cannot hand off")
+""")
+
 if __name__ == '__main__':
     unittest.main()
