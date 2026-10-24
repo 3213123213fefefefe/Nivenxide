@@ -2335,5 +2335,32 @@ __L3.bladeRunConfig=nil;assert(not a1723.State.blade23Enabled())
 ''')
 
 
+    def test_rot_pickup_handles_delayed_carried_then_grabbing_at_fifteen_fps_and_high_ping(self):
+        pickup=self.part('        local fn702 = function(', '        local rotWalkStatus =')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local active=true;local grabbing=false;local held=false;local sent={}
+local LocalPlayer24={GetNetworkPing=function() return 0.4 end}
+local marker={IsA=function(_,kind) return kind=="BoolValue" end,Value=true}
+local character={FindFirstChild=function() return held and marker or nil end}
+local player={Parent=true,Character=character};local rotCarriedCharacter;local armed=0
+local rotDelivery={begin=function(c,fromPickup) assert(c==character and fromPickup);armed+=1 end}
+local fn697=function() return active end;local fn699=function() return grabbing end
+local v1345={HasTag=function(_,_,tag) return tag=="Unconscious" end}
+local MResult={distanceTo=function() return 3 end}
+local fn700=function() return {FireServer=function() table.insert(sent,clock) end} end
+local onWait=function() held=clock>=0.2;grabbing=clock>=0.8 end
+local task={wait=function(t) clock+=math.ceil(t*15)/15;onWait() end}
+'''+pickup+r'''
+assert(fn702(player) and #sent==1 and armed==1 and rotCarriedCharacter==character and clock<1)
+clock=0;grabbing=false;sent={};armed=0;held=true
+assert(not fn702(player) and #sent==0,"do not interfere with a victim already held before our attempt")
+clock=0;held=false;sent={};onWait=function() end
+assert(not fn702(player) and #sent==3 and armed==0)
+for i=2,#sent do assert(sent[i]-sent[i-1]>=1.59,"retry must allow high-ping replication before resending Carry") end
+clock=0;sent={};onWait=function() active=false end
+assert(not fn702(player) and #sent==1 and armed==0,"Stop cannot arm a delivery while waiting for acknowledgement")
+''')
+
+
 if __name__ == '__main__':
     unittest.main()

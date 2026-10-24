@@ -43070,27 +43070,41 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local fn702 = function(a1863)
           local character=a1863 and a1863.Character
           if not character then return false end
-          local deadline=os.clock()+4
+          local started=os.clock()
+          local ping=0.4
+          pcall(function() ping=math.clamp(tonumber(LocalPlayer24:GetNetworkPing()) or ping,0,1.5) end)
+          local retryDelay=math.clamp(ping*3+0.4,0.8,3)
+          local deadline=started+math.max(4,retryDelay*3)
           local nextAttempt=0
+          local attempts=0
           while fn697() and os.clock()<deadline do
             if a1863.Character~=character or not a1863.Parent then return false end
             if fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
             local carried=character:FindFirstChild("Carried")
-            if carried and (not carried:IsA("BoolValue") or carried.Value)
-              and (not carried:IsA("ObjectValue") or carried.Value~=nil) then return false end
-            if v1345:HasTag(character,"Jailed") or not (v1345:HasTag(character,"Unconscious")
-              or v1345:HasTag(character,"Knocked")) then return false end
-            local distance=MResult.distanceTo(a1863)
-            if not distance or distance>4 then return false end
-            if os.clock()>=nextAttempt then
-              local remote=fn700()
-              if remote then pcall(function() remote:FireServer() end) end
-              nextAttempt=os.clock()+0.25
-              if fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
+            local beingCarried=carried and (not carried:IsA("BoolValue") or carried.Value)
+              and (not carried:IsA("ObjectValue") or carried.Value~=nil)
+            if beingCarried and attempts==0 then return false end
+            if v1345:HasTag(character,"Jailed") then return false end
+            if beingCarried then
+              -- The victim's marker may replicate before our Grabbing marker: wait, never toggle Carry again.
+              deadline=math.max(deadline,started+8)
+            else
+              local down=v1345:HasTag(character,"Unconscious") or v1345:HasTag(character,"Knocked")
+              local distance=MResult.distanceTo(a1863)
+              if attempts==0 and (not down or not distance or distance>4) then return false end
+              if down and distance and distance<=4 and attempts<3 and os.clock()>=nextAttempt then
+                local remote=fn700()
+                if remote then
+                  attempts+=1
+                  pcall(function() remote:FireServer() end)
+                  nextAttempt=os.clock()+retryDelay
+                else nextAttempt=os.clock()+0.25 end
+                if fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
+              end
             end
             task.wait(0.05)
           end
-          if a1863.Character==character and fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
+          if a1863.Character==character and fn697() and fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
           return false
         end
         local rotWalkStatus = rotQueueTab:AddLabel("Walk: disabled (select Alts, then enable)")
