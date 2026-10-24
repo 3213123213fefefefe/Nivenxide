@@ -39727,7 +39727,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           for _,target in targets do
             local d=target.Position-position
             local flat=Vector3.new(d.X,0,d.Z)
-            if math.abs(d.Y)<=6 and flat.Magnitude<=range and
+            if flat.Magnitude<=range and
               (flat.Magnitude<0.05 or flat.Unit:Dot(direction)+0.000001>=cosine) then count+=1 end
           end
           return count
@@ -39753,7 +39753,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             local nearby={}
             for _,target in targets do
               local delta=target.Position-position
-              if math.abs(delta.Y)<=6 and Vector3.new(delta.X,0,delta.Z).Magnitude<=range and visible(position,target.Position) then
+              if Vector3.new(delta.X,0,delta.Z).Magnitude<=range and visible(position,target.Position) then
                 table.insert(nearby,target)
               end
             end
@@ -39842,7 +39842,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             while running() and not done() do
               local current=root.Position
               local flatOffset=Vector3.new(current.X-anchor.X,0,current.Z-anchor.Z).Magnitude
-              if flatOffset>__L3.bladeValue("BladeM1Step",1.5)+3 or math.abs(current.Y-anchor.Y)>4 then
+              if flatOffset>__L3.bladeValue("BladeM1Step",1.5)+3 then
                 __L3.bladeAimLabel:SetText("M1: fora do ponto; procurando um passo seguro para voltar")
                 local elevated=current.Y-anchor.Y>4
                 local recovery
@@ -39876,8 +39876,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 task.wait(0.3)
                 continue
               end
+              -- Height never pauses M1. Replan from the current position after climbing a mob,
+              -- and avoid choosing a floor point just to descend from the pile.
+              if plan and math.abs(plan.position.Y-current.Y)>2 then plan=nil end
               if not plan or os.clock()>=nextPlan then
-                plan=__L3.bladeAimPlan(anchor,current,initialLook,targetsProvider(),bounds,canStand,visible)
+                plan=__L3.bladeAimPlan(anchor,current,initialLook,targetsProvider(),bounds,function(position)
+                  return math.abs(position.Y-current.Y)<=2 and canStand(position)
+                end,visible)
                 nextPlan=os.clock()+1
                 if __L3.bladeAimLabel then
                   __L3.bladeAimLabel:SetText(string.format("M1: alcance estimado %d alvos | passo max. %.1f studs",plan.count,__L3.bladeValue("BladeM1Step",1.5)))

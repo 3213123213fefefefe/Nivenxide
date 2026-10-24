@@ -2492,11 +2492,11 @@ fail=false;available=false;local before=connectCount
 assert(not tbl252.setInn("Cavern",opts) and connectCount==before and restored==3)
 ''')
 
-    def test_shrieker_pile_recovery_tries_another_safe_side_after_stalled_step(self):
+    def test_shrieker_horizontal_displacement_tries_another_safe_side_after_stalled_step(self):
         attack=self.part('        __L3.bladeAttack=function(', '        a1723.Maid:Give(function() if __L3.bladeCombatCleanup')
         self.run_luau(VEC+r'''
 local clock=0;local os={clock=function() return clock end};local tbl303={true};local hits=0;local attempts={}
-local anchor=Vector3.new(0,0,0);local root={Parent=true,Position=Vector3.new(0,6,0)}
+local anchor=Vector3.new(0,0,0);local root={Parent=true,Position=Vector3.new(5,6,0)}
 local hum={Parent=true,Health=100,AutoRotate=true,MoveTo=function(_,position)
  if (position-root.Position).Magnitude<0.1 then return end
  assert(math.abs(position.X)<=3.5 and math.abs(position.Z)<=7 and position.Y==0)
@@ -2599,6 +2599,49 @@ assert(rotDelivery.pending==nil and rotCarriedCharacter==nil)
 assert(not rotDelivery.await(tx) and v1346==1,"late events must not double count the delivery")
 ''')
 
+
+    def test_shrieker_m1_continues_above_pile_for_sword_plain_and_mana_without_descending(self):
+        aim=self.part('        __L3.bladeConeCount=function(', '        __L3.bladeAttack=function(')
+        attack=self.part('        __L3.bladeAttack=function(', '        a1723.Maid:Give(function() if __L3.bladeCombatCleanup')
+        self.run_luau(VEC+r'''
+local clock=0;local os={clock=function() return clock end};local tbl303={true};local hits=0
+local anchor=Vector3.new(0,0,0);local root={Parent=true,Position=anchor}
+local hum={Parent=true,Health=100,AutoRotate=true,MoveTo=function(_,position)
+ assert((position-root.Position).Magnitude<0.01,"climbing a mob must not trigger a walk to the floor")
+end}
+local character={FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end}
+local LocalPlayer21={Character=character}
+local __L3={bladeFarmAssigned="shriekers",bladeAimLabel={SetText=function() end},
+ bladeCellBounds=function() return {},anchor,Vector3.new(0,0,1) end,
+ bladeInCell=function() return true end,bladeValue=function(_,default) return default end,
+ bladeFullHP=function() error("do not restart the entry gate") end}
+local heights={5,8,12,15}
+local function hit()
+ hits+=1;root.Position=Vector3.new(0,heights[hits],0);return true
+end
+__L3.bladePlainPunch=function() assert(__L3.bladeCombatMode=="unlock");return hit() end
+__L3.bladeManaPunch=function() assert(__L3.bladeCombatMode=="fist");return hit() end
+local fn577=function() assert(__L3.bladeCombatMode=="sword");hit() end
+local fn536=function() end;local fn576=function() return false end
+local RaycastParams={new=function() return {} end};local Enum={RaycastFilterType={Exclude=true}}
+local v966={FindFirstChild=function() end,Raycast=function(_,position,direction)
+ if direction.Y==-9 then return {Position=Vector3.new(position.X,0,position.Z),Normal=Vector3.new(0,1,0)} end
+end}
+local CFrame={lookAt=function() return {} end}
+local task={wait=function(dt) clock+=dt;assert(clock<10,"height must not stall the attack loop") end}
+local targets={{Position=Vector3.new(0,0,3)}}
+'''+aim+attack+r'''
+for _,mode in {"sword","unlock","fist"} do
+ hits=0;clock=0;root.Position=anchor;__L3.bladeCombatMode=mode
+ __L3.bladeAttack(function() return hits==4 end,function() return targets end,{})
+ assert(hits==4 and root.Position.Y==15 and hum.AutoRotate and __L3.bladeCombatCleanup==nil)
+end
+local above=Vector3.new(0,12,0);local direction=Vector3.new(0,0,1)
+assert(__L3.bladeConeCount(above,direction,targets,8,math.rad(55))==1)
+assert(__L3.bladeConeCount(above,direction,{{Position=Vector3.new(0,0,20)}},8,math.rad(55))==0,"horizontal range still applies")
+local blocked=__L3.bladeAimPlan(anchor,above,direction,targets,{},function() return false end,function() return false end)
+assert(blocked.count==0,"height tolerance must not bypass a wall")
+''')
 
 if __name__ == '__main__':
     unittest.main()

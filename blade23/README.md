@@ -164,7 +164,7 @@ Ao marcar spawn em Khei, a progressão procura chão firme e espaço livre ao la
 
 A entrega de ROT aproxima a conta do Bounty Officer, espera o movimento assentar e dá mais tempo para respostas do servidor. A navegação usa também MoveToFinished para não perder a chegada entre frames a 15 FPS, e libera caminhos e conexões ao terminar ou recalcular. A contagem continua exigindo confirmação de entrega.
 
-Validação: compilação Luau e 97 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
+Validação: compilação Luau e 98 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
 
 Em servidor lagado, o diálogo de ROT termina assim que recebe a mensagem positiva do Officer. Se o diálogo falhar com a vítima ainda carregada e sem evidência de entrega, a próxima tentativa fica disponível após 0,5 s, sem a espera extra de 12 s. Uma resposta positiva ou prisão já detectada mantém a espera pela confirmação e soltura; o contador não presume entregas. As outras conversas mantêm o comportamento anterior.
 
@@ -188,4 +188,6 @@ A vítima de ROT mantém a prisão registrada mesmo se o tag Jailed desaparecer 
 
 ### Recuperação da posição nos Shriekers
 
-Se a conta subir sobre os mobs ou sair da posição durante os M1, tenta voltar andando por pontos laterais dentro da cela, no mesmo piso e sem parede no caminho. Quando está elevada, evita insistir no ponto diretamente abaixo dela. Um passo que não termina é descartado temporariamente para tentar outro lado. A recuperação preserva o progresso de XP e não repete a checagem inicial de HP cheio.
+A conta continua dando M1 quando sobe nos Shriekers: a altura não interrompe o ataque nem exclui alvos da estimativa horizontal de mira. Ao subir, recalcula a mira a partir da posição atual sem escolher um ponto no chão apenas para descer. Isso vale para espada, os três socos normais e os socos de mana. Alcance horizontal e paredes continuam limitando a mira; o XP só aumenta com o dano observado no HP dos mobs, nunca pela estimativa de alcance.
+
+Se sair horizontalmente da região de ataque, ainda tenta voltar andando por pontos seguros dentro da cela. A recuperação preserva o progresso de XP e não repete a checagem inicial de HP cheio.
