@@ -1197,6 +1197,7 @@ decharge();assert(releases==1 and fired==2)
         ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
         self.run_luau(r'''
 local clock=0;local os={clock=function() return clock end};local active=true;local carrying=true;local jail=false
+local task={wait=function(t) clock+=t end}
 local v1346=0;local saved;local updated=0;local fn692=function() end
 local qResult4={set=function(key,value) assert(key=="rotbot_count");saved=value end}
 local victim={};local other={};local rotCarriedCharacter=victim
@@ -1669,6 +1670,7 @@ character.tags.Unconscious=true;distance=5;assert(not fn702(player) and #sent==0
         delivery=self.part('        local fn703 = function(', '        local function rotTargetDown(')
         self.run_luau(VEC+r"""
 local clock=0;local os={clock=function() return clock end};local active=true;local carrying=true;local jail=false
+local task={wait=function(t) clock+=t end}
 local root={Parent=true,Position=Vector3.new(0,0,0)};local officer={Name="Bounty Officer",GetFullName=function() return "Renova" end,
  FindFirstChild=function() return root end,FindFirstChildWhichIsA=function() return {} end}
 local fn701=function() return officer,0 end;local sResult10={root=function() return root end};local num407=9
@@ -1973,6 +1975,116 @@ observe=true;game.PlaceId=1;assert(not fn563(enemy,true),"Gaia's Super requireme
 super=true;assert(fn563(enemy,true))
 Toggles8.ProgSkipIllusionist.Value=false;assert(not fn563(enemy,true),"Khei skip cannot enable Gaia skip")
 """)
+
+    def test_khei_spawn_binding_disables_deliberate_kill_but_gaia_keeps_existing_reset(self):
+        call=self.part('local setInnResult = HResult.setInn(a1781, {','          fn536(false)')
+        self.run_luau(r'''
+local game={PlaceId=3541987450};local num274=3541987450;local tbl303={true}
+local fn547=function() end;local fn534=function() end;local a1781="Cavern"
+local expected=false;local HResult={setInn=function(name,opts)
+ assert(name==a1781 and opts.breakJoints==expected)
+ assert(opts.onBeforeBreak==(expected and fn547 or nil))
+ return true
+end}
+'''+call+r'''
+assert(setInnResult);game.PlaceId=5208655184;expected=true
+'''+call+r'''
+assert(setInnResult)
+''')
+
+    def test_inn_release_clears_fall_momentum_before_reenabling_physics(self):
+        release=self.part('      local fn486 = function(a1693)','      tbl252.waitSettled = function(')
+        self.run_luau(VEC+r'''
+Vector3.zero=Vector3.new(0,0,0)
+local Enum={HumanoidStateType={Freefall=5}}
+local root={AssemblyLinearVelocity=Vector3.new(0,-150,0),AssemblyAngularVelocity=Vector3.new(2,3,4)}
+local head={Name="Head",CanCollide=false,IsA=function() return true end}
+local hum={SetStateEnabled=function(_,s,v)
+ assert(s==5 and v and root.AssemblyLinearVelocity.Magnitude==0 and root.AssemblyAngularVelocity.Magnitude==0)
+end}
+local character={FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end,
+ GetDescendants=function() return {head} end}
+'''+release+r'''
+fn486(character);assert(head.CanCollide);fn486(nil)
+''')
+
+    def test_rot_navigation_uses_reached_signal_when_low_fps_misses_waypoint_radius(self):
+        walk=self.part('        local function rotWalkTo(', '        rotSupplier.flyTo=')
+        self.run_luau(VEC+r'''
+local clock=0;local os={clock=function() return clock end}
+local Enum={RaycastFilterType={Exclude=1},PathStatus={Success=1},PathWaypointAction={Jump=1}}
+local typeof=function(v) return getmetatable(v)==Vec and "Vector3" or type(v) end
+local RaycastParams={new=function() return {} end}
+local root={Position=Vector3.new(0,0,0)};local moves=0;local alive=0;local destroyed=0
+local callback
+local function signal(cbslot)
+ return {Connect=function(_,fn)
+  alive+=1;if cbslot then callback=fn end
+  local live=true
+  return {Disconnect=function() if live then alive-=1;live=false end end}
+ end}
+end
+local hum={Parent=true,Health=100,MoveToFinished=signal(true)}
+hum.MoveTo=function(_,p)
+ moves+=1
+ if moves==1 then root.Position=Vector3.new(8,0,0);callback(true)
+ elseif moves==2 then root.Position=Vector3.new(20,0,0);callback(true) end
+end
+local character={FindFirstChildOfClass=function() return hum end}
+local LocalPlayer24={Character=character};local sResult10={root=function() return root end}
+local rotDestinationMarker={};local rotWalkStatus={SetText=function() end}
+local fn697=function() return true end;local getResult26={GetPlayers=function() return {} end}
+local v1341={FindFirstChild=function() end,Raycast=function() end}
+local game={GetService=function() return {CreatePath=function()
+ return {Status=1,Blocked=signal(false),ComputeAsync=function() end,
+ GetWaypoints=function() return {{Position=Vector3.new(0,0,0)},{Position=Vector3.new(10,0,0)},{Position=Vector3.new(20,0,0)}} end,
+ Destroy=function() destroyed+=1 end}
+end} end}
+local task={wait=function(t) clock+=math.ceil(t*15)/15 end}
+'''+walk+r'''
+assert(rotWalkTo(Vector3.new(20,0,0),function() return true end,1))
+assert(moves==3 and destroyed==1 and alive==0,"arrival must advance without replanning or leaking path signals")
+''')
+
+    def test_rot_delivery_at_fifteen_fps_approaches_settles_and_accepts_delayed_server_reply(self):
+        delivery=self.part('        local fn703 = function(', '        local function rotTargetDown(')
+        self.run_luau(VEC+r'''
+local clock=0;local os={clock=function() return clock end}
+local carrying=true;local jail=false;local walks=0;local confirmed=0;local calls=0
+local root={Position=Vector3.new(8,0,0),AssemblyLinearVelocity=Vector3.new(5,0,0)}
+local npcRoot={Parent=true,Position=Vector3.new(0,0,0)}
+local officer={Name="Bounty Officer",GetFullName=function() return "Renova" end,
+ FindFirstChild=function() return npcRoot end,FindFirstChildWhichIsA=function() return {MaxActivationDistance=9} end}
+local fn701=function() return officer,8 end;local sResult10={root=function() return root end};local num407=9
+local rotWalkStatus={SetText=function() end};local rotDestinationMarker={};local fireclickdetector_5=true
+local fn697=function() return true end;local fn699=function() return carrying end
+local victim={};local rotCarriedCharacter=victim;local tx={character=victim,jailed=false}
+local v1345={HasTag=function() return jail end};local tbl364={};local str52="looking for a job"
+local fn672=function() end;local print=function() end
+local task={wait=function(t)
+ clock+=math.ceil(t*15)/15
+ if clock>=0.4 then root.AssemblyLinearVelocity=Vector3.new(0,0,0) end
+end}
+local rotWalkTo=function(destination,keepGoing,range)
+ assert(keepGoing() and destination()==npcRoot.Position);walks+=1
+ root.Position=Vector3.new(range,root.Position.Y,0);return true
+end
+local rotDelivery={begin=function() return tx end,await=function(t)
+ assert(t.jailed and not carrying);confirmed+=1;return true
+end}
+local FResult3={close=function() end,run=function(npc,answers,opts)
+ calls+=1;assert(npc==officer and opts.holdPosition==false and opts.timeout>=8)
+ assert(clock>=0.6 and root.AssemblyLinearVelocity.Magnitude==0)
+ local start=clock
+ while clock-start<8 do assert(opts.shouldRun());task.wait(1/15) end
+ jail=true;carrying=false;assert(not opts.shouldRun());return true
+end}
+'''+delivery+r'''
+assert(fn703("Victim") and walks==1 and confirmed==1 and calls==1)
+carrying=true;jail=false;tx={character=victim,jailed=false};root.Position=Vector3.new(8,6,0)
+assert(fn703("Victim") and walks==2 and confirmed==2 and calls==2)
+''')
+
 
 if __name__ == '__main__':
     unittest.main()

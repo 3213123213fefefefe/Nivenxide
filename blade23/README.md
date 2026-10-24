@@ -130,7 +130,7 @@ As opções e as rotinas de XP, mana, ROT, skills, movimentação e segurança f
 
 ## Validação
 
-O runtime passou pela compilação Luau. Setenta e três testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Setenta e sete testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -157,3 +157,11 @@ setclipboard(readfile("sentinel/.cache/blade23_ram_diagnostic.json"))
 ```
 
 Os testes simulam 100 ciclos de instalação e remoção de hooks, falha parcial, execução duplicada, histórico limitado e Unload reentrante. Eles não medem o pico real de RAM do Roblox ou do executor.
+
+### Spawn em Khei e entrega de ROT com FPS baixo
+
+Ao marcar spawn em Khei, a progressão não executa mais o reset deliberado usado em Gaia. A liberação do movimento no inn zera as velocidades antes de reativar a física, reduzindo o risco de carregar impulso de queda. O sacrifício exigido na Spire permanece.
+
+A entrega de ROT aproxima a conta do Bounty Officer, espera o movimento assentar e dá mais tempo para respostas do servidor. A navegação usa também MoveToFinished para não perder a chegada entre frames a 15 FPS, e libera caminhos e conexões ao terminar ou recalcular. A contagem continua exigindo confirmação de entrega.
+
+Validação: compilação Luau e 77 testes de regressão simulados. Ainda é necessário conferir a física e as respostas reais no jogo.

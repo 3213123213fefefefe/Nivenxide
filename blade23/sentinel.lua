@@ -33853,6 +33853,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         if not a1693 then
           return
         end
+        -- Release inn noclip without carrying downward momentum into the landing.
+        local root=a1693:FindFirstChild("HumanoidRootPart")
+        if root then root.AssemblyLinearVelocity=Vector3.zero;root.AssemblyAngularVelocity=Vector3.zero end
         local Humanoid10 = a1693:FindFirstChildOfClass("Humanoid")
         if Humanoid10 then
           Humanoid10:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
@@ -36393,8 +36396,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             shouldRun = function()
               return tbl303[1]
             end,
-            breakJoints = true,
-            onBeforeBreak = fn547,
+            breakJoints = game.PlaceId~=num274,
+            onBeforeBreak = game.PlaceId~=num274 and fn547 or nil,
             attempts = 4,
             log = function(a1782)
               fn534("setInn: no keeper found for %s", tostring(a1782))
@@ -43030,7 +43033,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local humanoid=character and character:FindFirstChildOfClass("Humanoid")
           if not humanoid then return false end
           local deadline=os.clock()+45
-          local blockedConnection
+          local blockedConnection,moveConnection,activePath
+          local function releasePath()
+            if moveConnection then moveConnection:Disconnect();moveConnection=nil end
+            if blockedConnection then blockedConnection:Disconnect();blockedConnection=nil end
+            if activePath then activePath:Destroy();activePath=nil end
+          end
           local function targetPosition()
             return type(destination)=="function" and destination() or destination
           end
@@ -43068,12 +43076,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 AgentRadius=2, AgentHeight=5, AgentCanJump=true,
                 AgentCanClimb=true, WaypointSpacing=3,
               })
+              activePath=path
               rotWalkStatus:SetText("Walk: calculating route around obstacles")
               path:ComputeAsync(groundPosition(root.Position),groundPosition(target))
               if not active() then break end
               if path.Status~=Enum.PathStatus.Success then
                 failures+=1
                 rotWalkStatus:SetText("Walk: no route; retry "..failures.."/8")
+                releasePath()
                 task.wait(0.25)
                 continue
               end
@@ -43089,6 +43099,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 if not active() then break end
                 local point=waypoints[index]
                 if point.Action==Enum.PathWaypointAction.Jump then humanoid.Jump=true end
+                local reached=false
+                if humanoid.MoveToFinished then
+                  moveConnection=humanoid.MoveToFinished:Connect(function(success)
+                    local current=sResult10.root()
+                    if success and current and closeEnough(current.Position,point.Position,3) then reached=true end
+                  end)
+                end
                 humanoid:MoveTo(point.Position)
                 local stepDeadline=math.min(deadline,os.clock()+5)
                 local lastProgress=os.clock()
@@ -43098,7 +43115,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   local currentTarget=targetPosition()
                   if not root or typeof(currentTarget)~="Vector3" then replan=true; break end
                   if closeEnough(root.Position,currentTarget,range) then success=true; break end
-                  if closeEnough(root.Position,point.Position,1.5) then break end
+                  if closeEnough(root.Position,point.Position,1.5) or reached then break end
                   local remaining=Vector3.new(root.Position.X-point.Position.X,0,root.Position.Z-point.Position.Z).Magnitude
                   if remaining<bestDistance-0.2 then bestDistance=remaining; lastProgress=os.clock() end
                   if blocked or (currentTarget-target).Magnitude>6 or os.clock()>=stepDeadline
@@ -43108,16 +43125,17 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   end
                   task.wait(0.05)
                 end
+                if moveConnection then moveConnection:Disconnect();moveConnection=nil end
                 if success or replan then break end
               end
-              if blockedConnection then blockedConnection:Disconnect(); blockedConnection=nil end
+              releasePath()
               if success then break end
               failures+=1
               rotWalkStatus:SetText("Walk: obstacle or stuck; recalculating "..failures.."/8")
               task.wait(0.1)
             end
           end)
-          if blockedConnection then blockedConnection:Disconnect() end
+          releasePath()
           local root=sResult10.root()
           if humanoid.Parent and root and LocalPlayer24.Character==character then humanoid:MoveTo(root.Position) end
           if not ok then rotWalkStatus:SetText("Walk navigation error: "..tostring(err)) end
@@ -43200,10 +43218,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           rotDestinationMarker.Transparency = 0
           print("[Rot destination] " .. res265:GetFullName() .. " at " .. tostring(HumanoidRootPart20.Position) .. " carrying " .. tostring(a1864))
           local rootResult26 = sResult10.root()
-          if rootResult26 and (rootResult26.Position - HumanoidRootPart20.Position).Magnitude > num407 then
+          local interactionRange=math.min(6,math.max(3,(tonumber(ClickDetector7.MaxActivationDistance) or num407)-2))
+          if rootResult26 and (rootResult26.Position - HumanoidRootPart20.Position).Magnitude > interactionRange then
+            local vertical=math.abs(rootResult26.Position.Y-HumanoidRootPart20.Position.Y)
+            local approachRange=math.max(1,math.min(4,math.sqrt(math.max(1,interactionRange*interactionRange-vertical*vertical))-1))
             if not rotWalkTo(function()
               return HumanoidRootPart20.Parent and HumanoidRootPart20.Position or nil
-            end, function() return fn697() and fn699() end, 7) then
+            end, function() return fn697() and fn699() end, approachRange) then
               fn672("Rot Bot: could not walk to Renova Officer; waiting to retry")
               return false
             end
@@ -43212,6 +43233,24 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             fn672("Rot Bot: the carry dropped before the desk")
             return false
           end
+          -- Let Humanoid movement stop before clicking; this can take several frames at 15 FPS.
+          local settleDeadline=os.clock()+2
+          local settledSince
+          while fn697() and fn699() and os.clock()<settleDeadline do
+            local current=sResult10.root()
+            if not current then return false end
+            if (current.Position-HumanoidRootPart20.Position).Magnitude>interactionRange+0.5 then
+              rotWalkStatus:SetText("Walk: fora do alcance do Officer; aproximando novamente")
+              return false
+            end
+            local velocity=current.AssemblyLinearVelocity
+            if not velocity or velocity.Magnitude<=2 then
+              settledSince=settledSince or os.clock()
+              if os.clock()-settledSince>=0.2 then break end
+            else settledSince=nil end
+            task.wait(0.05)
+          end
+          if not fn697() then return false end
           local transaction=rotDelivery.begin(rotCarriedCharacter)
           if not transaction then
             rotWalkStatus:SetText("Walk: vitima nao identificada ou ja contabilizada; nenhuma nova entrega")
@@ -43221,14 +43260,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           -- make it close the dialogue it has just opened.
           FResult3.close(1)
           rotWalkStatus:SetText("Walk: delivering at Renova (dialogue, no position lock)")
-          local dialogueDeadline = os.clock() + 7
+          local dialogueDeadline = os.clock() + 20
           local result = table.pack(pcall(FResult3.run, res265, {}, {
             shouldRun = function()
               if v1345:HasTag(transaction.character,"Jailed") then transaction.jailed=true end
               return fn697() and os.clock()<dialogueDeadline and not (transaction.jailed and not fn699())
             end,
-            successWhen = tbl364, minHold = 0, openWait = 0, answerDelay=0.1,
-            holdPosition = false, timeout = 5, silence = 2, maxReplays = 1,
+            successWhen = tbl364, minHold = 0, openWait = 0, answerDelay=0.2,
+            holdPosition = false, timeout = 12, silence = 3, maxReplays = 1,
             log = function(message) print("[Rot delivery] " .. tostring(message)) end,
           }))
           -- Sixth run return is the server's positive success marker (seventh after pcall).
