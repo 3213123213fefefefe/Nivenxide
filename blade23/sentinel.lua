@@ -33852,6 +33852,44 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         return nil
       end
       local tbl256 = { Ria = "A room, please.", Orodin = "May I reserve a room?", Esterina = "Yes.", Innkeeper = "Yes." }
+      tbl252.safeInnPosition = function(character, keeperRoot)
+        local root=character and character:FindFirstChild("HumanoidRootPart")
+        local hum=character and character:FindFirstChildOfClass("Humanoid")
+        if not root or not hum or not keeperRoot then return nil end
+        local excluded={character}
+        for _,name in {"NPCs","Live"} do
+          local folder=v917:FindFirstChild(name)
+          if folder then table.insert(excluded,folder) end
+        end
+        local params=RaycastParams.new()
+        params.FilterType=Enum.RaycastFilterType.Exclude
+        params.FilterDescendantsInstances=excluded;params.RespectCanCollide=true
+        local overlap=OverlapParams.new()
+        overlap.FilterType=Enum.RaycastFilterType.Exclude
+        overlap.FilterDescendantsInstances=excluded;overlap.RespectCanCollide=true
+        local height=math.max(3,hum.HipHeight+root.Size.Y/2)
+        for _,radius in {3.5,5,7} do
+          for index=0,7 do
+            local angle=index*math.pi/4
+            local origin=keeperRoot.Position+Vector3.new(math.cos(angle)*radius,2,math.sin(angle)*radius)
+            local hit=v917:Raycast(origin,Vector3.new(0,-14,0),params)
+            if hit and hit.Normal.Y>=0.75 and math.abs(hit.Position.Y-keeperRoot.Position.Y)<=6 then
+              local supported=true
+              for _,offset in {Vector3.new(-1,2,-1),Vector3.new(-1,2,1),Vector3.new(1,2,-1),Vector3.new(1,2,1)} do
+                local edge=v917:Raycast(hit.Position+offset,Vector3.new(0,-4,0),params)
+                if not edge or edge.Normal.Y<0.75 or math.abs(edge.Position.Y-hit.Position.Y)>0.5 then supported=false;break end
+              end
+              if supported then
+                for _,part in v917:GetPartBoundsInBox(CFrame.new(hit.Position+Vector3.new(0,2.75,0)),Vector3.new(2.4,5,2.4),overlap) do
+                  if part.CanCollide then supported=false;break end
+                end
+              end
+              if supported then return hit.Position+Vector3.new(0,height+0.15,0) end
+            end
+          end
+        end
+        return nil
+      end
       local fn486 = function(a1693)
         if not a1693 then
           return
@@ -33975,14 +34013,41 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not res182 then
             break
           end
-          local connectResult5 = v918.RenderStepped:Connect(__NATIVE[103](sResult6, LocalPlayer18, v948, v947))
+          local landing=v941.safeLanding and tbl252.safeInnPosition(res182,v944)
+          if v941.safeLanding and not landing then
+            if v941.log then v941.log(v943.." (sem chao livre e seguro perto do innkeeper)") end
+            return false
+          end
+          local holdFrame=landing and CFrame.new(landing)
+          if v941.protectFall then v941.protectFall() end
+          local nativeInnStep=__NATIVE[103](sResult6, LocalPlayer18, v948, v947)
+          local connectResult5 = v918.RenderStepped:Connect(function(...)
+            if LocalPlayer18.Character~=res182 or not v948.Parent then return end
+            nativeInnStep(...)
+            if holdFrame then
+              v948.CFrame=holdFrame
+              v948.AssemblyLinearVelocity=Vector3.zero;v948.AssemblyAngularVelocity=Vector3.zero
+              if v941.protectFall then v941.protectFall() end
+            end
+          end)
+          local released=false
+          local function releaseInnHold()
+            if released then return end
+            released=true
+            connectResult5:Disconnect()
+            if LocalPlayer18.Character==res182 and v948.Parent then
+              if holdFrame then v948.CFrame=holdFrame end
+              if v941.protectFall then v941.protectFall() end
+              fn486(res182)
+            end
+          end
+          v941.releaseInnHold=releaseInnHold
           local flag55 = false
           local flag56 = false
           local num253 = 0
           local v949, Character36, num254, v951, v952
           while true do
             if not (v942() and num253 < 2 and fn487()) then
-              connectResult5:Disconnect()
               if flag56 then
                 if v945 then
                   for i51 = 1, 2 do
@@ -34004,9 +34069,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   v941.onBeforeBreak()
                 end
                 if v941.breakJoints == false then
-                  fn486(LocalPlayer18.Character)
+                  releaseInnHold()
                   return true
                 end
+                releaseInnHold()
                 Character36 = LocalPlayer18.Character
                 sResult6.kill()
                 num254 = 0
@@ -34037,7 +34103,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
             local rootResult15 = sResult6.root()
             if rootResult15 and v944.Parent then
-              rootResult15.CFrame = v944.CFrame + Vector3.new(0, 5, 0)
+              rootResult15.CFrame = holdFrame or (v944.CFrame + Vector3.new(0, 5, 0))
             end
             if CurrentCamera9 then
               CurrentCamera9.CFrame = CFrame.new(CurrentCamera9.CFrame.Position, v944.Position)
@@ -34066,11 +34132,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             num253 += task.wait()
           end
           if __ml == 1 then
+            releaseInnHold()
             __ml = nil
             continue
           end
           flag56 = true
-          connectResult5:Disconnect()
           if flag56 then
             if v945 then
               for i51 = 1, 2 do
@@ -34092,9 +34158,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               v941.onBeforeBreak()
             end
             if v941.breakJoints == false then
-              fn486(LocalPlayer18.Character)
+              releaseInnHold()
               return true
             end
+            releaseInnHold()
             Character36 = LocalPlayer18.Character
             sResult6.kill()
             num254 = 0
@@ -34126,8 +34193,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       end
       tbl252.setInn = function(a1696, a2215)
         local liftResult2 = uResult3.lift()
-        local ok110, result107 = pcall(fn488, a1696, a2215)
+        local options=table.clone(a2215 or {})
+        local ok110, result107 = pcall(fn488, a1696, options)
+        local cleaned,cleanupError=true,nil
+        if options.releaseInnHold then cleaned,cleanupError=pcall(options.releaseInnHold) end
         liftResult2()
+        if ok110 and not cleaned then error(cleanupError,0) end
         if not ok110 then
           error(result107, 0)
         end
@@ -36420,6 +36491,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               return tbl303[1]
             end,
             breakJoints = game.PlaceId~=num274,
+            safeLanding = game.PlaceId==num274,
+            protectFall = game.PlaceId==num274 and function()
+              a1723.State.noFallUntil=math.max(a1723.State.noFallUntil or 0,tick()+2)
+            end or nil,
             onBeforeBreak = game.PlaceId~=num274 and fn547 or nil,
             attempts = 4,
             log = function(a1782)
@@ -39741,6 +39816,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local baseFloor=floor(anchor)
           local failedSteps={}
           local function canStand(position)
+            baseFloor=baseFloor or floor(anchor)
             for index=#failedSteps,1,-1 do
               if os.clock()>=failedSteps[index].untilTime then table.remove(failedSteps,index) end
             end
@@ -39767,14 +39843,36 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               local current=root.Position
               local flatOffset=Vector3.new(current.X-anchor.X,0,current.Z-anchor.Z).Magnitude
               if flatOffset>__L3.bladeValue("BladeM1Step",1.5)+3 or math.abs(current.Y-anchor.Y)>4 then
-                __L3.bladeAimLabel:SetText("M1: fora do ponto; tentando voltar andando ao ataque")
-                if canStand(anchor) then
-                  hum:MoveTo(anchor)
-                  local recoverDeadline=os.clock()+1.5
-                  while running() and not done() and (root.Position-anchor).Magnitude>1 and os.clock()<recoverDeadline do task.wait(0.05) end
-                  if root.Parent then hum:MoveTo(root.Position) end
-                  plan=nil;nextPlan=0
+                __L3.bladeAimLabel:SetText("M1: fora do ponto; procurando um passo seguro para voltar")
+                local elevated=current.Y-anchor.Y>4
+                local recovery
+                local candidates={anchor}
+                for _,radius in {2.5,4} do
+                  for index=0,7 do
+                    local angle=index*math.pi/4
+                    table.insert(candidates,anchor+Vector3.new(math.cos(angle)*radius,0,math.sin(angle)*radius))
+                  end
                 end
+                for _,candidate in candidates do
+                  local horizontal=Vector3.new(candidate.X-current.X,0,candidate.Z-current.Z).Magnitude
+                  -- Walking toward the point directly underneath a mob pile cannot step off it.
+                  if (not elevated or horizontal>=2) and (candidate==anchor or __L3.bladeInCell(candidate,bounds)) and canStand(candidate) then
+                    recovery=candidate;break
+                  end
+                end
+                if recovery then
+                  hum:MoveTo(recovery)
+                  local recoverDeadline=os.clock()+1.5
+                  while running() and not done() and (root.Position-recovery).Magnitude>1 and os.clock()<recoverDeadline do task.wait(0.05) end
+                  if root.Parent then
+                    if (root.Position-recovery).Magnitude>1 then
+                      if #failedSteps>=16 then table.remove(failedSteps,1) end
+                      table.insert(failedSteps,{position=recovery,untilTime=os.clock()+3})
+                    end
+                    hum:MoveTo(root.Position)
+                  end
+                end
+                plan=nil;nextPlan=0
                 task.wait(0.3)
                 continue
               end
@@ -43111,10 +43209,76 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local root = closest:FindFirstChild("HumanoidRootPart") or closest.PrimaryPart
           return closest, (root.Position-carrierRoot.Position).Magnitude
         end
+        rotDelivery.activeMarker=function(marker)
+          if not marker then return false end
+          if marker:IsA("BoolValue") then return marker.Value end
+          if marker:IsA("ObjectValue") then return marker.Value~=nil end
+          return true
+        end
+        rotDelivery.snapshotCarried=function()
+          local snapshot={}
+          for _,player in getResult26:GetPlayers() do
+            local character=player.Character
+            if character and rotDelivery.activeMarker(character:FindFirstChild("Carried")) then snapshot[character]=true end
+          end
+          return snapshot
+        end
+        rotDelivery.identify=function()
+          local own=LocalPlayer24.Character
+          if not own then return nil end
+          local players=getResult26:GetPlayers()
+          local function characterOf(value)
+            if typeof(value)~="Instance" then return nil end
+            for _,player in players do
+              local character=player.Character
+              if character and (value==player or value==character or value:IsDescendantOf(character)) then return character end
+            end
+          end
+          local grabbing=own:FindFirstChild("Grabbing")
+          if grabbing and grabbing:IsA("ObjectValue") then
+            local character=characterOf(grabbing.Value)
+            if character and character~=own then return character end
+          end
+          for _,player in players do
+            local character=player.Character
+            local carried=character and character:FindFirstChild("Carried")
+            if character~=own and carried and carried:IsA("ObjectValue") and characterOf(carried.Value)==own then return character end
+          end
+          -- Carry has no target argument. Resolve the actual replicated attachment, not the requested alt.
+          for _,joint in own:GetDescendants() do
+            if joint:IsA("JointInstance") or joint:IsA("WeldConstraint") then
+              local first,second=characterOf(joint.Part0),characterOf(joint.Part1)
+              if first==own and second and second~=own then return second end
+              if second==own and first and first~=own then return first end
+            end
+          end
+          local root=own:FindFirstChild("HumanoidRootPart")
+          local snapshot=rotDelivery.pickupSnapshot
+          if not root or not snapshot then return nil end
+          local candidate
+          for _,player in players do
+            local character=player.Character
+            local part=character and character:FindFirstChild("HumanoidRootPart")
+            if character and character~=own and not snapshot[character] and part
+              and rotDelivery.activeMarker(character:FindFirstChild("Carried")) and (part.Position-root.Position).Magnitude<=6 then
+              if candidate then return nil end -- Ambiguous: wait for an attachment instead of attributing the wrong jail.
+              candidate=character
+            end
+          end
+          return candidate
+        end
         local rotCarriedCharacter
         local fn702 = function(a1863)
           local character=a1863 and a1863.Character
           if not character then return false end
+          if not fn699() then rotDelivery.pickupSnapshot=rotDelivery.snapshotCarried() end
+          local function confirmCarry()
+            if not fn699() then return false end
+            local actual=rotDelivery.identify()
+            if not actual or not rotDelivery.begin(actual,true) then return false end
+            rotCarriedCharacter=actual
+            return true
+          end
           local started=os.clock()
           local ping=0.4
           pcall(function() ping=math.clamp(tonumber(LocalPlayer24:GetNetworkPing()) or ping,0,1.5) end)
@@ -43124,7 +43288,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local attempts=0
           while fn697() and os.clock()<deadline do
             if a1863.Character~=character or not a1863.Parent then return false end
-            if fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
+            if fn699() then
+              if confirmCarry() then return true end
+              task.wait(0.05)
+              continue -- A carry exists; do not toggle it while the victim identity is still replicating.
+            end
             local carried=character:FindFirstChild("Carried")
             local beingCarried=carried and (not carried:IsA("BoolValue") or carried.Value)
               and (not carried:IsA("ObjectValue") or carried.Value~=nil)
@@ -43144,12 +43312,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   pcall(function() remote:FireServer() end)
                   nextAttempt=os.clock()+retryDelay
                 else nextAttempt=os.clock()+0.25 end
-                if fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
+                if confirmCarry() then return true end
               end
             end
             task.wait(0.05)
           end
-          if a1863.Character==character and fn697() and fn699() then rotCarriedCharacter=character;rotDelivery.begin(character,true);return true end
+          if a1863.Character==character and fn697() and confirmCarry() then return true end
           return false
         end
         local rotWalkStatus = rotQueueTab:AddLabel("Walk: disabled (select Alts, then enable)")
@@ -43329,6 +43497,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               if os.clock()-settled>=0.1 then
                 local counted=fn693(pending.character,pending)
                 rotDelivery.pending=nil
+                rotDelivery.pickupSnapshot=nil
                 if rotCarriedCharacter==pending.character then rotCarriedCharacter=nil end
                 if counted then rotWalkStatus:SetText("Walk: Rot confirmado (entrega individual concluida)") end
                 return counted
@@ -43341,6 +43510,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             rotWalkStatus:SetText("Walk: entrega pendente preservada para a retomada")
             return false
           end
+          if pending.jailed or pending.dialogueSucceeded then
+            rotWalkStatus:SetText("Walk: resposta recebida; aguardando confirmar a vitima sem descartar a entrega")
+            return false
+          end
           rotWalkStatus:SetText("Walk: entrega sem confirmacao; contador nao foi alterado")
           if not fn699() then
             if rotCarriedCharacter==pending.character then rotCarriedCharacter=nil end
@@ -43349,6 +43522,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return false
         end
         local fn703 = function(a1864)
+          if fn699() then
+            local actual=rotDelivery.identify()
+            if not actual or (rotDelivery.pending and rotDelivery.pending.character~=actual) then
+              rotWalkStatus:SetText("Walk: aguardando identificar a vitima realmente carregada")
+              return false
+            end
+            rotCarriedCharacter=actual
+            rotDelivery.begin(actual,true)
+          end
           local pending=rotDelivery.pending
           if pending and pending.nextDialogueAt and os.clock()<pending.nextDialogueAt then return false end
           local res265, officerDistance = fn701()
@@ -43675,7 +43857,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
         end
         local function rotCollectSelected()
-          if rotDelivery.pending and (rotDelivery.pending.jailed or not fn699()) then
+          if rotDelivery.pending and (rotDelivery.pending.jailed or rotDelivery.pending.dialogueSucceeded or not fn699()) then
             return rotDelivery.await(rotDelivery.pending)
           end
           if fn699() then return fn703("carried account") end

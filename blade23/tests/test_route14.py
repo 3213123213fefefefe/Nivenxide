@@ -1649,7 +1649,7 @@ rotCollectSelected();assert(walks==2)
         self.run_luau(r"""
 local clock=0;local os={clock=function() return clock end};local active=true;local grabbing=false;local sent={}
 local character={tags={Unconscious=true},FindFirstChild=function() end};local player={Parent=true,Character=character}
-local rotDelivery={begin=function() end};local rotCarriedCharacter;local fn697=function() return active end;local fn699=function() return grabbing end
+local rotDelivery={snapshotCarried=function() return {} end,identify=function() return character end,begin=function() return {} end};local rotCarriedCharacter;local fn697=function() return active end;local fn699=function() return grabbing end
 local v1345={HasTag=function(_,c,tag) return c.tags[tag] end};local distance=3
 local MResult={distanceTo=function() return distance end}
 local fn700=function() return {FireServer=function() table.insert(sent,clock) end} end
@@ -1682,7 +1682,7 @@ local victim={};local rotCarriedCharacter=victim;local tx={character=victim,jail
 local v1345={HasTag=function(_,c) assert(c==victim);return jail end}
 local closed=0;local confirmed=0;local tbl364={};local str52="looking for a job"
 local fn672=function() end;local print=function() end
-local rotDelivery={begin=function(c) assert(c==victim);return tx end,
+local rotDelivery={identify=function() return victim end,begin=function(c) assert(c==victim);return tx end,
  await=function(t) assert(t==tx and t.jailed and not carrying);confirmed+=1;return true end}
 local FResult3={close=function() closed+=1 end,run=function(npc,answers,opts)
  assert(npc==officer and opts.holdPosition==false and opts.shouldRun())
@@ -1755,6 +1755,8 @@ local task={wait=function(dt) clock+=dt end};local rotCarriedCharacter
 """+counter+ledger+r"""
 local tx=rotDelivery.begin(character,true);tx.dialogueSucceeded=true;carrying=false
 assert(not rotDelivery.await(tx) and v1346==0,"NPC success alone plus dropping carry is insufficient while victim stays present")
+assert(rotDelivery.pending==tx,"an acknowledged transaction must survive its confirmation timeout")
+rotDelivery.pending=nil -- Start a separate unacknowledged delivery for this negative case.
 tx=rotDelivery.begin(character,true);player.Character={}
 assert(not rotDelivery.await(tx) and v1346==0,"respawn alone without positive NPC acknowledgement is insufficient")
 player.Character=character;tx=rotDelivery.begin(character,true);tx.dialogueSucceeded=true;player.Character={};carrying=true
@@ -2071,7 +2073,7 @@ local rotWalkTo=function(destination,keepGoing,range)
  assert(keepGoing() and destination()==npcRoot.Position);walks+=1
  root.Position=Vector3.new(range,root.Position.Y,0);return true
 end
-local rotDelivery={begin=function() return tx end,await=function(t)
+local rotDelivery={identify=function() return victim end,begin=function() return tx end,await=function(t)
  assert(t.jailed and not carrying);confirmed+=1;return true
 end}
 local FResult3={close=function() end,run=function(npc,answers,opts)
@@ -2345,7 +2347,8 @@ local LocalPlayer24={GetNetworkPing=function() return 0.4 end}
 local marker={IsA=function(_,kind) return kind=="BoolValue" end,Value=true}
 local character={FindFirstChild=function() return held and marker or nil end}
 local player={Parent=true,Character=character};local rotCarriedCharacter;local armed=0
-local rotDelivery={begin=function(c,fromPickup) assert(c==character and fromPickup);armed+=1 end}
+local rotDelivery={snapshotCarried=function() return {} end,identify=function() return character end,
+ begin=function(c,fromPickup) assert(c==character and fromPickup);armed+=1;return {} end}
 local fn697=function() return active end;local fn699=function() return grabbing end
 local v1345={HasTag=function(_,_,tag) return tag=="Unconscious" end}
 local MResult={distanceTo=function() return 3 end}
@@ -2405,6 +2408,195 @@ end}
 '''+move+r'''
 assert(fn677(Vector3.new(10,0,0),100)==false)
 assert(cancelled==1 and destroyed==1 and disconnected==1)
+''')
+
+
+    def test_khei_inn_requires_supported_clear_floor_beside_keeper(self):
+        safe=self.part('      tbl252.safeInnPosition = function(', '      local fn486 = function(')
+        self.run_luau(VEC+r'''
+local tbl252={};local root={Size=Vector3.new(2,2,1)};local hum={HipHeight=0}
+local character={FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end}
+local keeper={Position=Vector3.new(0,3,0)}
+local RaycastParams={new=function() return {} end};local OverlapParams={new=function() return {} end}
+local Enum={RaycastFilterType={Exclude=1}};local CFrame={new=function(p) return {Position=p} end}
+local mode="floor";local checks=0
+local v917={FindFirstChild=function() return {} end,Raycast=function(_,position,direction,params)
+ assert(params.RespectCanCollide and #params.FilterDescendantsInstances==3);checks+=1
+ if mode=="missing" or (mode=="ledge" and direction.Y==-4) then return nil end
+ return {Normal=Vector3.new(0,1,0),Position=Vector3.new(position.X,0,position.Z)}
+end,GetPartBoundsInBox=function(_,frame,size,params)
+ assert(frame.Position.Y>size.Y/2 and params.RespectCanCollide)
+ return mode=="wall" and {{CanCollide=true}} or {{CanCollide=false}}
+end}
+'''+safe+r'''
+local point=tbl252.safeInnPosition(character,keeper)
+assert(point and point.Y==3.15 and math.abs(point.X)>=3.5 and checks==5)
+for _,value in {"missing","ledge","wall"} do
+ mode=value;checks=0
+ assert(tbl252.safeInnPosition(character,keeper)==nil,"never choose an unsupported or obstructed landing: "..value)
+ assert(checks<=120,"floor search must remain bounded")
+end
+''')
+
+    def test_khei_inn_hold_survives_dialogue_and_cleans_on_error_without_reset(self):
+        release=self.part('      local fn486 = function(a1693)', '      tbl252.waitSettled = function(')
+        inn=self.part('      local fn487 = function()', '      return tbl252\n')
+        self.run_luau(VEC+r'''
+Vector3.zero=Vector3.new(0,0,0)
+local CFrame={new=function(p) return {Position=p} end}
+local Enum={HumanoidStateType={Freefall=5}}
+local connected=false;local connectCount=0;local step;local protections=0;local restored=0;local fail=false;local waits=0
+local root={Parent=true,Position=Vector3.new(0,20,0)}
+local head={Name="Head",CanCollide=true,IsA=function() return true end}
+local hum={Health=100,SetStateEnabled=function(_,state,enabled)
+ assert(state==5 and enabled and root.AssemblyLinearVelocity.Magnitude==0)
+end}
+local character={FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end,GetDescendants=function() return {head} end}
+local gui={FindFirstChild=function() return {FindFirstChild=function() return {Visible=true} end} end}
+local LocalPlayer18={Character=character,FindFirstChildOfClass=function() return gui end}
+local keeperRoot={Parent=true,Position=Vector3.new(0,3,0),CFrame={}}
+local keeper={Name="Ria",FindFirstChild=function() return keeperRoot end,FindFirstChildWhichIsA=function() return {} end}
+local landing=Vector3.new(3.5,3.15,0);local available=true
+local tbl252={canonicalInn=function(name) return name end,innKeeper=function() return keeper end,INN_ANCHORS={},
+ safeInnPosition=function() return available and landing or nil end}
+local tbl256={Ria="A room, please."};local fn484=function() return true end
+local sResult6={root=function() return root end,kill=function() error("Khei spawn must never reset") end}
+local remote={FireServer=function() end,OnClientEvent={Wait=function() end}}
+local eResult6={getServerValue=function() return 3 end,getRemote=function() return remote end}
+local v917={};local v919={HasTag=function() return false end}
+local v918={RenderStepped={Connect=function(_,fn)
+ assert(not connected);connected=true;connectCount+=1;step=fn
+ return {Disconnect=function() connected=false end}
+end}}
+local __NATIVE={[103]=function() return function()
+ head.CanCollide=false;root.AssemblyLinearVelocity=Vector3.new(0,-100,0)
+end end}
+local uResult3={lift=function() return function() restored+=1 end end}
+local fireclickdetector_3=function() end
+local task={spawn=function(fn) fn() end,wait=function(dt)
+ waits+=1;assert(connected,"inn hold must remain connected through dialogue waits")
+ step()
+ assert(root.CFrame.Position==landing and root.AssemblyLinearVelocity.Magnitude==0 and not head.CanCollide)
+ if fail then error("simulated dialogue interruption") end
+ return dt or 1/15
+end}
+'''+release+inn+r'''
+local opts={safeLanding=true,breakJoints=false,protectFall=function() protections+=1 end}
+assert(tbl252.setInn("Cavern",opts))
+assert(waits==2 and not connected and head.CanCollide and restored==1 and protections>=4)
+assert(opts.releaseInnHold==nil,"cleanup state must not leak into caller options")
+fail=true
+assert(not pcall(tbl252.setInn,"Cavern",opts))
+assert(not connected and head.CanCollide and restored==2,"errors must restore collision and FPS lift")
+fail=false;available=false;local before=connectCount
+assert(not tbl252.setInn("Cavern",opts) and connectCount==before and restored==3)
+''')
+
+    def test_shrieker_pile_recovery_tries_another_safe_side_after_stalled_step(self):
+        attack=self.part('        __L3.bladeAttack=function(', '        a1723.Maid:Give(function() if __L3.bladeCombatCleanup')
+        self.run_luau(VEC+r'''
+local clock=0;local os={clock=function() return clock end};local tbl303={true};local hits=0;local attempts={}
+local anchor=Vector3.new(0,0,0);local root={Parent=true,Position=Vector3.new(0,6,0)}
+local hum={Parent=true,Health=100,AutoRotate=true,MoveTo=function(_,position)
+ if (position-root.Position).Magnitude<0.1 then return end
+ assert(math.abs(position.X)<=3.5 and math.abs(position.Z)<=7 and position.Y==0)
+ if root.Position.Y>4 then
+  assert(Vector3.new(position.X-root.Position.X,0,position.Z-root.Position.Z).Magnitude>=2)
+  table.insert(attempts,position)
+  if #attempts==1 then return end -- First side is blocked by the mob pile.
+ end
+ root.Position=position
+end}
+local character={FindFirstChild=function() return root end,FindFirstChildOfClass=function() return hum end}
+local LocalPlayer21={Character=character}
+local __L3={bladeFarmAssigned="shriekers",bladeCombatMode="unlock",bladeAimLabel={SetText=function() end},
+ bladeCellBounds=function() return {},anchor,Vector3.new(0,0,1) end,
+ bladeInCell=function(p) return math.abs(p.X)<=3.5 and math.abs(p.Z)<=7 end,
+ bladeValue=function(_,fallback) return fallback end,
+ bladeAimPlan=function(_,current) return {count=1,position=current,direction=Vector3.new(0,0,1)} end,
+ bladePlainPunch=function() hits+=1;return true end,
+ bladeFullHP=function() error("do not restart the full-HP entry gate during recovery") end}
+local fn536=function() end;local fn576=function() return false end
+local RaycastParams={new=function() return {} end};local Enum={RaycastFilterType={Exclude=true}}
+local v966={FindFirstChild=function() end,Raycast=function(_,position,direction)
+ if direction.Y==-9 then return {Position=Vector3.new(position.X,0,position.Z),Normal=Vector3.new(0,1,0)} end
+end}
+local CFrame={lookAt=function() return {} end}
+local task={wait=function(dt) clock+=dt;assert(clock<10,"farm must recover instead of retrying one blocked point forever") end}
+'''+attack+r'''
+__L3.bladeAttack(function() return hits==3 end,function() return {} end,{})
+assert(#attempts==2 and (attempts[1]-attempts[2]).Magnitude>0.4)
+assert(hits==3 and hum.AutoRotate and __L3.bladeCombatCleanup==nil)
+''')
+
+    def test_rot_identifies_actual_carried_victim_and_waits_on_ambiguity(self):
+        identity=self.part('        rotDelivery.activeMarker=function(', '        local rotWalkStatus =')
+        self.run_luau(VEC+r'''
+local clock=0;local os={clock=function() return clock end};local grabbing=false;local sent=0;local recorded
+local typeof=function(v) return type(v)=="table" and v.instance and "Instance" or type(v) end
+local function marker(kind,value) return {Value=value,IsA=function(_,name) return name==kind end} end
+local function makeCharacter(x)
+ local c={Parent=true,instance=true,children={},joints={},IsDescendantOf=function() return false end}
+ c.root={instance=true,Position=Vector3.new(x,0,0),IsDescendantOf=function(_,parent) return parent==c end}
+ c.FindFirstChild=function(_,name) return name=="HumanoidRootPart" and c.root or c.children[name] end
+ c.GetDescendants=function() return c.joints end
+ return c
+end
+local own=makeCharacter(0);local wanted=makeCharacter(2);local actual=makeCharacter(3);local other=makeCharacter(4)
+local players={}
+for _,c in {own,wanted,actual,other} do table.insert(players,{Character=c,Parent=true,instance=true,IsDescendantOf=function() return false end}) end
+local LocalPlayer24=players[1];LocalPlayer24.GetNetworkPing=function() return 0.4 end
+local getResult26={GetPlayers=function() return players end}
+local rotDelivery={begin=function(character,fromPickup) assert(fromPickup);recorded=character;return {} end}
+local fn697=function() return true end;local fn699=function() return grabbing end
+local v1345={HasTag=function(_,_,tag) return tag=="Unconscious" end}
+local MResult={distanceTo=function() return 3 end}
+other.children.Carried=marker("BoolValue",true)
+local fn700=function() return {FireServer=function()
+ sent+=1;grabbing=true
+ own.children.Grabbing=marker("ObjectValue",actual)
+ actual.children.Carried=marker("BoolValue",true)
+end} end
+local task={wait=function(dt) clock+=dt;assert(clock<10) end}
+'''+identity+r'''
+assert(fn702(players[2]) and recorded==actual and rotCarriedCharacter==actual and sent==1,"no-argument Carry can select a different alt")
+own.children.Grabbing=marker("BoolValue",true)
+assert(rotDelivery.identify()==actual,"ignore accounts already carried before this attempt")
+wanted.children.Carried=marker("BoolValue",true)
+assert(rotDelivery.identify()==nil,"two new nearby Carried markers are ambiguous")
+own.joints={{IsA=function(_,name) return name=="WeldConstraint" end,Part0=own.root,Part1=actual.root}}
+assert(rotDelivery.identify()==actual,"the attachment resolves ambiguous nearby markers")
+own.joints={};actual.children.Carried=marker("ObjectValue",own.root)
+assert(rotDelivery.identify()==actual,"a victim's object marker can identify its carrier")
+-- Grabbing may replicate before identity. Never toggle Carry again while waiting.
+actual.children.Carried=nil;wanted.children.Carried=nil;other.children.Carried=nil;own.children.Grabbing=nil
+grabbing=false;recorded=nil;sent=0;clock=0
+fn700=function() return {FireServer=function() sent+=1;grabbing=true;own.children.Grabbing=marker("BoolValue",true) end} end
+task.wait=function(dt)
+ clock+=dt
+ if clock>=0.4 then actual.children.Carried=marker("BoolValue",true) end
+ assert(clock<2)
+end
+assert(fn702(players[2]) and sent==1 and recorded==actual and clock>=0.4)
+''')
+
+    def test_rot_preserves_acknowledged_delivery_until_jail_arrives_after_timeout(self):
+        counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
+        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local character={Parent=true};local player={Character=character}
+local fn697=function() return true end;local fn699=function() return false end
+local fn692=function() end;local v1346=0;local saved=0;local qResult4={set=function(_,count) saved=count end}
+local getResult26={GetPlayerFromCharacter=function() return player end}
+local v1345={HasTag=function(_,c) assert(c==character);return clock>=17 end}
+local rotWalkStatus={SetText=function() end};local rotCarriedCharacter=character
+local task={wait=function(dt) clock+=dt;assert(clock<25) end}
+'''+counter+ledger+r'''
+local tx=rotDelivery.begin(character,true);tx.dialogueSucceeded=true
+assert(not rotDelivery.await(tx) and rotDelivery.pending==tx and v1346==0)
+assert(rotDelivery.await(tx) and v1346==1 and saved==1 and clock>=17.1)
+assert(rotDelivery.pending==nil and rotCarriedCharacter==nil)
+assert(not rotDelivery.await(tx) and v1346==1,"late events must not double count the delivery")
 ''')
 
 
