@@ -866,6 +866,7 @@ assert(__L3.bladePauseForMenu("Illusionist"));step();menu=false;step();assert(ha
     def test_stay_server_menus_even_if_blade_hops_are_disabled(self):
         action=self.part('local fn558 = function(', '        local fn559 = function()')
         self.run_luau(r'''
+local game={PlaceId=1};local num274=2
 local tbl303={true};local tbl304={false};local __L3={bladeEnabled=function() return true end,bladeValue=function() return false end}
 local stays=true;local pauses=0;local hops=0
 __L3.bladeStayHere=function() return stays end;__L3.bladePauseForMenu=function() pauses+=1;return true end
@@ -1908,6 +1909,70 @@ assert(not pcall(__L3.bladeValidateSetup,run,"B1_XP"),"XP/ROT requirements still
 """)
         self.assertIn('progressionTab:AddDropdown("ProgStartPhase"',self.source)
         self.assertNotIn('__L3.hiddenSetup:AddDropdown("ProgStartPhase"',self.source)
+
+
+    def test_khei_proximity_reaches_menu_or_hop_independently_of_gaia_hop_setting(self):
+        helpers=self.part('__L3.bladeThreatDistance=function()', '        __L3.bladeEnabled=function()')
+        action=self.part('local fn558 = function(', '        local fn559 = function()')
+        danger=self.part('        tbl309[1] = function()', '        local fn586 = function(')
+        start='function(X, D, j, I, l, Z, g, x, i, y, Q, A, F, n, c, Y, f, r, H, e, h, q, s, proximityDistance)'
+        native=self.part(start,'  function(X, D, j)').rstrip().removesuffix(',')
+        self.run_luau(VEC+r"""
+local now=100;local tick=function() return now end;local game={PlaceId=2};local num274=2
+local tbl303={true};local tbl304={false};local tbl309={};local tbl312={0}
+local __L3={bladeEnabled=function() return true end,bladeValue=function() return false end}
+local a1723={State={}};local __L2={fn512=function(_,p) return p.ally==true end}
+local Options8={ProgProximity={Value=0},ProgKheiProximity={Value=500}}
+local Toggles8={ProgStayInServer={Value=false},ProgKheiStayInServer={Value=true}}
+local menus=0;local hops=0;local dangerOn=true
+local fn557=function() hops+=1;tbl303[1]=false;return true end
+__L3.bladePauseForMenu=function() menus+=1;tbl303[1]=false;return true end
+"""+helpers+action+danger+r"""
+local function character(x) return {FindFirstChild=function(_,key) if key=="HumanoidRootPart" then return {Position=Vector3.new(x,0,0)} end end} end
+local self={Character=character(0)};local ally={Name="Ally",Character=character(1),ally=true}
+local enemy={Name="Enemy",Character=character(300)};local players={GetPlayers=function() return {self,ally,enemy} end}
+local factory="""+native+r"""
+local watcher=factory({HasTag=function() return dangerOn end},self,Options8,0,players,
+ {RANGE={opalHold=0},allowed=function() return false end},Toggles8,function() end,a1723,function() end,
+ __L2.fn512,function(p) return p.Name end,tbl309,{0},{},function() return 0 end,fn558,{0},tbl303,{0},{0},{true},function() return false end,__L3.bladeThreatDistance)
+watcher(0.1);assert(menus==1 and hops==0,"Danger escape cannot bypass Stay In Server or stop the bot before menu handling")
+tbl303[1]=true;dangerOn=false;Toggles8.ProgKheiStayInServer.Value=false
+watcher(0.1);assert(hops==1 and menus==1,"Khei hops cannot be blocked by Gaia BladeAllowHop=false")
+tbl303[1]=true;Options8.ProgKheiProximity.Value=0;watcher(0.1);assert(hops==1 and menus==1)
+game.PlaceId=1;watcher(0.1);assert(hops==1 and menus==1,"Khei distance must not leak into Gaia")
+Options8.ProgProximity.Value=500;watcher(0.1);assert(hops==1 and menus==1,"Gaia still respects its existing Allow hops setting")
+Toggles8.ProgStayInServer.Value=true;watcher(0.1);assert(menus==2 and hops==1)
+""")
+
+    def test_skip_illusionist_detects_observe_without_spawn_and_respects_world_and_allies(self):
+        identify=self.part('        local fn553 = function(', '        local getServerValue =')
+        detect=self.part('local fn563 = function(', '        local fn564 = function(')
+        self.run_luau(r"""
+local game={PlaceId=2};local num274=2;local tbl303={true};local LocalPlayer21={}
+local observe=true;local equipped=false;local observing=false;local mindMage=false;local ally=false;local super=false
+local backpack={FindFirstChild=function(_,name) return name=="Observe" and observe and {} or nil end}
+local enemy={Name="Illu",FindFirstChildOfClass=function() return backpack end}
+local a1723={State={}};local __L2={fn512=function() return ally end}
+local Toggles8={ProgSkipIllusionist={Value=true},ProgKheiSkipIllusionist={Value=false},ProgMenuIllusionistSuper={Value=false}}
+local fn562=function() return game.PlaceId==num274 or super end
+local GResult={isIllusionist=function() return mindMage end};local fn549=function(p) return p.Name end
+local reactions=0;local actionResult=true;local fn558=function() reactions+=1;return actionResult end
+local __L3={bladeThreatDistance=function() return 0 end}
+"""+identify+detect+r"""
+assert(fn553(enemy),"Observe in Backpack must identify an illusionist even before Character exists")
+assert(not fn563(enemy,true) and reactions==0,"Gaia skip cannot enable Khei skip")
+Toggles8.ProgKheiSkipIllusionist.Value=true;assert(fn563(enemy,true) and reactions==1)
+ally=true;assert(not fn563(enemy,true) and reactions==1);ally=false
+actionResult=false;assert(not fn563(enemy,true),"a blocked/failed action must not be reported as handled")
+actionResult=true;observe=false
+assert(not fn563(enemy,true))
+enemy.Character={FindFirstChild=function(_,name) return ((name=="Observe" and equipped) or (name=="Observing" and observing)) and {} or nil end}
+equipped=true;assert(fn563(enemy,true));equipped=false;observing=true;assert(fn563(enemy,true))
+observing=false;mindMage=true;assert(fn563(enemy,true));mindMage=false
+observe=true;game.PlaceId=1;assert(not fn563(enemy,true),"Gaia's Super requirement remains in effect")
+super=true;assert(fn563(enemy,true))
+Toggles8.ProgSkipIllusionist.Value=false;assert(not fn563(enemy,true),"Khei skip cannot enable Gaia skip")
+""")
 
 if __name__ == '__main__':
     unittest.main()

@@ -35243,18 +35243,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             fn550()
           end)
         end
-        local fn553 = function(a1737)
-          local Character44 = a1737.Character
-          if not Character44 then
-            return false
-          end
-          if game.PlaceId ~= num274 then
-            return Character44:FindFirstChild("Observing") ~= nil
-          end
-          local Backpack16 = a1737:FindFirstChildOfClass("Backpack")
-          return Character44:FindFirstChild("Observe") ~= nil
-            or Backpack16 ~= nil and Backpack16:FindFirstChild("Observe") ~= nil
-            or Character44:FindFirstChild("Observing") ~= nil
+        local fn553 = function(player)
+          local character=player and player.Character
+          local backpack=player and player:FindFirstChildOfClass("Backpack")
+          return (character~=nil and (character:FindFirstChild("Observe")~=nil or character:FindFirstChild("Observing")~=nil))
+            or (backpack~=nil and backpack:FindFirstChild("Observe")~=nil)
         end
         local getServerValue = eResult7.getServerValue
         a1723.State.getServerValue = getServerValue
@@ -35350,7 +35343,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if __L3.bladePauseForMenu then return __L3.bladePauseForMenu(a1741) end
             return false
           end
-          if __L3.bladeEnabled() and not __L3.bladeValue("BladeAllowHop",false) then return false end
+          if game.PlaceId~=num274 and __L3.bladeEnabled() and not __L3.bladeValue("BladeAllowHop",false) then return false end
           return fn557(a1741, a2230, a375, a430) and true or false
         end
         local fn559 = function()
@@ -35369,7 +35362,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local fn560 = function(a1742, a2231, a376)
           if __L3.bladeStayHere() then return fn558(a1742,a2231,a376) end
-          if __L3.bladeEnabled() and not __L3.bladeValue("BladeAllowHop",false) then return false end
+          if game.PlaceId~=num274 and __L3.bladeEnabled() and not __L3.bladeValue("BladeAllowHop",false) then return false end
           fn559()
           return fn557(a1742, a2231, a376)
         end
@@ -35418,23 +35411,22 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             return __L3.bladePauseForMenu("Illusionist "..fn549(a1744).." (Super)")
           end
           local v1037 = LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart")
-          fn558(
-            "Illusionist " .. fn549(a1744) .. (game.PlaceId == num274 and " carrying Observe" or " observing"),
+          return fn558(
+            "Illusionist " .. fn549(a1744),
             v1037 and v1037.Position,
             __L3.bladeThreatDistance()
-          )
-          return true
+          )==true
         end
         local fn564 = function(a1745, a2233)
           if not a2233 then
             return
           end
           newResult61["char_" .. a1745.UserId] = a2233.ChildAdded:Connect(function(a1746)
-            if a1746.Name == "Observing" then
+            if a1746.Name == "Observing" or a1746.Name == "Observe" then
               fn563(a1745)
             end
           end)
-          if a2233:FindFirstChild("Observing") then
+          if a2233:FindFirstChild("Observing") or a2233:FindFirstChild("Observe") then
             fn563(a1745)
           end
         end
@@ -36069,6 +36061,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return Character58 ~= nil and not v969:HasTag(Character58, "Danger")
         end
         tbl309[1] = function()
+          -- Stay In Server must reach the normal proximity/menu action, never this forced-hop escape.
+          if __L3.bladeStayHere() then return end
           if flag57 or tick() < tbl312[1] then
             return
           end
@@ -41374,8 +41368,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           Tooltip="Ao ter Super, pausa no menu se detectar Illusionist nao aliado; aguarda Play manual",
         })
         progressionTab:AddDivider("Khei: protecoes separadas")
-        progressionTab:AddSlider("ProgKheiProximity",{Text="Proximity Check (Khei)",Default=300,Min=0,Max=1000,Rounding=0,Suffix=" studs",Tooltip="0 desliga; usa apenas em Khei"})
-        progressionTab:AddToggle("ProgKheiSkipIllusionist",{Text="Skip Illusionist Server (Khei)",Default=false})
+        progressionTab:AddSlider("ProgKheiProximity",{Text="Proximity Check (Khei)",Default=300,Min=0,Max=1000,Rounding=0,Suffix=" studs",Tooltip="0 desliga. Em Khei, Stay In Server usa menu; desligado troca de servidor. Independe de Allow hops da rota Gaia."})
+        progressionTab:AddToggle("ProgKheiSkipIllusionist",{Text="Skip Illusionist Server (Khei)",Default=false,Tooltip="Detecta Observe na mochila/personagem, Observing ou MindMage. Stay In Server usa menu; desligado troca de servidor, sem depender de Allow hops de Gaia."})
         progressionTab:AddToggle("ProgKheiStayInServer",{Text="Stay In Server (Khei)",Default=false,Tooltip="Pausa no menu e aguarda Play manual, em vez de trocar de servidor"})
         progressionTab:AddInput("ProgWebhook", {
           Text = "Progression Webhook",
