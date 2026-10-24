@@ -35,6 +35,54 @@ end
 __bootMark("runtime-entry")
 
 
+-- Coalesce UI work by object and process it outside property-change callbacks.
+-- A linked FIFO lets Destroying remove pending work immediately without retaining dead UI.
+local function __frameWorkQueue()
+  local queue={entries={},head=nil,tail=nil,busy=false,closed=false,generation=0,sequence=0}
+  queue.remove=function(key)
+    local entry=queue.entries[key]
+    if not entry then return end
+    queue.entries[key]=nil
+    if entry.previous then entry.previous.next=entry.next else queue.head=entry.next end
+    if entry.next then entry.next.previous=entry.previous else queue.tail=entry.previous end
+    entry.previous=nil;entry.next=nil
+    return entry
+  end
+  queue.push=function(key,run)
+    if queue.closed then return end
+    local entry=queue.entries[key]
+    if entry then entry.run=run;return end
+    queue.sequence+=1
+    entry={key=key,run=run,previous=queue.tail,sequence=queue.sequence}
+    if queue.tail then queue.tail.next=entry else queue.head=entry end
+    queue.tail=entry;queue.entries[key]=entry
+  end
+  queue.clear=function()
+    queue.generation+=1
+    table.clear(queue.entries);queue.head=nil;queue.tail=nil
+  end
+  queue.close=function() queue.closed=true;queue.clear() end
+  queue.step=function()
+    if queue.busy or queue.closed or not queue.head then return end
+    queue.busy=true
+    local generation=queue.generation
+    local lastSequence=queue.tail.sequence
+    local started=os.clock()
+    local count=0
+    repeat
+      local entry=queue.head
+      if not entry or entry.sequence>lastSequence then break end
+      queue.remove(entry.key)
+      pcall(entry.run)
+      count+=1
+      -- Newly queued work, including our own deferred change events, belongs to the next frame.
+      if count>=32 or os.clock()-started>=0.002 then break end
+    until queue.closed or queue.generation~=generation
+    queue.busy=false
+  end
+  return queue
+end
+
 local __UI_FILES = {
 	lib = [=[
 --!nonstrict
@@ -21022,6 +21070,9 @@ __modules.m356b75b2d82b = function()
           local info = debug.info
           local wrapChecks=setmetatable({}, {__mode="k"})
           local wrapCheckCount=0
+          local valueAt=(debug and debug.getupvalue) or getupvalue
+          local functionInfo=(debug and debug.getinfo) or getinfo
+          local wrapInspecting=setmetatable({}, {__mode="k"})
           local uiRoot,packagesRoot
           pcall(function() uiRoot=game:GetService("CoreGui") end)
           pcall(function() packagesRoot=game:FindFirstChild("CorePackages") end)
@@ -21046,8 +21097,23 @@ __modules.m356b75b2d82b = function()
             local now=os.clock()
             local cached=wrapChecks[fn]
             if cached and now-cached.at<1 then return cached.blocked end
-            local values=getupvalues(fn)
-            local blocked=#values==1 and values[1]==RunService
+            local blocked
+            if type(valueAt)=="function" and type(functionInfo)=="function" then
+              local infoOk,details=pcall(functionInfo,fn)
+              local nups=infoOk and type(details)=="table" and details.nups
+              if type(nups)=="number" and nups>=0 and nups%1==0 then
+                if nups~=1 then blocked=false
+                else
+                  local valueOk,value=pcall(valueAt,fn,1)
+                  if valueOk then blocked=value==RunService end
+                end
+              end
+            end
+            if blocked==nil then
+              -- Preserve compatibility with executors without the scalar inspection APIs.
+              local values=getupvalues(fn)
+              blocked=#values==1 and values[1]==RunService
+            end
             -- Keep only the decision, never the inspected values/captured object graphs.
             if wrapCheckCount>=512 then table.clear(wrapChecks);wrapCheckCount=0 end
             if not wrapChecks[fn] then wrapCheckCount+=1 end
@@ -21061,8 +21127,16 @@ __modules.m356b75b2d82b = function()
               if not active then return v140(a1193) end
               if not checkcaller() then
                 if type(a1193) == "function" and islclosure(a1193) then
-                  if engineUI(a1193) then return v140(a1193) end
-                  if wrappedRunServiceOnly(a1193) then return v140(fn108) end
+                  local thread=coroutine.running()
+                  if wrapInspecting[thread] then return v140(a1193) end
+                  wrapInspecting[thread]=true
+                  local ok,isUI,blocked=pcall(function()
+                    if engineUI(a1193) then return true,false end
+                    return false,wrappedRunServiceOnly(a1193)
+                  end)
+                  wrapInspecting[thread]=nil
+                  if not ok or isUI then return v140(a1193) end
+                  if blocked then return v140(fn108) end
                 end
                 if info and info(5, "n") == "pcall" then
                   return
@@ -40386,9 +40460,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
             if __L3.bladeEnabled() and phase:sub(1,1)=="B" then
               __L3.bladeStep(phase)
-              -- A missing character/NPC or failed movement may return without yielding.
-              -- Never let an immediate retry monopolize the frame and allocate without a bound.
-              task.wait(0.1)
             elseif phase == "P0" then
               fn543("P1")
             elseif phase == "P1" then
@@ -40425,6 +40496,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 task.wait(1)
               end
             end
+            -- Covers both Blade steps and the legacy ultra/Khei steps they hand off to.
+            task.wait(0.1)
           end
         end
         __L3.vector318 = Vector3.new(-3622, 1220, 2241)
@@ -41937,19 +42010,24 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return false
         end
         clients.tick=function()
-          if clients.closed then return end
-          local written=writeJson(clients.file,{version=1,active=true,userId=LocalPlayer23.UserId,jobId=game.JobId,placeId=game.PlaceId,at=os.time()})
-          if not written and not clients.writeFailed then warn("[blade 23] Nao consegui anunciar esta conta no PC. Confira o acesso a pasta de arquivos do executor.") end
-          clients.writeFailed=not written
-          local present={}
-          for _,player in getResult25:GetPlayers() do
-            local id=player.UserId
-            present[id]=true
-            clients.checked[id]=nil
-            clients.members[id]=nil
-            clients.isAlly(player)
-          end
-          for id in clients.checked do if not present[id] then clients.checked[id]=nil;clients.members[id]=nil end end
+          if clients.closed or clients.busy then return end
+          clients.busy=true
+          local ok,err=pcall(function()
+            local written=writeJson(clients.file,{version=1,active=true,userId=LocalPlayer23.UserId,jobId=game.JobId,placeId=game.PlaceId,at=os.time()})
+            if not written and not clients.writeFailed then warn("[blade 23] Nao consegui anunciar esta conta no PC. Confira o acesso a pasta de arquivos do executor.") end
+            clients.writeFailed=not written
+            local present={}
+            for _,player in getResult25:GetPlayers() do
+              local id=player.UserId
+              present[id]=true
+              clients.checked[id]=nil
+              clients.members[id]=nil
+              clients.isAlly(player)
+            end
+            for id in clients.checked do if not present[id] then clients.checked[id]=nil;clients.members[id]=nil end end
+          end)
+          clients.busy=false
+          if not ok then error(err,0) end
         end
         clients.stop=function()
           if clients.closed then return end
@@ -58498,10 +58576,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
         end
         local tbl549 = {}
+        local leaderboardPaint=__frameWorkQueue()
+        a11194.Maid:Give(v2233.Heartbeat:Connect(leaderboardPaint.step))
+        a11194.Maid:Give(leaderboardPaint.close)
         local flag123 = false
         local obj10 = setmetatable({}, { __mode = "k" })
         local obj11 = setmetatable({}, { __mode = "k" })
         local fn1058 = function(a11215)
+          leaderboardPaint.remove(a11215)
           local item101 = tbl549[a11215]
           if item101 then
             tbl549[a11215] = nil
@@ -58525,8 +58607,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           obj11[a2383] = true
           local flag127 = false
-          local paint = function()
-            if flag123 or not (a11194.State.scrambleOn and a11194.State.scrambleOn()) then
+          local applyPaint = function()
+            if not a2383.Parent or flag119 or flag123 or not (a11194.State.scrambleOn and a11194.State.scrambleOn()) then
               return
             end
             local v2309 = flag127 and a11194.State.maskUser(a11216) or a11194.State.maskRogue(a11216, fn1036(a11216))
@@ -58534,6 +58616,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               a2383.Text = v2309
             end
           end
+          local paint=function() leaderboardPaint.push(a2383,applyPaint) end
           local tbl560 = {
             paint = paint,
             restore = function()
@@ -58820,12 +58903,16 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               v2349:WaitForChild("LeaderboardClient", 10)
             end)
             task.wait()
-            pcall(function()
-              collectgarbage("collect")
-            end)
-            task.wait(0.1)
+            local scanStarted=os.clock()
+            local scanCount=0
             local pairsResult18, v2350, v2351 = pairs(getreg_())
             for k536, v2352 in pairsResult18, v2350, v2351 do
+              if flag119 or not v2349.Parent then return end
+              scanCount+=1
+              if scanCount>=64 or os.clock()-scanStarted>=0.002 then
+                task.wait();scanStarted=os.clock();scanCount=0
+                if flag119 or not v2349.Parent then return end
+              end
               if typeof(v2352) == "function" and v2239(v2352) and not (v2240 and v2240(v2352)) then
                 local ok184, result172 = pcall(function()
                   return getfenv_(v2352).script
@@ -58985,9 +59072,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               fn1054
             )
           )
-          task.spawn(function()
-            pcall(fn1067)
-          end)
+          fn1070()
         end
         a11194.Maid:Give(function()
           flag119 = true
@@ -60737,7 +60822,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local tbl574 = {}
         local tbl575 = {}
         local tbl576 = {}
-        local tbl577 = {}
         local v2441
         local v2442
         local v2443
@@ -60920,67 +61004,70 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         a11260.Maid:Give(fn1133)
         -- Never rewrite CoreGui properties inside their own change callbacks.
         -- Roblox's menu can rewrite them too; queue coalesced work with a frame budget instead.
-        local menuMasks={entries={},pending={},roots={}}
+        local menuMasks={entries={},roots={},work=__frameWorkQueue()}
+        menuMasks.pending=menuMasks.work.entries
         menuMasks.remove=function(object)
           local entry=menuMasks.entries[object]
-          menuMasks.entries[object]=nil;menuMasks.pending[object]=nil
+          menuMasks.entries[object]=nil;menuMasks.work.remove(object)
           if not entry then return end
           entry.changed:Disconnect();entry.destroying:Disconnect()
         end
-        menuMasks.bind=function(object,property,read)
+        menuMasks.schedule=function(object)
+          local entry=menuMasks.entries[object]
+          if not entry or menuMasks.pending[object] then return end
+          menuMasks.work.push(object,function()
+            if menuMasks.entries[object]~=entry then return end
+            if not object.Parent then menuMasks.remove(object);return end
+            entry.applying=true
+            pcall(function()
+              local value=entry.read()
+              if menuMasks.entries[object]==entry and object.Parent and value~=nil and object[entry.property]~=value then
+                object[entry.property]=value
+              end
+            end)
+            entry.applying=false
+          end)
+        end
+        menuMasks.bind=function(object,property,read,restore)
           local entry=menuMasks.entries[object]
           if not entry then
-            entry={property=property,read=read,applying=false,original=object[property]}
+            entry={property=property,read=read,applying=false,original=object[property],restore=restore~=false}
             menuMasks.entries[object]=entry
             entry.changed=object:GetPropertyChangedSignal(property):Connect(function()
-              if not entry.applying then menuMasks.pending[object]=true end
+              if menuMasks.entries[object]==entry and not entry.applying then menuMasks.schedule(object) end
             end)
             entry.destroying=object.Destroying:Connect(function() menuMasks.remove(object) end)
           end
           entry.read=read
-          menuMasks.pending[object]=true
+          menuMasks.schedule(object)
         end
-        menuMasks.flush=function()
-          local started=os.clock()
-          local count=0
-          for object in menuMasks.pending do
-            menuMasks.pending[object]=nil
-            local entry=menuMasks.entries[object]
-            if entry then
-              if not object.Parent then menuMasks.remove(object)
-              else
-                entry.applying=true
-                pcall(function()
-                  local value=entry.read()
-                  if object[entry.property]~=value then object[entry.property]=value end
-                end)
-                entry.applying=false
-              end
-            end
-            count+=1
-            if count>=32 or os.clock()-started>=0.002 then break end
-          end
-        end
+        menuMasks.flush=menuMasks.work.step
         menuMasks.watchRoot=function(root,onAdded)
           local record=menuMasks.roots[root]
           if record then return record end
           record={scanned=false,scanning=false}
           menuMasks.roots[root]=record
-          record.added=root.DescendantAdded:Connect(onAdded)
+          record.added=root.DescendantAdded:Connect(function(node)
+            if menuMasks.roots[root]==record then onAdded(node) end
+          end)
           record.destroying=root.Destroying:Connect(function()
             record.added:Disconnect();record.destroying:Disconnect();menuMasks.roots[root]=nil
           end)
           return record
         end
-        menuMasks.walk=function(root,visit)
+        menuMasks.walk=function(root,visit,enabled)
+          local generation=menuMasks.work.generation
           local stack={root}
           local count=0
           local started=os.clock()
           while #stack>0 do
-            if not flag135 or not (Toggles16.StreamerMode and Toggles16.StreamerMode.Value) or not root.Parent then return false end
+            if generation~=menuMasks.work.generation or not (Toggles16.StreamerMode and Toggles16.StreamerMode.Value)
+              or not root.Parent or (enabled and not enabled()) or (not enabled and not flag135) then return false end
             local node=table.remove(stack)
-            visit(node)
-            for _,child in node:GetChildren() do table.insert(stack,child) end
+            if node==root or node.Parent then
+              visit(node)
+              for _,child in node:GetChildren() do table.insert(stack,child) end
+            end
             count+=1
             if count>=40 or os.clock()-started>=0.002 then
               count=0;task.wait();started=os.clock()
@@ -60989,14 +61076,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return true
         end
         menuMasks.clear=function()
+          menuMasks.work.clear()
           for object,entry in menuMasks.entries do
             menuMasks.remove(object)
-            pcall(function() if object.Parent then object[entry.property]=entry.original end end)
+            if entry.restore then pcall(function() if object.Parent then object[entry.property]=entry.original end end) end
           end
           for root,record in menuMasks.roots do
             record.added:Disconnect();record.destroying:Disconnect();menuMasks.roots[root]=nil
           end
-          table.clear(menuMasks.pending)
         end
         a11260.Maid:Give(v2420.Heartbeat:Connect(function()
           if Toggles16.StreamerMode and Toggles16.StreamerMode.Value then menuMasks.flush() end
@@ -61183,14 +61270,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           record.scanning=false
         end
         local fn1142 = function()
-          if flag134 then
-            return
-          end
-          flag134 = true
           flag135 = true
+          if flag134 then return end
+          flag134 = true
           task.spawn(function()
-            v2420.RenderStepped:Wait()
-            while flag135 do
+            -- Heartbeat-based waiting also resumes with background GPU rendering disabled.
+            task.wait()
+            while flag135 and Toggles16.StreamerMode and Toggles16.StreamerMode.Value do
               pcall(function()
                 local RobloxGui = v2426:FindFirstChild("RobloxGui")
                 local v2574 = RobloxGui and RobloxGui:FindFirstChild("SettingsClippingShield")
@@ -61209,33 +61295,18 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
         end
         local fn1143 = function(a11295)
-          if not a11295:IsA("TextLabel") or tbl577[a11295] then
-            return
-          end
-          local fn1259 = function()
-            if fn1137(a11295.Text) then
-              a11295.Text = fn1123()
-            end
-          end
-          task.defer(fn1259)
-          tbl577[a11295] = a11295:GetPropertyChangedSignal("Text"):Connect(fn1259)
-          a11295.Destroying:Once(function()
-            local item103 = tbl577[a11295]
-            if item103 then
-              item103:Disconnect()
-              tbl577[a11295] = nil
-            end
-          end)
+          if not a11295:IsA("TextLabel") then return end
+          menuMasks.bind(a11295,"Text",function()
+            if fn1137(a11295.Text) then return fn1123() end
+          end,false)
         end
         local fn1144 = function(a11296)
-          if not a11296 then
-            return
-          end
-          local getDescendantsResult24, v2576, v2577 = a11296:GetDescendants()
-          for k580, v2578 in getDescendantsResult24, v2576, v2577 do
-            fn1143(v2578)
-          end
-          table.insert(tbl574, a11296.DescendantAdded:Connect(fn1143))
+          if not a11296 then return end
+          local record=menuMasks.watchRoot(a11296,fn1143)
+          if record.scanned or record.scanning then return end
+          record.scanning=true
+          record.scanned=menuMasks.walk(a11296,fn1143,function() return true end)
+          record.scanning=false
         end
         local fn1145 = function()
           if flag133 then
@@ -61282,6 +61353,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
               if cond41 then
                 if v2441 ~= v2585 then
+                  if v2441 then menuMasks.remove(v2441) end
                   for k582, v2586 in tbl575 do
                     pcall(function()
                       v2586:Enable()
@@ -61304,22 +61376,28 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 end
                 v2441 = v2585
                 flag145 = true
-                local fn1260 = function()
+                menuMasks.bind(v2585,"Text",function()
                   local Text2 = v2585.Text
-                  if Text2 == "" then
-                    return
-                  end
+                  if Text2 == "" then return end
                   local res485 = fn1123()
-                  for k586, v2594 in { LocalPlayer33.Name, LocalPlayer33.DisplayName } do
-                    if type(v2594) == "string" and v2594 ~= "" and v2594 ~= res485 and Text2:find(v2594, 1, true) then
-                      v2585.Text = Text2:gsub(v2594, res485, 1)
-                      return
+                  local entry=menuMasks.entries[v2585]
+                  if Text2==entry.maskedText then Text2=entry.sourceText
+                  elseif Text2==res485 then
+                    entry.sourceText=LocalPlayer33.Name;entry.maskedText=Text2;return
+                  end
+                  for _,name in { LocalPlayer33.Name, LocalPlayer33.DisplayName } do
+                    local first,last
+                    if type(name)=="string" and name~="" then first,last=Text2:find(name,1,true) end
+                    if first then
+                      local masked=Text2:sub(1,first-1)..res485..Text2:sub(last+1)
+                      entry.sourceText=Text2;entry.maskedText=masked
+                      return masked
                     end
                   end
-                end
+                end,false)
+                local fn1260=function() menuMasks.schedule(v2585) end
                 v2442 = fn1260
                 if #tbl576 == 0 then
-                  table.insert(tbl576, v2585:GetPropertyChangedSignal("Text"):Connect(fn1260))
                   table.insert(
                     tbl576,
                     v2585.MouseEnter:Connect(function()
@@ -61413,12 +61491,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end)
           end
           table.clear(tbl576)
-          for k590, v2605 in tbl577 do
-            pcall(function()
-              v2605:Disconnect()
-            end)
-          end
-          table.clear(tbl577)
           flag133 = false
           for k591, v2606 in tbl575 do
             pcall(function()
@@ -70696,7 +70768,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return {version=1,objects=objects}
         end
         bladePrefs.save=function()
-          if not bladePrefs.ready or a11542.State.loadingConfig then return end
+          if not bladePrefs.ready or bladePrefs.saving or a11542.State.loadingConfig then return end
+          bladePrefs.saving=true
           local ok,err=pcall(function()
             local encoded=game:GetService("HttpService"):JSONEncode(bladePrefs.snapshot())
             if encoded==bladePrefs.last then return end
@@ -70708,6 +70781,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             writefile(bladePrefs.file,encoded)
             bladePrefs.last=encoded
           end)
+          bladePrefs.saving=false
           if not ok and not bladePrefs.failed then warn("[blade 23] Nao foi possivel salvar configuracoes: "..tostring(err)) end
           bladePrefs.failed=not ok
           return ok

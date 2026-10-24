@@ -108,13 +108,17 @@ A remoção da aba de gravação de pontos não apaga arquivos de pontos existen
 
 ## Estabilidade durante a execução
 
-O loop principal cede pelo menos 0,1 segundo após cada chamada de uma etapa Blade, mesmo quando uma falha de movimento ou personagem ausente retorna imediatamente. Isso limita a repetição de trabalho na mesma frame. A inspeção de funções no hook de `coroutine.wrap` reutiliza a decisão por até um segundo, guarda somente essa decisão (não os objetos capturados), usa chaves fracas e limita o cache a 512 entradas. Scripts internos do CoreGui/CorePackages e CoreScripts seguem a função original sem inspecionar suas capturas. As decisões das funções de jogo são reavaliadas após o prazo; o mecanismo existente de limpeza dos hooks permanece.
+O loop principal cede pelo menos 0,1 segundo após cada etapa, incluindo as etapas legadas de Ultra/Khei, mesmo quando uma falha de movimento ou personagem ausente retorna imediatamente. Isso limita tentativas sem espera no mesmo frame.
 
-Essas correções tratam caminhos identificados no código. Não medem o consumo do Roblox/Potassium e não comprovam que três clientes rodarão sem crash; a validação com as contas reais ainda é necessária.
+No hook de `coroutine.wrap`, executores que oferecem `debug.getinfo(...).nups` e `debug.getupvalue` usam metadados e leitura individual, evitando criar uma tabela com todas as variáveis capturadas a cada função nova. O caminho anterior permanece como compatibilidade quando essas APIs não existem ou falham. O cache conserva apenas a decisão por até um segundo, usa chaves fracas e tem limite de 512 entradas. A inspeção tem trava por coroutine para não entrar recursivamente no próprio hook. CoreGui/CorePackages e CoreScripts continuam seguindo a função original. O descarregamento continua restaurando os hooks.
+
+A busca de funções do leaderboard é serializada também na inicialização, percorre lotes de até 64 entradas ou 2 ms antes de ceder e termina quando a interface é destruída ou o script é descarregado. Ela não força uma coleta completa de lixo. O salvamento automático de preferências e a atualização de presença local impedem novas execuções enquanto a chamada anterior ao executor ainda está pendente.
+
+As opções e as rotinas de XP, mana, ROT, skills, movimentação e segurança foram preservadas nesta revisão. As opções existentes de economia de GPU em segundo plano também continuam disponíveis. Uso baixo de CPU/GPU, isoladamente, não distingue essa economia de um travamento real. As correções tratam caminhos identificados no código; não comprovam estabilidade do Roblox/Potassium com três clientes.
 
 ## Validação
 
-O runtime passou pela compilação Luau. Cinquenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Sessenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -122,7 +126,9 @@ Para executar os testes de rota com o CLI oficial Luau instalado:
 LUAU_BIN=/caminho/para/luau python3 -m unittest discover -s tests -p test_route14.py -v
 ```
 
-A máscara de nomes do Esc agrupa mudanças de Text/Image e aplica no máximo 32 atualizações ou 2 ms de trabalho por frame. Não reescreve a propriedade dentro do próprio evento, evitando realimentação com o menu do Roblox. A descoberta inicial da interface percorre os filhos por lotes de até 40 nós ou 2 ms, e os eventos de elementos destruídos são desconectados. Raízes já analisadas não repetem a busca completa a cada atualização. Os testes simulam conflito de escrita com o Roblox, 500 menus destruídos e limite de trabalho por frame. A melhora física de desempenho precisa ser conferida no cliente.
+As máscaras de nomes do Esc, StatGui e leaderboard aplicam mudanças fora dos eventos de Text/Image. Duas filas FIFO, uma para a máscara local/menu e outra para o scramble do leaderboard, coalescem trabalho por objeto; cada fila verifica o limite de 32 atualizações ou 2 ms por frame. Eventos imediatos e diferidos não iniciam outra aplicação recursiva. Objetos destruídos saem da fila e perdem seus listeners; tarefas antigas não escrevem depois da limpeza. Um nome que contém o próprio username não cresce a cada evento. A descoberta inicial da interface continua em lotes de até 40 nós ou 2 ms. Abrir e fechar Esc rapidamente reutiliza um único worker, cuja espera não depende de RenderStepped.
+
+Os testes simulam 200 reaberturas de Esc, eventos de texto imediatos e diferidos, conflito de escrita com a interface, 500 menus destruídos, filas com objetos removidos e leituras que cedem, além de chamadas lentas/recursivas do executor. Também verificam a inspeção individual com cache, a busca do leaderboard em lotes e tentativas de etapas legadas que retornam imediatamente.
 
 Os testes usam trechos reais do runtime com serviços simulados. Movimentação física, hitboxes, diálogos e o fluxo completo com várias contas ainda precisam de teste dentro do jogo.
 

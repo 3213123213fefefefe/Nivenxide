@@ -1094,6 +1094,7 @@ players={alice};a.tick();assert(next(a.members)==1 and a.checked[2]==nil)
 
     def test_menu_masks_coalesce_events_cap_frame_work_and_release_destroyed_ui(self):
         masks=self.part('        local menuMasks={', '        a11260.Maid:Give(v2420.Heartbeat:Connect(function()')
+        queue=self.part('local function __frameWorkQueue()', 'local __UI_FILES = {')
         self.run_luau(r'''
 local task={wait=function() end};local flag135=true;local Toggles16={StreamerMode={Value=true}}
 local function signal()
@@ -1109,7 +1110,7 @@ local function object()
  setmetatable(result,{__index=function(_,key) if key=="Text" then return value elseif key=="writes" then return writes end end,__newindex=function(t,key,v) if key=="Text" then writes+=1;value=v;changed.fire() else rawset(t,key,v) end end})
  return result,changed,destroyed
 end
-'''+masks+r'''
+'''+queue+masks+r'''
 local label,changed,destroyed=object()
 menuMasks.bind(label,"Text",function() return "Alias" end)
 for i=1,1000 do menuMasks.bind(label,"Text",function() return "Alias" end);changed.fire() end
@@ -1307,6 +1308,292 @@ scriptFor[ui]={instance=true,IsA=function() return false end,IsDescendantOf=func
 assert(engineUI(ui),"CorePackages UI modules must bypass capture inspection too")
 scriptFor[ui]=nil;assert(not engineUI(ui))
 ''')
+
+
+    def test_ui_queue_is_fair_bounded_reentrant_and_discards_destroyed_work(self):
+        queue=self.part('local function __frameWorkQueue()', 'local __UI_FILES = {')
+        self.run_luau(r"""
+local clock=0;local os={clock=function() return clock end}
+"""+queue+r"""
+local q=__frameWorkQueue();local order={}
+local hot
+hot=function() table.insert(order,"hot");q.push("hot",hot);q.step() end
+q.push("hot",hot)
+for i=1,100 do q.push(i,function() table.insert(order,i) end) end
+q.step();assert(#order==32 and order[1]=="hot" and order[32]==31)
+q.step();q.step();q.step()
+assert(order[101]==100 and order[102]=="hot","hot properties cannot starve quiet rows")
+q.clear();local calls=0
+for i=1,1000 do q.push("same",function() calls+=1 end) end
+q.step();assert(calls==1 and next(q.entries)==nil)
+-- Removing the old tail must not allow newly enqueued work to run in this same frame.
+q.push("first",function() q.remove("last");q.push("new",function() calls+=100 end) end)
+q.push("last",function() error("removed") end)
+q.step();assert(calls==1 and q.entries.new)
+q.step();assert(calls==101)
+for i=1,1000 do q.push(i,function() error("destroyed work") end);q.remove(i) end
+assert(q.head==nil and q.tail==nil and next(q.entries)==nil)
+-- File/UI callbacks that yield must not permit a second Heartbeat to enter the same queue.
+q.push("slow",function() coroutine.yield();calls+=1 end)
+local co=coroutine.create(q.step);assert(coroutine.resume(co));assert(q.busy)
+q.push("next",function() calls+=1 end);q.step();assert(calls==101)
+assert(coroutine.resume(co));assert(not q.busy and calls==102)
+q.step();assert(calls==103)
+q.push("bad",function() error("UI replaced while applying") end);q.step();assert(not q.busy)
+-- Time limit counts application time, not just the number of entries.
+for i=1,10 do q.push(i,function() clock+=0.003;calls+=1 end) end
+q.step();assert(calls==104)
+q.close();q.push("closed",function() calls+=1 end);q.step();assert(calls==104 and next(q.entries)==nil)
+""")
+
+    def test_deferred_text_events_and_stat_names_do_not_chain_writes(self):
+        queue=self.part('local function __frameWorkQueue()', 'local __UI_FILES = {')
+        masks=self.part('        local menuMasks={', '        a11260.Maid:Give(v2420.Heartbeat:Connect(function()')
+        stat=self.part('        local fn1143 = function(a11295)', '        local fn1145 = function()')
+        self.run_luau(r"""
+local clock=0;local os={clock=function() return clock end};local deferred={};local useDeferred=true
+local function signal()
+ local listeners={};local s={}
+ s.Connect=function(_,fn)
+  local key={};listeners[key]=fn;return {Disconnect=function() listeners[key]=nil end}
+ end
+ s.fire=function()
+  for key,fn in table.clone(listeners) do
+   if useDeferred then table.insert(deferred,function() if listeners[key] then fn() end end)
+   elseif listeners[key] then fn() end
+  end
+ end
+ s.count=function() local n=0;for _ in listeners do n+=1 end;return n end
+ return s
+end
+local function drain()
+ local passes=0
+ while #deferred>0 do
+  passes+=1;assert(passes<10,"property events recursively wrote more Text")
+  local batch=deferred;deferred={};for _,run in batch do run() end
+ end
+end
+local function label(initial)
+ local changed,death,added=signal(),signal(),signal();local text=initial;local writes=0
+ local obj={Parent=true,Destroying=death,DescendantAdded=added,GetChildren=function() return {} end,
+  IsA=function(_,name) return name=="TextLabel" end,GetPropertyChangedSignal=function() return changed end}
+ setmetatable(obj,{__index=function(_,k) if k=="Text" then return text elseif k=="writes" then return writes end end,
+  __newindex=function(t,k,v) if k=="Text" then text=v;writes+=1;changed.fire() else rawset(t,k,v) end end})
+ return obj,changed,death
+end
+local flag135=true;local Toggles16={StreamerMode={Value=true}}
+local task={wait=function() end}
+local fn1137=function(text) return text=="RealUser" end
+local fn1123=function() return "Alias" end
+"""+queue+masks+stat+r"""
+local mine,changed,death=label("RealUser");fn1143(mine)
+local other=label("SomeoneElse");fn1143(other)
+menuMasks.flush();drain();assert(mine.Text=="Alias" and mine.writes==1 and other.writes==0)
+menuMasks.flush();drain();assert(mine.writes==1,"our deferred event must not rewrite unchanged text")
+local enforce=changed:Connect(function() if mine.Text~="RealUser" then mine.Text="RealUser" end end)
+mine.Text="RealUser";drain()
+for i=1,200 do
+ local before=mine.writes;menuMasks.flush();drain()
+ assert(mine.writes-before==2,"exactly one mask attempt and one engine rewrite per frame")
+end
+enforce:Disconnect()
+local before=mine.writes
+mine.Text="RealUser";death.fire();drain();menuMasks.flush()
+assert(mine.writes==before+1 and menuMasks.entries[mine]==nil and changed.count()==0)
+-- Turning off the feature while a read yields cannot write an obsolete alias later.
+local slow=label("RealUser")
+menuMasks.bind(slow,"Text",function() coroutine.yield();return "Alias" end)
+local worker=coroutine.create(menuMasks.flush);assert(coroutine.resume(worker))
+menuMasks.clear();assert(coroutine.resume(worker));assert(slow.Text=="RealUser")
+assert(next(menuMasks.pending)==nil and next(menuMasks.entries)==nil)
+""")
+
+    def test_esc_reopen_reuses_one_worker_and_does_not_wait_for_rendering(self):
+        scan=self.part('        local fn1142 = function()', '        local fn1143 = function(')
+        self.run_luau(r"""
+local flag134=false;local flag135=false;local Toggles16={StreamerMode={Value=true}}
+local scheduled={};local starts=0;local scans=0
+local task={wait=function() coroutine.yield() end,spawn=function(fn)
+ starts+=1;local co=coroutine.create(fn);table.insert(scheduled,co);assert(coroutine.resume(co))
+end}
+local v2420={RenderStepped={Wait=function() error("rendering is disabled in background") end}}
+local root={FindFirstChild=function(self) return self end};local v2426=root
+local fn1136=function() return root end
+local fn1138=function() scans+=1 end;local fn1139=function() end;local fn1140=function() end;local fn1141=function() end
+"""+scan+r"""
+fn1142();assert(starts==1 and flag134 and flag135)
+for i=1,200 do
+ flag135=false -- MenuClosed
+ fn1142() -- reopen before the old worker's next scheduled tick
+ assert(starts==1 and flag135)
+ assert(coroutine.resume(scheduled[1]))
+end
+assert(scans==200)
+flag135=false;assert(coroutine.resume(scheduled[1]));assert(not flag134)
+fn1142();assert(starts==2)
+Toggles16.StreamerMode.Value=false;assert(coroutine.resume(scheduled[2]));assert(not flag134)
+""")
+
+    def test_scramble_leaderboard_paints_outside_text_callbacks_and_cleans_up(self):
+        queue=self.part('local function __frameWorkQueue()', 'local __UI_FILES = {')
+        painters=self.part('        local tbl549 = {}', '        a11194.State.leaderboardLabelFor = function(')
+        self.run_luau(r"""
+local clock=0;local os={clock=function() return clock end};local heart;local cleanup={}
+local v2233={Heartbeat={Connect=function(_,fn) heart=fn;return {} end}}
+local active=true;local LocalPlayer32={};local flag119=false
+local a11194={Maid={Give=function(_,v) table.insert(cleanup,v) end},State={
+ scrambleOn=function() return active end,maskUser=function() return "AliasUser" end,
+ maskRogue=function() return "AliasCharacter" end}}
+local fn1036=function() return "RealCharacter" end
+local function signal()
+ local list={};local s={Connect=function(_,fn) local key={};list[key]=fn;return {Disconnect=function() list[key]=nil end} end}
+ s.fire=function() for key,fn in table.clone(list) do if list[key] then fn() end end end
+ s.count=function() local n=0;for _ in list do n+=1 end;return n end
+ return s
+end
+local changed,death=signal(),signal();local text="RealCharacter";local writes=0
+local label={Parent=true,MouseEnter=signal(),MouseLeave=signal(),Destroying=death,GetPropertyChangedSignal=function() return changed end}
+setmetatable(label,{__index=function() return text end,__newindex=function(_,k,v) assert(k=="Text");text=v;writes+=1;changed.fire() end})
+"""+queue+painters+r"""
+fn1059({},label);assert(writes==0);heart();assert(text=="AliasCharacter")
+label.MouseEnter.fire();heart();assert(text=="AliasUser")
+label.MouseLeave.fire();heart();assert(text=="AliasCharacter")
+local enforce=changed:Connect(function() if text~="RealCharacter" then label.Text="RealCharacter" end end)
+label.Text="RealCharacter"
+for i=1,100 do local n=writes;heart();assert(writes-n<=2) end
+enforce:Disconnect();death.fire();heart()
+assert(changed.count()==0 and label.MouseEnter.count()==0 and tbl549[label]==nil and next(leaderboardPaint.entries)==nil)
+""")
+
+    def test_coroutine_inspection_uses_scalar_reads_and_survives_executor_reentry(self):
+        core=self.part('local fn44 = function()', '    tbl44.f = function()')
+        self.run_luau(r"""
+local clock=0;local os={clock=function() return clock end};local __bootSession={};local tbl44={};local hooks={}
+local fire=function() end;local destroy=function() end;local workspace={Destroy=destroy}
+local Instance={new=function() return {FireServer=fire} end};local RunService={}
+local services={Players={LocalPlayer={CharacterAdded={Connect=function() return {Disconnect=function() end} end}}},RunService=RunService}
+tbl44.a=function() return services end;tbl44.e=function() return {keyHandlerEnabled=function() return false end} end
+local getgenv=function() return {} end;local checkcaller=function() return false end
+local newcclosure=function(fn) return fn end;local islclosure=function() return true end
+local hookfunction=function(target,replacement) local old=hooks[target] or target;hooks[target]=replacement;return old end
+local task={spawn=function(fn) fn() end,wait=function() end}
+local captured={};local sizes={};local infoReads=0;local scalarReads=0;local bulkReads=0;local reenter=false;local throw=false
+local getupvalues=function(fn) bulkReads+=1;return captured[fn] or {} end
+local debug={info=function() return "caller" end,getinfo=function(fn)
+ infoReads+=1
+ if reenter then local nested=hooks[coroutine.wrap](function() return "nested" end);assert(nested()=="nested") end
+ if throw then error("executor unavailable") end
+ return {nups=sizes[fn] or 0}
+end,getupvalue=function(fn,index) scalarReads+=1;return captured[fn][index] end}
+local game={GetService=function() return {} end,FindFirstChild=function() return {} end}
+local getfenv=function() return {} end
+"""+core+r"""
+fn44()("Normal")
+local target=function() return "blocked body" end;captured[target]={RunService};sizes[target]=1
+assert(hooks[coroutine.wrap](target)()==nil)
+for i=1,1000 do assert(hooks[coroutine.wrap](target)()==nil) end
+assert(infoReads==1 and scalarReads==1 and bulkReads==0)
+local ordinary=function() return "ordinary" end;sizes[ordinary]=10000
+assert(hooks[coroutine.wrap](ordinary)()=="ordinary" and scalarReads==1 and bulkReads==0)
+clock=2;captured[target]={{}};assert(hooks[coroutine.wrap](target)()=="blocked body")
+clock=4;reenter=true;assert(hooks[coroutine.wrap](ordinary)()=="ordinary");reenter=false
+clock=6;throw=true;assert(hooks[coroutine.wrap](ordinary)()=="ordinary" and bulkReads==1)
+throw=false;clock=8;assert(hooks[coroutine.wrap](ordinary)()=="ordinary","inspection failure cannot leave the reentry lock stuck")
+__bootSession.coreCleanup();assert(hooks[coroutine.wrap]==coroutine.wrap)
+""")
+
+    def test_legacy_progression_stages_yield_on_immediate_failure_too(self):
+        loop=self.part('          while tbl303[1] do\n            local phase = tbl308[1].phase', '        __L3.vector318 =')
+        loop=loop[:loop.rfind('        end')]
+        self.run_luau(r"""
+local tbl303={true};local tbl308={{phase="P6"}};local calls=0;local waits=0
+local __L3={bladeEnabled=function() return true end,fn633=function() calls+=1 end}
+local task={wait=function(dt) assert(dt==0.1);waits+=1;if waits==100 then tbl303[1]=false end end}
+"""+loop+r"""
+assert(waits==100 and calls==100)
+""")
+
+    def test_leaderboard_scan_is_single_flight_budgeted_and_cancellable(self):
+        scan=self.part('        local fn1067 = function()', '        local fn1068 = function()')
+        guard=self.part('        local flag124 = false', '        local fn1071 = function()')
+        self.run_luau(r"""
+local scans=0;local inspected=0;local waits=0;local scheduled={};local flag119=false;local stop=false
+local task={wait=function()
+ waits+=1;if stop then flag119=true end
+ coroutine.yield()
+end,spawn=function(fn) local co=coroutine.create(fn);table.insert(scheduled,co);assert(coroutine.resume(co)) end}
+local gui={Parent=true,WaitForChild=function(self) return self end}
+local LocalPlayer32={FindFirstChildOfClass=function() return gui end}
+local getreg_=function() scans+=1;local t={};for i=1,2000 do t[i]=function() return i end end;return t end
+local v2238=function() return {} end;local v2242=function() end
+local getfenv_=function() inspected+=1;return {} end;local v2239=function() return true end
+local v2241=function() return {} end;local v2240
+local collectgarbage=function() error("must not force a full heap collection for leaderboard lookup") end
+"""+scan+guard+r"""
+fn1070();for i=1,100 do fn1070() end;assert(#scheduled==1 and flag124)
+local co=scheduled[1]
+while coroutine.status(co)~="dead" do
+ local before=inspected;assert(coroutine.resume(co));assert(inspected-before<=64,"scan must yield between bounded batches")
+end
+assert(scans==1 and inspected==2000 and waits>20 and not flag124)
+stop=true;fn1070();local cancelled=scheduled[2]
+while coroutine.status(cancelled)~="dead" do assert(coroutine.resume(cancelled)) end
+assert(not flag124 and inspected==2000,"unload stops the scan before inspecting more closures")
+""")
+        startup=self.part('        local fn1071 = function()', '        a11194.Maid:Give(function()\n          flag119 = true')
+        self.assertNotIn('pcall(fn1067)',startup)
+
+    def test_presence_refresh_does_not_stack_when_executor_file_write_yields(self):
+        service=self.part('      tbl358.localClients=function()', '      tbl358.channel = function(')
+        self.run_luau(r"""
+local tbl358={};local LocalPlayer23={UserId=1};local game={JobId="job",PlaceId=1}
+local getResult25={GetPlayers=function() return {LocalPlayer23} end};local pending=false;local writes=0;local fail=false
+local v1317={Heartbeat={Connect=function(_,fn) return {fire=fn,Disconnect=function() end} end}}
+local readJson=function() return nil end
+local writeJson=function() writes+=1;if pending then coroutine.yield() end;if fail then error("disk error") end;return true end
+"""+service+r"""
+local clients=tbl358.localClients();assert(writes==1)
+pending=true;local co=coroutine.create(clients.tick);assert(coroutine.resume(co))
+assert(clients.busy)
+for i=1,200 do clients.connection.fire(1) end
+assert(writes==2,"only one executor write may remain in flight")
+pending=false;assert(coroutine.resume(co));assert(not clients.busy)
+fail=true;assert(not pcall(clients.tick));assert(not clients.busy)
+fail=false;clients.tick();assert(writes==4)
+""")
+
+    def test_blade_autosave_has_one_inflight_write_and_recovers_after_error(self):
+        save=self.part('        bladePrefs.save=function()', '        bladePrefs.restore=function()')
+        self.run_luau(r"""
+local bladePrefs={ready=true,file="settings",snapshot=function() return {} end}
+local a11542={State={}};local version=1;local writes=0;local pause=true;local fail=false
+local game={GetService=function() return {JSONEncode=function() return tostring(version) end} end}
+local writefile=function() writes+=1;if pause then coroutine.yield() end;if fail then error("disk") end end
+local warn=function() end
+"""+save+r"""
+local co=coroutine.create(bladePrefs.save);assert(coroutine.resume(co));assert(bladePrefs.saving)
+for i=1,200 do bladePrefs.save() end;assert(writes==1)
+pause=false;assert(coroutine.resume(co));assert(not bladePrefs.saving and bladePrefs.last=="1")
+version=2;fail=true;assert(not bladePrefs.save() and not bladePrefs.saving and bladePrefs.last=="1")
+fail=false;assert(bladePrefs.save() and bladePrefs.last=="2")
+bladePrefs.save();assert(writes==3,"unchanged settings should not be rewritten")
+""")
+
+    def test_own_leaderboard_alias_is_idempotent_and_preserves_hover_name_changes(self):
+        binding=self.part('                menuMasks.bind(v2585,"Text",function()', '                local fn1260=')
+        self.run_luau(r"""
+local alias="RealUser 100%";local LocalPlayer33={Name="RealUser",DisplayName="Real Display"}
+local v2585={Text="@RealUser [rank]"};local fn1123=function() return alias end
+local reader;local menuMasks={entries={[v2585]={}},bind=function(_,_,read) reader=read end}
+"""+binding+r"""
+local function flush() local value=reader();if value then v2585.Text=value end end
+for i=1,1000 do flush() end
+assert(v2585.Text=="@RealUser 100% [rank]","alias containing username cannot grow on every change event")
+alias="Next";flush();assert(v2585.Text=="@Next [rank]","changing alias updates the last rendered name")
+v2585.Text=alias;flush();alias="Third";flush();assert(v2585.Text=="Third","hovered name must follow alias changes too")
+v2585.Text="Real Display";flush();assert(v2585.Text=="Third")
+v2585.Text="Character Name";flush();assert(v2585.Text=="Character Name","unrelated character text stays unchanged")
+""")
 
 if __name__ == '__main__':
     unittest.main()
