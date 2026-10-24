@@ -42928,30 +42928,29 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local rotCarriedCharacter
         local fn702 = function(a1863)
-          local num426 = 0
-          while true do
-            if not (fn697() and num426 < 4) then
-              break
+          local character=a1863 and a1863.Character
+          if not character then return false end
+          local deadline=os.clock()+4
+          local nextAttempt=0
+          while fn697() and os.clock()<deadline do
+            if a1863.Character~=character or not a1863.Parent then return false end
+            if fn699() then rotCarriedCharacter=character;return true end
+            local carried=character:FindFirstChild("Carried")
+            if carried and (not carried:IsA("BoolValue") or carried.Value)
+              and (not carried:IsA("ObjectValue") or carried.Value~=nil) then return false end
+            if v1345:HasTag(character,"Jailed") or not (v1345:HasTag(character,"Unconscious")
+              or v1345:HasTag(character,"Knocked")) then return false end
+            local distance=MResult.distanceTo(a1863)
+            if not distance or distance>4 then return false end
+            if os.clock()>=nextAttempt then
+              local remote=fn700()
+              if remote then pcall(function() remote:FireServer() end) end
+              nextAttempt=os.clock()+0.25
+              if fn699() then rotCarriedCharacter=character;return true end
             end
-            if fn699() then
-              rotCarriedCharacter = a1863.Character
-              return true
-            end
-            local distanceToResult = MResult.distanceTo(a1863)
-            if not distanceToResult or distanceToResult > num412 then
-              return false
-            end
-            local res264 = fn700()
-            if res264 then
-              pcall(function()
-                res264:FireServer()
-              end)
-            end
-            local num427 = 0.25
-            task.wait(num427)
-            num426 += num427
+            task.wait(0.05)
           end
-          if fn699() then rotCarriedCharacter = a1863.Character; return true end
+          if a1863.Character==character and fn699() then rotCarriedCharacter=character;return true end
           return false
         end
         local rotWalkStatus = rotQueueTab:AddLabel("Walk: disabled (select Alts, then enable)")
@@ -43164,8 +43163,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           rotWalkStatus:SetText("Walk: delivering at Renova (dialogue, no position lock)")
           local dialogueDeadline = os.clock() + 7
           local result = table.pack(pcall(FResult3.run, res265, {}, {
-            shouldRun = function() return fn697() and os.clock() < dialogueDeadline end,
-            successWhen = tbl364, minHold = 0, openWait = 0,
+            shouldRun = function()
+              if v1345:HasTag(transaction.character,"Jailed") then transaction.jailed=true end
+              return fn697() and os.clock()<dialogueDeadline and not (transaction.jailed and not fn699())
+            end,
+            successWhen = tbl364, minHold = 0, openWait = 0, answerDelay=0.1,
             holdPosition = false, timeout = 5, silence = 2, maxReplays = 1,
             log = function(message) print("[Rot delivery] " .. tostring(message)) end,
           }))
@@ -43387,6 +43389,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
         end))
         a1849.Maid:Give(function() queueLeave("left") end)
+        local rotPickupRetry=setmetatable({}, {__mode="k"})
         local function rotRefreshPlayers()
               local tbl372 = {}
               local flag79 = false
@@ -43422,86 +43425,74 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
         end
         local function rotCollectSelected()
-              if rotDelivery.pending and (rotDelivery.pending.jailed or not fn699()) then
-                rotDelivery.await(rotDelivery.pending)
+          if rotDelivery.pending and (rotDelivery.pending.jailed or not fn699()) then
+            rotDelivery.await(rotDelivery.pending)
+            return
+          end
+          if fn699() then fn703("carried account");return end
+          local function activeMarker(character,name)
+            local marker=character and character:FindFirstChild(name)
+            if not marker then return false end
+            if marker:IsA("BoolValue") then return marker.Value end
+            if marker:IsA("ObjectValue") then return marker.Value~=nil end
+            return true
+          end
+          local queuedUsers={}
+          for _,entry in queueRoster() do queuedUsers[entry.userId]=true end
+          local candidates={}
+          for _,name in fn698() do
+            local player=MResult.playerByName(name)
+            local character=player and player.Character
+            if player and player.Parent and not queuedUsers[player.UserId] and rotTargetDown(character)
+              and not activeMarker(character,"Carried") and not v1345:HasTag(character,"Jailed")
+              and not rotDelivery.counted[character] and (rotPickupRetry[character] or 0)<=os.clock() then
+              local distance=MResult.distanceTo(player)
+              if distance then table.insert(candidates,{player=player,character=character,distance=distance}) end
+            end
+          end
+          table.sort(candidates,function(a,b)
+            if a.distance~=b.distance then return a.distance<b.distance end
+            return a.player.UserId<b.player.UserId
+          end)
+          local candidate=candidates[1]
+          if not candidate then
+            -- Return to P14 to invite the next supplier only when no selected victim is already ready.
+            if a1849.State.bladeRunAlts and a1849.State.bladeReceiverAtP14 then
+              local root=sResult10.root()
+              if root and Vector3.new(root.Position.X-rotSupplier.receiverPoint.X,0,root.Position.Z-rotSupplier.receiverPoint.Z).Magnitude>4 then
+                rotWalkTo(function()
+                  local current=sResult10.root()
+                  return current and Vector3.new(rotSupplier.receiverPoint.X,current.Position.Y,rotSupplier.receiverPoint.Z) or nil
+                end,function() return fn697() and not fn699() end,3)
                 return
               end
-              if fn699() then
-                fn703("carried account")
-                return
-              end
-              if a1849.State.bladeRunAlts and a1849.State.bladeReceiverAtP14 then
-                local root=sResult10.root()
-                if root and Vector3.new(root.Position.X-rotSupplier.receiverPoint.X,0,root.Position.Z-rotSupplier.receiverPoint.Z).Magnitude>4 then
-                  rotWalkTo(function()
-                    local current=sResult10.root()
-                    return current and Vector3.new(rotSupplier.receiverPoint.X,current.Position.Y,rotSupplier.receiverPoint.Z) or nil
-                  end,function() return fn697() and not fn699() end,3)
-                  return
-                end
-              end
-              local queuedUsers={}
-              for _,entry in queueRoster() do queuedUsers[entry.userId]=true end
-              local res266, v1387, v1388 = fn698()
-              for k309, v1389 in res266, v1387, v1388 do
-                if not fn697() then
-                  return
-                end
-                local playerByNameResult = MResult.playerByName(v1389)
-                if playerByNameResult and queuedUsers[playerByNameResult.UserId] then continue end
-                local v1390 = playerByNameResult and MResult.distanceTo(playerByNameResult)
-                -- Selected targets may run any script; no Sentinel beacon required.
-                if not playerByNameResult then
-                  rotWalkStatus:SetText("Walk: selected account is not in this server")
-                elseif not v1390 then
-                  rotWalkStatus:SetText("Walk: waiting for character/root part")
-                elseif not rotTargetDown(playerByNameResult.Character) then
-                  rotWalkStatus:SetText("Walk: waiting for " .. v1389 .. " to be downed")
-                end
-                if playerByNameResult and v1390
-                  and rotTargetDown(playerByNameResult.Character) then
-                  local targetCharacter = playerByNameResult.Character
-                  local deadline = os.clock() + 35
-                  local function activeMarker(character, name)
-                    local marker = character and character:FindFirstChild(name)
-                    if not marker then return false end
-                    if marker:IsA("BoolValue") then return marker.Value end
-                    if marker:IsA("ObjectValue") then return marker.Value ~= nil end
-                    return true
-                  end
-                  local function walkingAllowed()
-                    if not fn697() then return false, "bot disabled or unloaded" end
-                    -- Do not compare Parent with a cloneref of the Players service.
-                    if not playerByNameResult.Parent then return false, "target left server" end
-                    if playerByNameResult.Character ~= targetCharacter then return false, "target respawned" end
-                    if not rotTargetDown(targetCharacter) then return false, "target no longer downed" end
-                    if activeMarker(targetCharacter, "Carried") then return false, "target has active Carried marker" end
-                    if v1345:HasTag(targetCharacter, "Jailed") then return false, "target has Jailed tag" end
-                    if activeMarker(LocalPlayer24.Character, "Grabbing") then return false, "carrier already has Grabbing marker" end
-                    if os.clock() >= deadline then return false, "approach timeout" end
-                    return true
-                  end
-                  local humanoid = LocalPlayer24.Character and LocalPlayer24.Character:FindFirstChildOfClass("Humanoid")
-                  local mayWalk, blockedReason = walkingAllowed()
-                  if not mayWalk then
-                    rotWalkStatus:SetText("Walk: " .. tostring(blockedReason))
-                  elseif not humanoid then
-                    rotWalkStatus:SetText("Walk: local Humanoid missing")
-                  end
-                  if humanoid and v1390 > 4 and walkingAllowed() then
-                    rotWalkStatus:SetText("Walk: approaching " .. v1389)
-                    rotWalkTo(function()
-                      local targetRoot=MResult.rootOf(playerByNameResult)
-                      return targetRoot and targetRoot.Position or nil
-                    end, walkingAllowed, 3)
-                  end
-                  local distance = MResult.distanceTo(playerByNameResult)
-                  if walkingAllowed() and distance and distance <= 4 and fn702(playerByNameResult) then
-                    rotWalkStatus:SetText("Walk: carrying; delivery only to Renova Bounty Officer")
-                    fn703(v1389)
-                  end
-                end
-              end
+            end
+            rotWalkStatus:SetText("Walk: aguardando uma alt selecionada downada e livre")
+            return
+          end
+          local player,character=candidate.player,candidate.character
+          local deadline=os.clock()+35
+          local function walkingAllowed()
+            return fn697() and player.Parent~=nil and player.Character==character and rotTargetDown(character)
+              and not activeMarker(character,"Carried") and not v1345:HasTag(character,"Jailed")
+              and not fn699() and os.clock()<deadline
+          end
+          if candidate.distance>4 and walkingAllowed() then
+            rotWalkStatus:SetText("Walk: aproximando da alt livre mais proxima: "..player.Name)
+            rotWalkTo(function()
+              local root=MResult.rootOf(player)
+              return root and root.Position or nil
+            end,walkingAllowed,3)
+          end
+          local distance=MResult.distanceTo(player)
+          if walkingAllowed() and distance and distance<=4 and fn702(player) then
+            rotPickupRetry[character]=nil
+            rotWalkStatus:SetText("Walk: carrying; delivery only to Renova Bounty Officer")
+            fn703(player.Name)
+          elseif fn697() and not fn699() then
+            -- A blocked/broken target must not hold up every other eligible account.
+            rotPickupRetry[character]=os.clock()+2
+          end
         end
         local rotWalkElapsed = 0
         local Maid10 = a1849.Maid

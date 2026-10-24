@@ -1595,5 +1595,99 @@ v2585.Text="Real Display";flush();assert(v2585.Text=="Third")
 v2585.Text="Character Name";flush();assert(v2585.Text=="Character Name","unrelated character text stays unchanged")
 """)
 
+
+    def test_rot_pickup_prioritizes_nearest_eligible_alt_without_p14_detour(self):
+        collect=self.part('        local function rotCollectSelected()', '        local rotWalkElapsed =')
+        self.run_luau(VEC+r"""
+local clock=10;local os={clock=function() return clock end};local active=true;local carrying=false
+local fn697=function() return active end;local fn699=function() return carrying end
+local rotDelivery={counted={},await=function() error("no pending transaction") end}
+local rotPickupRetry=setmetatable({}, {__mode="k"});local players={};local names={}
+local function add(name,id,distance,opts)
+ opts=opts or {};local tags={Unconscious=opts.down~=false,Jailed=opts.jailed}
+ local character={tags=tags,FindFirstChild=function(_,key) if key=="Carried" then return opts.carried end end}
+ local p={Name=name,UserId=id,Character=character,Parent=true,distance=distance}
+ players[name]=p;table.insert(names,name);return p
+end
+local far=add("Far",1,30);local jailed=add("Jailed",2,1,{jailed=true})
+local near=add("Near",3,3);local carried=add("Carried",4,1,{carried={IsA=function() return false end}})
+local asleep=add("Awake",5,1,{down=false});local counted=add("Counted",6,1)
+local queued=add("Receiver",7,1);rotDelivery.counted[counted.Character]=true
+local queueRoster=function() return {{userId=7}} end
+local fn698=function() return names end
+local rotTargetDown=function(c) return c and c.tags.Unconscious end
+local v1345={HasTag=function(_,c,tag) return c.tags[tag] end}
+local MResult={playerByName=function(name) return players[name] end,distanceTo=function(p) return p.distance end,
+ rootOf=function(p) return {Position=Vector3.new(p.distance,0,0)} end}
+local a1849={State={bladeRunAlts={},bladeReceiverAtP14=true}}
+local rotSupplier={receiverPoint=Vector3.new(0,0,0)};local sResult10={root=function() return {Position=Vector3.new(10,0,0)} end}
+local picked={};local delivered={};local walks=0;local failPickup=false
+local fn702=function(p) table.insert(picked,p.Name);carrying=not failPickup;return not failPickup end
+local fn703=function(name) table.insert(delivered,name);carrying=false end
+local rotWalkStatus={SetText=function() end}
+local rotWalkTo=function(destination,allowed)
+ walks+=1;assert(allowed());local position=destination()
+ for _,p in players do if position.X==p.distance then p.distance=3 end end
+ return true
+end
+"""+collect+r"""
+rotCollectSelected();assert(picked[1]=="Near" and delivered[1]=="Near" and walks==0,"near downed alt takes priority over return to P14")
+-- A failed nearest pickup yields the next attempt to another ready target.
+failPickup=true;rotCollectSelected();assert(rotPickupRetry[near.Character]==12)
+failPickup=false;rotCollectSelected();assert(delivered[2]=="Far" and walks==1)
+-- With no ready victim, return to P14 so suppliers can see the receiver again.
+for _,p in players do p.Character.tags.Unconscious=false end
+rotCollectSelected();assert(walks==2)
+""")
+
+    def test_rot_carry_polls_confirmation_quickly_without_spamming_remote(self):
+        pickup=self.part('        local fn702 = function(', '        local rotWalkStatus =')
+        self.run_luau(r"""
+local clock=0;local os={clock=function() return clock end};local active=true;local grabbing=false;local sent={}
+local character={tags={Unconscious=true},FindFirstChild=function() end};local player={Parent=true,Character=character}
+local rotCarriedCharacter;local fn697=function() return active end;local fn699=function() return grabbing end
+local v1345={HasTag=function(_,c,tag) return c.tags[tag] end};local distance=3
+local MResult={distanceTo=function() return distance end}
+local fn700=function() return {FireServer=function() table.insert(sent,clock) end} end
+local onWait=function() if clock>=0.1 then grabbing=true end end
+local task={wait=function(dt) clock+=dt;onWait() end}
+"""+pickup+r"""
+assert(fn702(player) and clock<=0.11 and #sent==1 and rotCarriedCharacter==character)
+clock=0;grabbing=false;sent={};onWait=function() end
+assert(not fn702(player) and #sent<=17)
+for i=2,#sent do assert(sent[i]-sent[i-1]>=0.2499,"carry remote retry interval must stay at least 250ms") end
+-- Respawning during pickup must not bind a newly spawned victim to the old carry.
+clock=0;sent={};onWait=function() player.Character={};grabbing=true end
+assert(not fn702(player) and #sent==1)
+player.Character=character;grabbing=false;clock=0;sent={};onWait=function() end
+character.tags.Unconscious=false;assert(not fn702(player) and #sent==0)
+character.tags.Unconscious=true;distance=5;assert(not fn702(player) and #sent==0)
+""")
+
+    def test_rot_dialogue_finishes_on_authoritative_jail_without_waiting_for_silence(self):
+        delivery=self.part('        local fn703 = function(', '        local function rotTargetDown(')
+        self.run_luau(VEC+r"""
+local clock=0;local os={clock=function() return clock end};local active=true;local carrying=true;local jail=false
+local root={Parent=true,Position=Vector3.new(0,0,0)};local officer={Name="Bounty Officer",GetFullName=function() return "Renova" end,
+ FindFirstChild=function() return root end,FindFirstChildWhichIsA=function() return {} end}
+local fn701=function() return officer,0 end;local sResult10={root=function() return root end};local num407=9
+local rotWalkStatus={SetText=function() end};local rotDestinationMarker={};local fireclickdetector_5=true
+local fn697=function() return active end;local fn699=function() return carrying end
+local victim={};local rotCarriedCharacter=victim;local tx={character=victim,jailed=false}
+local v1345={HasTag=function(_,c) assert(c==victim);return jail end}
+local closed=0;local confirmed=0;local tbl364={};local str52="looking for a job"
+local fn672=function() end;local print=function() end
+local rotDelivery={begin=function(c) assert(c==victim);return tx end,
+ await=function(t) assert(t==tx and t.jailed and not carrying);confirmed+=1;return true end}
+local FResult3={close=function() closed+=1 end,run=function(npc,answers,opts)
+ assert(npc==officer and opts.holdPosition==false and opts.shouldRun())
+ jail=true;assert(opts.shouldRun(),"Jailed alone must not finish while carry is still active")
+ carrying=false;assert(not opts.shouldRun(),"confirmed prison and carry release should end the dialogue immediately")
+ return true
+end}
+"""+delivery+r"""
+assert(fn703("Victim") and confirmed==1 and closed==2)
+""")
+
 if __name__ == '__main__':
     unittest.main()
