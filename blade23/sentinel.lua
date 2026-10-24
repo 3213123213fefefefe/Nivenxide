@@ -35078,6 +35078,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             fn534("stopped by hand, skipping the kick for: %s", tostring(a1730))
             return
           end
+          if __L3.bladeStayHere() then
+            if __L3.bladePauseForMenu then __L3.bladePauseForMenu(a1730) end
+            return
+          end
           fn534("HARD STOP: %s", tostring(a1730))
           fn542()
           tbl303[1] = false
@@ -35160,6 +35164,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local fn550 = function()
           if not tbl303[1] then
+            return
+          end
+          if __L3.bladeStayHere() then
+            if tbl308[1] then tbl308[1].boundInn=nil end
+            fn542()
+            if __L3.bladePauseForMenu then __L3.bladePauseForMenu("bot morreu; aguardando Play manual") end
             return
           end
           tbl303[1] = false
@@ -35305,6 +35315,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return false
         end
         local fn557 = function(a1740, a2229, a374, a429)
+          if __L3.bladeStayHere() then
+            return __L3.bladePauseForMenu and __L3.bladePauseForMenu(a1740) or false
+          end
           if tbl304[1] then
             return false
           end
@@ -35374,7 +35387,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local fn561 = function(a1743)
           if __L3.bladeStayHere() then
-            fn544("Moderator " .. a1743.Name .. " present")
+            fn558("Moderator " .. a1743.Name .. " present")
             return
           end
           local str49 = "moderator_encounter_" .. a1743.Name
@@ -36418,7 +36431,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             tbl308[1].boundInn = nil
             fn542()
           end
-          if not a2249 and tbl303[1] and fn494() > 250 and not (__L3.bladeStayHere()) then
+          if not a2249 and tbl303[1] and fn494() > 250 then
             fn560(string.format("setInn(%s) failed + %.0fms ping - hopping", tostring(a1781), fn494()))
           end
           return false
@@ -37963,7 +37976,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end)
               fn536(false)
               if not menuTeleResult2 then
-                if tbl303[1] and not (__L3.bladeStayHere()) then
+                if tbl303[1] then
                   fn558("the menu teleport to Central Sanctuary did not take")
                 end
                 return
@@ -38310,7 +38323,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               fn534("finish: Yaalda not in workspace.NPCs (attempt %d/%d)", i67, num275)
             end
             task.wait(3)
-            if i67 >= num282 and fn494() > num283 and not (__L3.bladeStayHere()) then
+            if i67 >= num282 and fn494() > num283 then
               fn534("finish: %.0fms ping after %d tries - hopping to retry the handoff elsewhere", fn494(), i67)
               if fn558(string.format("%.0fms ping stalling the Khei handoff", fn494())) then
                 return
@@ -40472,7 +40485,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             and v1273 > 0
             and huge5 < math.huge
             and huge5 > v1273
-            and not (__L3.bladeStayHere())
           then
             fn534("runCore: %.0fms ping here, hopping for a closer server", huge5)
             if fn558(string.format("%.0fms ping on arrival", huge5)) then
@@ -40685,7 +40697,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 flag73 = true
                 break
               end
-              if i73 >= num282 and fn494() > num283 and not (__L3.bladeStayHere()) then
+              if i73 >= num282 and fn494() > num283 then
                 fn534("Khei: %.0fms ping after %d inn tries - hopping to retry in a closer server", fn494(), i73)
                 fn558(string.format("%.0fms ping stalling the Cavern Sanctuary bind", fn494()))
                 return
@@ -40725,7 +40737,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   break
                 end
               end
-              if i74 >= num282 and fn494() > num283 and not (__L3.bladeStayHere()) then
+              if i74 >= num282 and fn494() > num283 then
                 fn534("Khei: %.0fms ping after %d spire tries - hopping to retry elsewhere", fn494(), i74)
                 fn558(string.format("%.0fms ping stalling the spire teleport", fn494()))
                 return
@@ -41124,6 +41136,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
         end
         v1009 = function(a1824)
+          if a1824==true and __L3.bladeTerminalMenu then
+            __L3.bladeTerminalMenu=nil;a1723.State.bladeManualMenu=false
+          end
           if __L3.bladeMenuPause and not __L3.bladePausing then
             if a1824~=true then return end -- An unwinding stage must not cancel the requested pause.
             __L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false
@@ -41158,6 +41173,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             return
           end
           task.spawn(function()
+            if __L3.bladeStayHere() then
+              if a1723.State.bladeMenuInsteadOfLeave then
+                a1723.State.bladeMenuInsteadOfLeave("execucao encerrada",true)
+              end
+              return
+            end
             __L2.fn516()
             if a1723.State.safeTerminate then
               a1723.State.safeTerminate("auto-sigil: run stopped on its own")
@@ -41214,7 +41235,29 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
           return true
         end
-        a1723.Maid:Give(function() __L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false end)
+        -- Shared safety exit used by termination and the ROT supplier; never rejoins or presses Play.
+        a1723.State.bladeStayHere=__L3.bladeStayHere
+        a1723.State.bladeMenuInsteadOfLeave=function(reason,terminal)
+          if not __L3.bladeStayHere() then return false end
+          if __L3.bladeMenuPause or __L3.bladeTerminalMenu then return true end
+          if tbl303[1] and not terminal then return __L3.bladePauseForMenu(reason) end
+          if tbl303[1] then v1009(true) end
+          local token={};__L3.bladeTerminalMenu=token;a1723.State.bladeManualMenu=true
+          task.spawn(function()
+            local function active() return __L3.bladeTerminalMenu==token end
+            local ok,entered=pcall(vResult5.forceMenu,active)
+            if active() and ok and entered then
+              if __L3.progStatusLabel then __L3.progStatusLabel:SetText("Sigil: no menu; aguardando Play manual | "..tostring(reason)) end
+              repeat task.wait(0.25) until not active() or (not vResult5.startMenu() and fn497())
+            end
+            if active() then __L3.bladeTerminalMenu=nil;a1723.State.bladeManualMenu=false end
+          end)
+          return true
+        end
+        a1723.Maid:Give(function()
+          __L3.bladeMenuPause=nil;__L3.bladeTerminalMenu=nil;a1723.State.bladeManualMenu=false
+          a1723.State.bladeMenuInsteadOfLeave=nil;a1723.State.bladeStayHere=nil
+        end)
         a1723.State.registerBot({
           name = "Auto Sigil",
           running = function()
@@ -42565,6 +42608,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return vResult6.startMenu() ~= nil
         end
         local fn686 = function()
+          while tbl365[1] and a1849.State.bladeManualMenu do task.wait(0.25) end
+          if not tbl365[1] then return false end
           fn685()
           while true do
             if not (tbl365[1] and not fn684()) then
@@ -42580,6 +42625,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if not (tbl365[1] and vResult6.startMenu() and num421 < 12) then
               break
             end
+            while tbl365[1] and a1849.State.bladeManualMenu do task.wait(0.25) end
+            if not tbl365[1] then return false end
+            if not vResult6.startMenu() then break end
             vResult6.clickPlay()
             task.wait(0.5)
             num421 += 0.5
@@ -42596,7 +42644,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         rotSupplier.ensurePlaying=function()
           local deadline=os.clock()+60
+          while tbl365[1] and a1849.State.bladeManualMenu do
+            rotSupplier.status:SetText("Fornecedor: no menu; aguardando Play manual")
+            task.wait(0.25);deadline=os.clock()+60
+          end
           while tbl365[1] and (vResult6.startMenu() or not sResult10.root()) and os.clock()<deadline do
+            if a1849.State.bladeManualMenu then return false end
             rotSupplier.status:SetText("Fornecedor: entrando no jogo (Play)")
             vResult6.clickPlay();task.wait(0.5)
           end
@@ -42606,6 +42659,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return rotSupplier.approach and rotSupplier.approach(master) or false
         end
         local fn688 = function()
+          if a1849.State.bladeMenuInsteadOfLeave and a1849.State.bladeMenuInsteadOfLeave("ROT: rejoin substituido por menu",true) then
+            rotSupplier.rejoining=false
+            return false
+          end
           rotSupplier.rejoining=true
           if Library9.Toggles.RotSupplierResume and Library9.Toggles.RotSupplierResume.Value then
             qResult4.set("rotbot_active", "true")
@@ -71287,11 +71344,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return
         end
         local str153 = tostring(a11603 or "sentinel safety check failed")
+        if tbl743.State.bladeMenuInsteadOfLeave and tbl743.State.bladeMenuInsteadOfLeave(str153,true) then return end
         task.spawn(function()
           while true do
             if not (task.wait() and not flag165) then
               break
             end
+            if tbl743.State.bladeMenuInsteadOfLeave and tbl743.State.bladeMenuInsteadOfLeave(str153,true) then return end
             pcall(function()
               v3328(Players.LocalPlayer, str153)
               local ErrorPrompt2 = game:GetService("CoreGui").RobloxPromptGui.promptOverlay.ErrorPrompt

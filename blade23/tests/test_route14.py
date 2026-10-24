@@ -501,7 +501,7 @@ assert(disconnected==1 and cleared==1 and clipped==1 and not root.Anchored)
         play=self.part('rotSupplier.ensurePlaying=function', '        local fn687 =')
         self.run_luau(r'''
 local clock=0;local os={clock=function() return clock end};local task={wait=function(t) clock+=t end}
-local tbl365={true};local menu=true;local clicks=0
+local tbl365={true};local menu=true;local clicks=0;local a1849={State={}}
 local rotSupplier={status={SetText=function() end}}
 local sResult10={root=function() return {} end}
 local vResult6={startMenu=function() return menu end,clickPlay=function() clicks+=1;if clicks==3 then menu=false end end}
@@ -829,7 +829,7 @@ Options8.ProgKheiProximity.Value=0;assert(__L3.bladeThreatDistance()==0)
 
 
     def test_menu_pause_waits_for_old_worker_and_manual_play_preserving_progress(self):
-        pause=self.part('__L3.bladePauseForMenu=function(reason)', '        a1723.Maid:Give(function() __L3.bladeMenuPause')
+        pause=self.part('__L3.bladePauseForMenu=function(reason)', '        -- Shared safety exit used by termination')
         self.run_luau(r'''
 local __L3={bladeCoreRunning=true,progStatusLabel={SetText=function() end},bladeLand=function() end}
 local tbl303={true};local tbl307={};local tbl308={};local Toggles8={};local game={JobId="job",PlaceId=1};local num274=2
@@ -2170,6 +2170,77 @@ end}
 local tx={character=victim,jailed=true};rotDelivery.pending=tx
 assert(rotDelivery.await(tx) and counts==1 and clock<0.5)
 assert(rotDelivery.pending==nil and rotCarriedCharacter==nil)
+''')
+
+
+    def test_stay_intercepts_direct_hop_hard_stop_death_and_moderator_without_exit(self):
+        direct=self.part('        local fn557 = function(', '        local v1013\n')
+        hard=self.part('        local fn544 = function(', '        local fn545 = function(')
+        death=self.part('        local fn550 = function()', '        local fn551 = function(')
+        moderator=self.part('        local fn561 = function(', '        local fn562 = function(')
+        self.run_luau(r'''
+local menus=0;local saves=0;local tbl303={true};local tbl304={false};local tbl308={{phase="B1_XP",boundInn="Cavern",bladeDamage=6400}}
+local __L3={bladeStayHere=function() return true end,bladePauseForMenu=function() menus+=1;return true end}
+local fn534=function() end;local fn542=function() saves+=1 end
+local fn558=function(reason) assert(reason:find("Moderator"));menus+=1 end
+'''+direct+hard+death+moderator+r'''
+assert(fn557("forced path") and not tbl304[1] and tbl303[1])
+fn544("error");fn550();fn561({Name="Mod"})
+assert(menus==4 and saves==1 and tbl308[1].boundInn==nil and tbl308[1].bladeDamage==6400)
+''')
+
+    def test_shared_stay_exit_menus_once_waits_manual_play_and_does_not_resume_terminal_run(self):
+        helper=self.part('        a1723.State.bladeStayHere=__L3.bladeStayHere', '        a1723.Maid:Give(function()\n          __L3.bladeMenuPause=nil;__L3.bladeTerminalMenu=nil')
+        self.run_luau(r'''
+local stay=true;local paused=0;local stopped=0;local forced=0;local menu=true;local spawned=false
+local __L3={bladeStayHere=function() return stay end,bladePauseForMenu=function() paused+=1;return true end}
+local a1723={State={}};local tbl303={true}
+local v1009=function(manual) assert(manual);stopped+=1;tbl303[1]=false end
+local fn497=function() return spawned end
+local threads={};local task={spawn=function(fn) table.insert(threads,coroutine.create(fn)) end,wait=function() coroutine.yield() end}
+local vResult5={forceMenu=function(active) assert(active());forced+=1;return true end,startMenu=function() return menu end}
+local function step() for _,t in threads do if coroutine.status(t)~="dead" then local ok,err=coroutine.resume(t);assert(ok,err) end end end
+'''+helper+r'''
+assert(a1723.State.bladeMenuInsteadOfLeave("proximity") and paused==1)
+assert(a1723.State.bladeMenuInsteadOfLeave("finished",true) and stopped==1)
+assert(a1723.State.bladeMenuInsteadOfLeave("duplicate",true) and #threads==1)
+step();for i=1,10 do step() end
+assert(forced==1 and a1723.State.bladeManualMenu and not tbl303[1])
+menu=false;step();assert(a1723.State.bladeManualMenu)
+spawned=true;step();assert(not a1723.State.bladeManualMenu and not tbl303[1],"completion must not restart itself")
+stay=false;assert(not a1723.State.bladeMenuInsteadOfLeave("normal exit",true) and #threads==1)
+''')
+
+    def test_rot_supplier_stay_blocks_rejoin_and_auto_play_until_manual_spawn(self):
+        rejoin=self.part('        local fn688 = function()', '        local fn689 = function()')
+        play=self.part('        rotSupplier.ensurePlaying=function()', '        local fn687 = function(')
+        self.run_luau(r'''
+local menus=0;local a1849={State={bladeMenuInsteadOfLeave=function(reason,terminal) assert(terminal);menus+=1;return true end}}
+local rotSupplier={rejoining=true,status={SetText=function() end}}
+'''+rejoin+r'''
+assert(not fn688() and menus==1 and not rotSupplier.rejoining)
+local clock=0;local os={clock=function() return clock end};local tbl365={true};local menu=true;local waits=0;local clicks=0
+a1849.State.bladeManualMenu=true
+local task={wait=function(t)
+ clock+=t;waits+=1
+ if waits==4 then menu=false;a1849.State.bladeManualMenu=false end
+end}
+local sResult10={root=function() return menu and nil or {} end}
+local vResult6={startMenu=function() return menu end,clickPlay=function() clicks+=1 end}
+'''+play+r'''
+assert(rotSupplier.ensurePlaying() and waits==4 and clicks==0)
+''')
+
+    def test_global_safety_termination_uses_menu_override_before_starting_kick_loop(self):
+        terminate=self.part('      local safeTerminate = function(', '      tbl743.State.safeTerminate =')
+        self.run_luau(r'''
+local flag165=false;local calls=0;local spawns=0
+local tbl743={State={bladeMenuInsteadOfLeave=function(reason,terminal) assert(reason=="test" and terminal);calls+=1;return true end}}
+local task={spawn=function() spawns+=1 end}
+'''+terminate+r'''
+safeTerminate("test");assert(calls==1 and spawns==0)
+tbl743.State.bladeMenuInsteadOfLeave=function() return false end
+safeTerminate("test");assert(spawns==1,"Stay disabled keeps existing termination behavior")
 ''')
 
 

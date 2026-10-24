@@ -130,7 +130,7 @@ As opções e as rotinas de XP, mana, ROT, skills, movimentação e segurança f
 
 ## Validação
 
-O runtime passou pela compilação Luau. Oitenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Oitenta e cinco testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -164,8 +164,10 @@ Ao marcar spawn em Khei, a progressão não executa mais o reset deliberado usad
 
 A entrega de ROT aproxima a conta do Bounty Officer, espera o movimento assentar e dá mais tempo para respostas do servidor. A navegação usa também MoveToFinished para não perder a chegada entre frames a 15 FPS, e libera caminhos e conexões ao terminar ou recalcular. A contagem continua exigindo confirmação de entrega.
 
-Validação: compilação Luau e 81 testes de regressão simulados. Ainda é necessário conferir a física e as respostas reais no jogo.
+Validação: compilação Luau e 85 testes de regressão simulados. Ainda é necessário conferir a física e as respostas reais no jogo.
 
 Em servidor lagado, o diálogo de ROT termina assim que recebe a mensagem positiva do Officer. Se o diálogo falhar com a vítima ainda carregada e sem evidência de entrega, a próxima tentativa fica disponível após 0,5 s, sem a espera extra de 12 s. Uma resposta positiva ou prisão já detectada mantém a espera pela confirmação e soltura; o contador não presume entregas. As outras conversas mantêm o comportamento anterior.
 
 A coleta encadeia até quatro entregas confirmadas no mesmo worker, com uma passagem de frame e nova checagem de Stop, turno e meta de 16 antes de cada vítima. A confirmação mantém evidência de prisão e soltura estável por 0,1 s (amostras a cada 0,05 s). O fechamento do diálogo usa orçamento de 0,15 s; a próxima conversa continua limpando qualquer diálogo antigo. A atualização da lista visual fica limitada a uma vez por segundo e não roda enquanto o carrier está ocupado.
+
+Com Stay in Server ativo no mapa atual, as saídas automáticas de Blade/Sigil por erro, morte, moderador e hop direto passam pelo menu manual. Uma etapa em execução preserva o progresso e retoma depois de Play manual; um término normal fica parado. A terminação central respeita a mesma regra, e o fornecedor ROT substitui rejoin por menu sem forçar Play. Gaia e Khei continuam com opções independentes. Stay desligado mantém o comportamento anterior.
