@@ -34730,6 +34730,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       __L2.fn512 = function(a1713, a2219)
         if not a2219 then return false end
         local state=a1713.State
+        if state.blade23Enabled and state.blade23Enabled() then return true end
         if state.bladeLocalClients and state.bladeLocalClients.isAlly(a2219) then return true end
         if state.isFriend and state.isFriend(a2219) then return true end
         local alts=state.bladeRunAlts or (a1713.Library.Options.RotAlts and a1713.Library.Options.RotAlts.Value) or {}
@@ -34926,6 +34927,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         __L3.bladeStayHere=function()
           local key=game.PlaceId==num274 and "ProgKheiStayInServer" or "ProgStayInServer"
           return Toggles8[key] and Toggles8[key].Value==true
+        end
+        a1723.State.blade23Enabled=function()
+          local run=__L3.bladeRunConfig
+          if run and run.Blade23Mode~=nil then return run.Blade23Mode==true end
+          return Toggles8.Blade23Mode and Toggles8.Blade23Mode.Value==true
         end
         __L3.bladeEnabled=function()
           return true -- Merged Blade/Sigil GUI; original routines remain available internally.
@@ -39442,7 +39448,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         __L3.bladeLockSetup=function(active)
           for _,key in {"ProgRoute","BladeOrderly","BladeFarm","BladeDamageGoal","BladeShrCount","BladeSpeed",
-            "BladeM1Range","BladeM1Arc","BladeM1Step","BladeAimCamera","BladeAllowHop","ProgStartPhase","RotAlts"} do
+            "BladeM1Range","BladeM1Arc","BladeM1Step","BladeAimCamera","BladeAllowHop","Blade23Mode","ProgStartPhase","RotAlts"} do
             local control=Options8[key] or Toggles8[key]
             if control and control.SetDisabled then control:SetDisabled(active) end
           end
@@ -39463,13 +39469,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if saved and type(saved.bladeRunConfig)=="table" and saved.bladeRunConfig.version==2 then
             local run=table.clone(saved.bladeRunConfig)
             run.BladeShrCount=__L3.bladeValue("BladeShrCount",50)
+            run.Blade23Mode=Toggles8.Blade23Mode and Toggles8.Blade23Mode.Value==true or false
             return run
           end
           local run={version=2,ProgRoute="Blade/Sigil (3 stages)",points={},alts={}}
           for _,key in {"BladeOrderly","BladeFarm","BladeSpeed","BladeShrCount","BladeM1Range","BladeM1Arc","BladeM1Step"} do
             if Options8[key] then run[key]=Options8[key].Value end
           end
-          for _,key in {"BladeAimCamera","BladeAllowHop"} do
+          for _,key in {"BladeAimCamera","BladeAllowHop","Blade23Mode"} do
             if Toggles8[key] then run[key]=Toggles8[key].Value end
           end
           run.cell=__L3.bladeCellDefault()
@@ -39492,7 +39499,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not fireclickdetector then table.insert(missing,"fireclickdetector para comprar espada") end
           if not trainingOnly and run.BladeFarm~="Zombie Scrooms" and not (a1723.State.mana and a1723.State.mana.chargeUntil) then table.insert(missing,"controle de mana para o treino de soco") end
           if run.BladeFarm~="Zombie Scrooms" and not __L3.bladeCellBounds(run.cell) then table.insert(missing,"cela XP para Shriekers/Automatic") end
-          if not trainingOnly and (run.BladeOrderly or "Rots")=="Rots" and not next(run.alts or {}) then table.insert(missing,"contas fornecedoras em Blade / Sigil > Alts") end
+          if not trainingOnly and (run.BladeOrderly or "Rots")=="Rots" and not run.Blade23Mode and not next(run.alts or {}) then table.insert(missing,"contas fornecedoras em Blade / Sigil > Alts") end
           if not __L3.bladeIO.available() then table.insert(missing,"acesso aos arquivos do executor para as filas locais") end
           if #missing>0 then error("Configure antes de iniciar: "..table.concat(missing,", "),0) end
         end
@@ -41267,7 +41274,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             v1009(true)
           end,
         })
-        __L3.tbl333 = { "ProgSkipIllusionist", "ProgMenuIllusionistSuper", "ProgStayInServer", "ProgKheiSkipIllusionist", "ProgKheiStayInServer", "ProgGoToKhei", "BladeAllowHop", "BladeAimCamera" }
+        __L3.tbl333 = { "ProgSkipIllusionist", "ProgMenuIllusionistSuper", "ProgStayInServer", "ProgKheiSkipIllusionist", "ProgKheiStayInServer", "ProgGoToKhei", "BladeAllowHop", "BladeAimCamera", "Blade23Mode" }
         __L3.tbl334 = { "ProgProximity", "ProgKheiProximity", "ProgPing", "ProgClass", "ProgRoute", "ProgStartPhase", "ProgWebhook", "BladeOrderly", "BladeFarm", "BladeSpeed", "BladeDamageGoal", "BladeShrCount", "BladeM1Range", "BladeM1Arc", "BladeM1Step" }
         __L3.tbl335 = { false }
         __L3.fn649 = function()
@@ -41337,12 +41344,17 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           __L3.progStatusLabel:SetText(ok and message or tostring(message))
         end})
         __L3.hiddenSetup:AddDropdown("ProgRoute", {Text="Progression route",Values={"Original","Blade/Sigil (3 stages)"},Default="Blade/Sigil (3 stages)",Multi=false})
+        progressionTab:AddToggle("Blade23Mode", {Text="23",Default=false,
+          Tooltip="Todos do servidor viram aliados salvos. Na etapa ROT, pega a conta downada livre mais proxima em ate 30 studs, sem selecionar Alts.",
+          Callback=function()
+            if a1723.State.bladeAddServerAllies then a1723.State.bladeAddServerAllies() end
+          end})
         progressionTab:AddDropdown("BladeOrderly", {Text="Blade P2 Orderly method",Values={"Rots","Quests"},Default="Rots",Multi=false,Callback=function()
           if __L3.bladeSupplyLabel then __L3.bladeSupplyLabel:SetText(__L3.bladeSilverGoal()==100 and "Inicio Alana | Rots: 100 Silver, sem pocoes" or "Inicio Alana | Quests: 660 Silver + pocoes") end
         end})
         progressionTab:AddDropdown("BladeFarm", {Text="Blade XP preference",Values={"Automatic","Shriekers","Zombie Scrooms"},Default="Automatic",Multi=false})
         __L3.bladeSupplyLabel=progressionTab:AddLabel("Inicio Alana | Rots: 100 Silver, sem pocoes",true)
-        progressionTab:AddLabel("Configure metodo, farm, velocidade, minimo de Shriekers e Alts antes de Iniciar. Filas locais; pontos e cela ja definidos.",true)
+        progressionTab:AddLabel("Configure metodo, farm, velocidade, minimo de Shriekers e Alts (ou 23) antes de Iniciar. Filas locais; pontos e cela ja definidos.",true)
         __L3.hiddenSetup:AddSlider("BladeDamageGoal", {Text="Shrieker damage goal",Min=6400,Max=12000,Default=6700,Rounding=0})
         progressionTab:AddSlider("BladeSpeed",{Text="Velocidade de movimentacao",Min=20,Max=250,Default=100,Rounding=0})
         progressionTab:AddSlider("BladeShrCount", {Text="Minimum Shriekers before entry",Min=1,Max=100,Default=50,Rounding=0})
@@ -42359,6 +42371,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local fn670 = function()
           if rotSupplier.explicitSupplier and not a1849.State.bladeRunAlts then return false end
+          if a1849.State.blade23Enabled and a1849.State.blade23Enabled() then return true end
           local pairsResult5, v1350, v1351 = pairs(a1849.State.bladeRunAlts or (Options9.RotAlts and Options9.RotAlts.Value or {}))
           for k305, v1352 in pairsResult5, v1350, v1351 do
             if v1352 then
@@ -42973,7 +42986,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             end
           end,
         })
-        rotReceiverTab:AddLabel("Rots: selecione as contas fornecedoras em Alts antes de iniciar. Master e fila sao automaticos.", true)
+        rotReceiverTab:AddLabel("Rots: selecione Alts ou ative 23 para pegar downados livres em ate 30 studs. Master e fila sao automaticos.", true)
         if not MResult.available() then
           rotBotTab:AddLabel("This executor has no file access, so alts cannot be listed", true)
         end
@@ -42992,6 +43005,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local tbl369 = {}
         local fn698 = function()
           local tbl371 = {}
+          if a1849.State.blade23Enabled and a1849.State.blade23Enabled() then
+            for _,player in getResult26:GetPlayers() do
+              if player~=LocalPlayer24 then table.insert(tbl371,player.Name) end
+            end
+            return tbl371
+          end
           local pairsResult6, v1376, v1377 = pairs(a1849.State.bladeRunAlts or (Options9.RotAlts and Options9.RotAlts.Value or {}))
           for k308, v1378 in pairsResult6, v1376, v1377 do
             if v1378 then
@@ -43612,11 +43631,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           for _,name in fn698() do
             local player=MResult.playerByName(name)
             local character=player and player.Character
-            if player and player.Parent and not queuedUsers[player.UserId] and rotTargetDown(character)
+            if player and player~=LocalPlayer24 and player.Parent and not queuedUsers[player.UserId] and rotTargetDown(character)
               and not activeMarker(character,"Carried") and not v1345:HasTag(character,"Jailed")
               and (rotPickupRetry[character] or 0)<=os.clock() then
               local distance=MResult.distanceTo(player)
-              if distance then table.insert(candidates,{player=player,character=character,distance=distance}) end
+              local automatic=a1849.State.blade23Enabled and a1849.State.blade23Enabled()
+              if distance and (not automatic or distance<=30) then table.insert(candidates,{player=player,character=character,distance=distance}) end
             end
           end
           table.sort(candidates,function(a,b)
@@ -60232,6 +60252,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not a11261 or a11261 == LocalPlayer33 then
             return false
           end
+          if a11260.State.blade23Enabled and a11260.State.blade23Enabled() then return true end
           if Toggles16.IgnoreFriendly and Toggles16.IgnoreFriendly.Value then
             return false
           end
@@ -60256,6 +60277,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local alliesUpdating=false
         local fn1104 = function()
+          if a11260.State.blade23Enabled and a11260.State.blade23Enabled() then
+            local changed=false
+            for _,player in getResult42:GetPlayers() do
+              if player~=LocalPlayer33 and res464[player.UserId]~=player.Name then
+                res464[player.UserId]=player.Name;changed=true
+              end
+            end
+            if changed then fn1094(res464) end
+          end
           local tbl598 = {}
           for k557, v2455 in res464 do
             table.insert(tbl598, tostring(v2455))
@@ -60301,6 +60331,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           fn1094(res464)
           fn1104()
         end
+        a11260.State.bladeAddServerAllies=fn1104
         a11260.State.toggleFriend = toggleFriend
         a11260.State.isFriend = function(a11263)
           return a11263 ~= nil and res464[a11263.UserId] ~= nil

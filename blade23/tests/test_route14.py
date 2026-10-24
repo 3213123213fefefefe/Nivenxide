@@ -2244,5 +2244,91 @@ safeTerminate("test");assert(spawns==1,"Stay disabled keeps existing termination
 ''')
 
 
+    def test_mode23_adds_existing_and_joining_players_to_persistent_allies_in_one_batch(self):
+        update=self.part('        local fn1104 = function()', '        local toggleFriend = function(')
+        ally=self.part('      __L2.fn512 = function(', '      __L2.fn513 = function(')
+        self.run_luau(r'''
+local enabled=true;local writes=0;local LocalPlayer33={Name="Self",UserId=1}
+local first={Name="First",UserId=2};local second={Name="Second",UserId=3};local roster={LocalPlayer33,first}
+local getResult42={GetPlayers=function() return roster end};local res464={};local Options17={}
+local a11260={State={blade23Enabled=function() return enabled end}}
+local fn1094=function(data) writes+=1;assert(data[1]==nil) end
+local __L2={}
+'''+update+ally+r'''
+fn1104();assert(writes==1 and res464[2]=="First")
+fn1104();assert(writes==1,"unchanged roster must not rewrite the friend file")
+table.insert(roster,second);fn1104();assert(writes==2 and res464[3]=="Second")
+assert(__L2.fn512(a11260,second))
+enabled=false;local third={Name="Third",UserId=4};table.insert(roster,third);fn1104()
+assert(writes==2 and res464[2]=="First" and res464[3]=="Second" and res464[4]==nil,"disabling the mode keeps saved allies")
+''')
+
+    def test_mode23_automatically_picks_only_nearby_free_downed_nonreceivers(self):
+        names=self.part('        local fn698 = function()', '        local fn699 = function()')
+        collect=self.part('        local function rotCollectSelected()', '        local rotWalkElapsed =')
+        self.run_luau(VEC+r'''
+local enabled=true;local carrying=false;local LocalPlayer24={Name="Self",UserId=1}
+local a1849={State={blade23Enabled=function() return enabled end}}
+local roster={LocalPlayer24};local byName={};local chosen
+local function add(name,id,distance,down,jailed,carried)
+ local tags={Unconscious=down,Jailed=jailed}
+ local p={Name=name,UserId=id,Parent=true,distance=distance,Character={tags=tags,
+ FindFirstChild=function(_,key) return key=="Carried" and carried and {IsA=function() return false end} or nil end}}
+ table.insert(roster,p);byName[name]=p;return p
+end
+local near=add("Near",2,3,true);add("Far",3,31,true);add("Awake",4,1,false)
+add("Jailed",5,1,true,true);add("Held",6,1,true,false,true);add("Receiver",7,1,true)
+local getResult26={GetPlayers=function() return roster end};local Options9={RotAlts={Value={}}}
+local fn697=function() return true end;local fn699=function() return carrying end
+local rotDelivery={};local rotPickupRetry={};local queueRoster=function() return {{userId=7}} end
+local rotTargetDown=function(c) return c and c.tags.Unconscious end
+local v1345={HasTag=function(_,c,key) return c.tags[key] end}
+local MResult={playerByName=function(n) return byName[n] end,distanceTo=function(p) return p.distance end}
+local rotWalkStatus={SetText=function() end}
+local fn702=function(p) chosen=p;return true end;local fn703=function() return true end
+local rotWalkTo=function() error("no distant pursuit") end
+'''+names+collect+r'''
+assert(#fn698()==6,"server roster is discovered without selected Alts and excludes self")
+assert(rotCollectSelected() and chosen==near)
+near.Character.tags.Unconscious=false;chosen=nil
+assert(not rotCollectSelected() and chosen==nil,"31-stud downed players and ineligible nearby players cannot be collected")
+enabled=false;assert(#fn698()==0,"manual mode retains the selected-alt requirement")
+''')
+
+    def test_mode23_receiver_role_and_saved_setup_allow_no_selected_alts(self):
+        role=self.part('        local fn670 = function()', '        local fn671 = function()')
+        capture=self.part('        __L3.bladeCaptureSetup=function(', '        __L3.bladeValidateSetup=function(')
+        validation=self.part('        __L3.bladeValidateSetup=function(', '        a1723.Maid:Give(__L3.bladeReleaseSetup)')
+        self.run_luau(r'''
+local enabled=true;local a1849={State={blade23Enabled=function() return enabled end}}
+local rotSupplier={};local Options9={RotAlts={Value={}}}
+'''+role+r'''
+assert(fn670());rotSupplier.explicitSupplier=true;assert(not fn670(),"the victim must not turn into a receiver")
+a1849.State.bladeRunAlts={};assert(fn670());enabled=false;assert(not fn670())
+local __L3={bladeValue=function() return 33 end};local Options8={};local Toggles8={Blade23Mode={Value=true},AutoBag={}}
+local game={PlaceId=1};local num274=2;local firetouchinterest=true;local fireclickdetector=true
+Options8.BagRange={};__L3.bladeRoute=table.create(14,true);__L3.bladeIO={available=function() return true end}
+local a1723={State={}}
+'''+capture+validation+r'''
+local saved={bladeRunConfig={version=2,Blade23Mode=false,BladeOrderly="Rots",BladeFarm="Zombie Scrooms",BladeSpeed=100,alts={}}}
+local run=__L3.bladeCaptureSetup(saved);assert(run.Blade23Mode and not next(run.alts))
+assert(pcall(__L3.bladeValidateSetup,run,"B2_ORDERLY"))
+Toggles8.Blade23Mode.Value=false;run=__L3.bladeCaptureSetup(saved)
+assert(not run.Blade23Mode and not pcall(__L3.bladeValidateSetup,run,"B2_ORDERLY"))
+''')
+
+    def test_mode23_uses_frozen_run_setting_until_setup_is_released(self):
+        mode=self.part('        a1723.State.blade23Enabled=function()', '        __L3.bladeEnabled=function()')
+        self.run_luau(r'''
+local a1723={State={}};local __L3={};local Toggles8={Blade23Mode={Value=true}}
+'''+mode+r'''
+assert(a1723.State.blade23Enabled())
+__L3.bladeRunConfig={Blade23Mode=false};assert(not a1723.State.blade23Enabled())
+__L3.bladeRunConfig={Blade23Mode=true};Toggles8.Blade23Mode.Value=false
+assert(a1723.State.blade23Enabled())
+__L3.bladeRunConfig=nil;assert(not a1723.State.blade23Enabled())
+''')
+
+
 if __name__ == '__main__':
     unittest.main()
