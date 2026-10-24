@@ -38875,6 +38875,41 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           tbl308[1].bladePhase=phase
           fn543(phase)
         end
+        __L3.bladeStartStages={
+          ["1 - Alana: Silver e itens"]="B1_PREP",
+          ["2 - Comprar espada"]="B1_SWORD",
+          ["3 - XP: espada e socos"]="B1_XP",
+          ["4 - Sair do XP / aguardar Danger"]="B1_EXIT",
+          ["5 - Orderly: Rots ou Quests"]="B2_ORDERLY",
+          ["6 - Skills de Warrior e Sigil (base/super)"]="B3_TRAIN",
+          ["7 - Draug e Ultra (Jagen)"]="P7",
+          ["Khei - retomar sequencia"]="KHEI",
+        }
+        __L3.bladeSelectStart=function(value)
+          if not value or value=="Resume" then return false end
+          if tbl303[1] or __L3.bladeCoreRunning or __L3.bladeMenuPause then error("Pare o Sigil e aguarde a etapa encerrar antes de trocar.",0) end
+          local phase=__L3.bladeStartStages[value]
+          if not phase then
+            local old=value:match("^P%d")
+            phase=({P1="B1_PREP",P2="B2_ORDERLY",P3="B3_TRAIN",P4="B1_SWORD",P5="B1_XP",P6="B2_ORDERLY",P7="P7"})[old]
+          end
+          if not phase then error("Etapa manual invalida: "..tostring(value),0) end
+          if (phase=="KHEI")~=(game.PlaceId==num274) then
+            error(phase=="KHEI" and "Entre em Khei antes de selecionar essa etapa." or "Em Khei, selecione Resume ou Khei - retomar sequencia.",0)
+          end
+          local save=fn541() or {}
+          save.phase=phase;save.bladePhase=phase;save.step=0
+          -- A manual continuation starts here, without an unrelated trip back to Alana.
+          save.bladeStartSpawnDone=phase~="B1_PREP" or nil
+          save.bladeSpawnTransitionAllowed=(phase=="B2_ORDERLY" or phase=="B3_TRAIN" or phase=="P7") or nil
+          if phase=="B1_PREP" then save.bladeSupplyBound=nil end
+          if phase=="B1_EXIT" then save.bladeAtExitP10=nil end
+          if phase=="P7" then save.p7dash=nil;save.p7side=nil end
+          tbl308[1]=save
+          fn542()
+          qResult3.remove("prog_pathpoint");qResult3.remove("prog_lastpos")
+          return true
+        end
         __L3.bladeCount=function(name)
           local count=0
           for _,container in {LocalPlayer21.Character,LocalPlayer21:FindFirstChildOfClass("Backpack")} do
@@ -39432,8 +39467,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           return run
         end
-        __L3.bladeValidateSetup=function(run)
+        __L3.bladeValidateSetup=function(run,phase)
           if game.PlaceId==num274 then return end
+          local trainingOnly=phase=="B3_TRAIN" or phase=="P7"
           local missing={}
           if #__L3.bladeRoute~=14 then table.insert(missing,"rota Blade de 14 pontos") end
           if run.BladeOrderly~="Rots" and run.BladeOrderly~="Quests" then table.insert(missing,"metodo Rots ou Quests") end
@@ -39441,9 +39477,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if type(run.BladeSpeed)~="number" or run.BladeSpeed<20 or run.BladeSpeed>250 then table.insert(missing,"velocidade de 20 a 250") end
           if not firetouchinterest or not Toggles8.AutoBag or not Options8.BagRange then table.insert(missing,"AutoBagPickup e firetouchinterest") end
           if not fireclickdetector then table.insert(missing,"fireclickdetector para comprar espada") end
-          if run.BladeFarm~="Zombie Scrooms" and not (a1723.State.mana and a1723.State.mana.chargeUntil) then table.insert(missing,"controle de mana para o treino de soco") end
+          if not trainingOnly and run.BladeFarm~="Zombie Scrooms" and not (a1723.State.mana and a1723.State.mana.chargeUntil) then table.insert(missing,"controle de mana para o treino de soco") end
           if run.BladeFarm~="Zombie Scrooms" and not __L3.bladeCellBounds(run.cell) then table.insert(missing,"cela XP para Shriekers/Automatic") end
-          if (run.BladeOrderly or "Rots")=="Rots" and not next(run.alts or {}) then table.insert(missing,"contas fornecedoras em Blade / Sigil > Alts") end
+          if not trainingOnly and (run.BladeOrderly or "Rots")=="Rots" and not next(run.alts or {}) then table.insert(missing,"contas fornecedoras em Blade / Sigil > Alts") end
           if not __L3.bladeIO.available() then table.insert(missing,"acesso aos arquivos do executor para as filas locais") end
           if #missing>0 then error("Configure antes de iniciar: "..table.concat(missing,", "),0) end
         end
@@ -40988,7 +41024,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local resumeSave=a1823 and fn541() or nil
           if __L3.bladeEnabled() or (resumeSave and type(resumeSave.bladeRunConfig)=="table") then
             local run=__L3.bladeCaptureSetup(resumeSave)
-            __L3.bladeValidateSetup(run)
+            local planned=resumeSave or fn541()
+            local phase=planned and planned.phase~="DONE" and (planned.bladePhase or planned.phase) or nil
+            __L3.bladeValidateSetup(run,phase)
             __L3.bladeRunConfig=run
             a1723.State.bladeRunAlts=run.alts
             __L3.bladeSpawnReady=false
@@ -41075,6 +41113,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           task.spawn(function()
             local ok124, result119 = pcall(__L3.fn642)
             __L3.bladeCoreRunning=false
+            if not tbl303[1] then __L3.bladeLockSetup(false) end
             if not ok124 and not __L3.bladeMenuPause then
               fn534("run stopped on an error: %s", tostring(result119))
               xResult2.textBounded("@everyone Auto-Sigil stopped on an error: **" .. tostring(result119) .. "**")
@@ -41294,22 +41333,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         __L3.bladeCellTab:AddToggle("BladeAimCamera",{Text="Acompanhar mira com a camera",Default=true})
         __L3.bladeAimLabel=__L3.bladeCellTab:AddLabel("M1: alcance/angulo sao estimativas; XP continua confirmado pelo HP de cada mob.",true)
         progressionTab:AddDropdown("ProgClass", { Text = "Class", Values = { "Sigil" }, Multi = false, Default = "Sigil" })
-        __L3.hiddenSetup:AddDropdown("ProgStartPhase", {
-          Text = "Start Phase",
-          Values = {
-            "Resume",
-            "P1 (collect bags)",
-            "P2 (Tespianize)",
-            "P3 (silver)",
-            "P4 (buy sword)",
-            "P5 (zombie scrooms)",
-            "P6 (sigil quest)",
-            "P7 (survive days)",
-          },
-          Multi = false,
-          Default = "Resume",
-          Tooltip = "Resume picks up where it left off",
+        progressionTab:AddDropdown("ProgStartPhase", {
+          Text = "Etapa ao iniciar (manual)",
+          Values = {"Resume","1 - Alana: Silver e itens","2 - Comprar espada","3 - XP: espada e socos",
+            "4 - Sair do XP / aguardar Danger","5 - Orderly: Rots ou Quests",
+            "6 - Skills de Warrior e Sigil (base/super)","7 - Draug e Ultra (Jagen)","Khei - retomar sequencia"},
+          Multi = false, Default = "Resume",
+          Tooltip = "Pare o Sigil, escolha a etapa e clique Iniciar. Preserva XP, Rots e skills confirmados; etapas concluidas podem avancar automaticamente. Resume usa o progresso salvo.",
         })
+        progressionTab:AddLabel("Etapa manual: Pare Sigil > escolha acima > Iniciar Sigil. A escolha vale uma vez; depois volta para Resume.",true)
         progressionTab:AddToggle("ProgSkipIllusionist", {
           Text = "Skip Illusionist Server (Gaia)",
           Default = false,
@@ -41406,21 +41438,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           __L3.progStatusLabel:SetText("Sigil: iniciando...")
           local ok,message=pcall(function()
             local v1301=Options8.ProgStartPhase and Options8.ProgStartPhase.Value
-            local v1302=v1301 and v1301:match("^P%d")
-            if v1302 then
-              tbl308[1]=fn541() or {}
-              if __L3.bladeEnabled() then
-                local mapping={P1="B1_PREP",P2="B2_ORDERLY",P3="B3_TRAIN",P4="B1_SWORD",P5="B1_XP",P6="B2_ORDERLY",P7="P7"}
-                tbl308[1].bladePhase=mapping[v1302]
-                tbl308[1].phase=tbl308[1].bladePhase
-              else tbl308[1].phase=v1302 end
-              tbl308[1].step=0
-              tbl308[1].boundInn=nil
-              fn542()
-              pcall(function() Options8.ProgStartPhase:SetValue("Resume") end)
-              fn535("auto-sigil starting at "..v1302)
-            end
+            local manual=__L3.bladeSelectStart(v1301)
             __L3.fn648(false)
+            if manual and tbl303[1] then
+              pcall(function() Options8.ProgStartPhase:SetValue("Resume") end)
+              fn535("Sigil iniciado na etapa selecionada; progresso confirmado preservado")
+            end
           end)
           if not ok then
             pcall(v1009,true)

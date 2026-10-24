@@ -73,6 +73,16 @@ Ao concluir, sai por P10 e espera o Danger desaparecer antes de avançar. A vaga
 
 **Quests:** usa a sequência existente de missões e poções. O treino de Warrior compra apenas **Pommel Strike**, **Action Surge** e **Plate Training** com Alfric, com limite persistente de três compras confirmadas, considerando também skills já obtidas. Respostas de pagamento duplicadas no mesmo diálogo são bloqueadas antes do envio. Se faltar Silver, Orderly ou XP, permanece no trainer, coleta Silver próximo e tenta novamente após 15 segundos. Não refaz a estalagem e a viagem entre cada tentativa. Em Castle Sanctuary, visita Draug logo após marcar spawn, usa o diálogo existente e confirma a conversa antes de ir a Jagen. Aguarda a compra e a confirmação da skill Ultra de Jagen e segue diretamente à finalização ou a Ya'alda/Khei, conforme a opção existente. A rota Blade/Sigil não carrega mana nem espera Mana Dash depois da Ultra. Retomadas antigas removem os marcadores dessa espera, preservando o progresso e o farm de socos de mana. A rota Blade não desvia para o day farm em Santorini antes dessa compra.
 
+## Escolher a etapa manualmente
+
+Em **blade 23 → Blade / Sigil**, clique **Parar Sigil**, aguarde a rotina terminar, selecione **Etapa ao iniciar (manual)** e clique **Iniciar Sigil**. A troca é aplicada somente nesse clique; carregar configurações ou retomar após menu/hop não aplica uma nova escolha automaticamente. Após uma inicialização bem-sucedida, o seletor volta para **Resume**. Se a inicialização falhar, a escolha permanece disponível para tentar novamente.
+
+As opções são início em Alana/coleta, compra da espada, XP de espada e socos, saída do XP/espera de Danger, Orderly por Rots ou Quests, skills de Warrior/Sigil e Draug/Ultra com Jagen. **Khei - retomar sequencia** exige que a conta já esteja em Khei; as etapas Gaia exigem o mapa Gaia.
+
+A escolha preserva dano/XP, socos confirmados, Rots, skills e o runId salvos. Uma parte já concluída pode avançar automaticamente. Ela não concede XP, Silver, Orderly ou skills no jogo e não zera os contadores. As verificações reais dos NPCs continuam valendo. Para repetir todo o processo do zero, existe o botão separado Reset Progress.
+
+Etapas avançadas não refazem a viagem inicial até Alana. Escolher o início em Alana refaz a vinculação dessa etapa. Base/super e Ultra não exigem configurar alts de Rot ou o controlador de treino de mana de etapas anteriores. A opção usa o mesmo identificador de configuração existente e participa do salvamento automático e Save Config.
+
 ## Contas fornecedoras de Rot
 
 Na subaba **Rot**, habilite Blatant Mode, ajuste a retomada após rejoin e a tecla de parada e clique **Iniciar Rot**. Não inicie a progressão Sigil nessa mesma conta. O botão inicia o papel de fornecedora e não exige Master manual.
@@ -118,7 +128,7 @@ As opções e as rotinas de XP, mana, ROT, skills, movimentação e segurança f
 
 ## Validação
 
-O runtime passou pela compilação Luau. Sessenta e nove testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Setenta e um testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 

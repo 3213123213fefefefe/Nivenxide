@@ -1847,5 +1847,67 @@ purchase=true;visited=false;__L3.fn638();assert(finishes==1,"Draug visit remains
 visited=true;tbl303[1]=false;__L3.fn638();assert(finishes==1,"stopped bot cannot hand off")
 """)
 
+
+    def test_manual_stage_selection_preserves_counters_and_checks_stop_and_world(self):
+        selector=self.part('        __L3.bladeStartStages={', '        __L3.bladeCount=function(')
+        self.run_luau(r"""
+local __L3={};local tbl303={false};local num274=2;local game={PlaceId=1}
+local saved={phase="DONE",bladeDamage=6704,bladeFistDamage=144,bladeUnlockHits=3,
+ bladeRotCount=11,bladeTraining={jagen={confirmed=1}},boundInn="Castle Sanctuary",runId="old"}
+local fn541=function() return table.clone(saved) end;local tbl308={};local writes=0;local removed={}
+local fn542=function() writes+=1;saved=tbl308[1] end
+local qResult3={remove=function(key) removed[key]=true end}
+"""+selector+r"""
+assert(not __L3.bladeSelectStart("Resume") and writes==0)
+assert(__L3.bladeSelectStart("7 - Draug e Ultra (Jagen)"))
+assert(saved.phase=="P7" and saved.bladePhase=="P7" and saved.bladeStartSpawnDone and saved.bladeSpawnTransitionAllowed)
+assert(saved.bladeDamage==6704 and saved.bladeFistDamage==144 and saved.bladeUnlockHits==3 and saved.bladeRotCount==11)
+assert(saved.bladeTraining.jagen.confirmed==1 and saved.boundInn=="Castle Sanctuary" and saved.runId=="old")
+assert(removed.prog_pathpoint and removed.prog_lastpos)
+for _,key in {"bladeCoreRunning","bladeMenuPause"} do
+ __L3[key]=true;assert(not pcall(__L3.bladeSelectStart,"1 - Alana: Silver e itens"));__L3[key]=nil
+end
+tbl303[1]=true;assert(not pcall(__L3.bladeSelectStart,"1 - Alana: Silver e itens"));tbl303[1]=false
+assert(writes==1)
+assert(not pcall(__L3.bladeSelectStart,"Khei - retomar sequencia") and writes==1)
+assert(__L3.bladeSelectStart("P5 (zombie scrooms)") and saved.phase=="B1_XP","old saved selector values remain compatible")
+assert(__L3.bladeSelectStart("1 - Alana: Silver e itens") and not saved.bladeStartSpawnDone and not saved.bladeSpawnTransitionAllowed)
+assert(saved.bladeDamage==6704 and saved.bladeRotCount==11,"selecting a stage must not silently erase confirmed progress")
+game.PlaceId=2
+assert(not pcall(__L3.bladeSelectStart,"7 - Draug e Ultra (Jagen)"))
+assert(__L3.bladeSelectStart("Khei - retomar sequencia") and saved.phase=="KHEI")
+assert(not pcall(__L3.bladeSelectStart,"unknown stage"))
+""")
+
+    def test_manual_stage_is_consumed_only_after_start_and_training_needs_no_rot_alts(self):
+        click=self.part('        __L3.progStartClick=function()', '        v1012 = progressionTab:AddButton(')
+        validation=self.part('        __L3.bladeValidateSetup=function(', '        a1723.Maid:Give(__L3.bladeReleaseSetup)')
+        self.run_luau(r"""
+local __L3={bladeSetupReady=true,num326=-math.huge,progStatusLabel={SetText=function() end}}
+local tbl303={false};local selected=0;local started=0;local value="7 - Draug e Ultra (Jagen)";local fail=false
+local Options8={ProgStartPhase={Value=value,SetValue=function(self,v) self.Value=v end}}
+local a1723={};local iResult5={allow=function() return true end};local tick=function() return 10 end
+__L3.bladeSelectStart=function(v) assert(v==value);selected+=1;return true end
+__L3.fn648=function() started+=1;if fail then error("missing capability") end;tbl303[1]=true end
+local fn535=function() end;local fn534=function() end;local v1009=function() tbl303[1]=false end
+__L3.bladeReleaseSetup=function() end
+local fn531=function() end;local fn532=function() end;local qResult3={remove=function() end}
+local newResult61={DoCleaning=function() end}
+"""+click+r"""
+__L3.progStartClick();assert(selected==1 and started==1 and Options8.ProgStartPhase.Value=="Resume")
+tbl303[1]=false;__L3.num326=-math.huge;Options8.ProgStartPhase.Value=value;fail=true
+__L3.progStartClick();assert(Options8.ProgStartPhase.Value==value and not tbl303[1],"failed start must keep the selected stage available")
+local game={PlaceId=1};local num274=2;local firetouchinterest=true;local fireclickdetector=true
+local Toggles8={AutoBag={}};Options8.BagRange={}
+__L3.bladeRoute=table.create(14,true);__L3.bladeCellBounds=function() return {} end
+__L3.bladeIO={available=function() return true end};a1723.State={}
+"""+validation+r"""
+local run={BladeOrderly="Rots",BladeFarm="Shriekers",BladeSpeed=100,alts={}}
+assert(pcall(__L3.bladeValidateSetup,run,"P7") and pcall(__L3.bladeValidateSetup,run,"B3_TRAIN"))
+assert(not pcall(__L3.bladeValidateSetup,run,"B1_XP"),"XP/ROT requirements still apply to earlier stages")
+""")
+        self.assertIn('progressionTab:AddDropdown("ProgStartPhase"',self.source)
+        self.assertNotIn('__L3.hiddenSetup:AddDropdown("ProgStartPhase"',self.source)
+
 if __name__ == '__main__':
     unittest.main()
