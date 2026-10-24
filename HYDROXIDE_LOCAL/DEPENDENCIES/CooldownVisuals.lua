@@ -54,6 +54,9 @@ return function(ctx)
     footText.TextStrokeTransparency = 0.65
     footText.Parent = foot
     local hotbarEnabled, noFallEnabled, showNumbers, opacity = true, true, true, 40
+    local hotbarStyle = "Video: escuro + timer"
+    local cardOpacity, cardTextSize = 85, 18
+    local opacityControls = {}
     local footHeight = -0.2
     local showProtectionTimer = true
     local overlays, slots = {}, {}
@@ -77,8 +80,12 @@ return function(ctx)
         shade.BorderSizePixel = 0
         shade.Active = false
         shade.Parent = container
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = shade
         local text = Instance.new("TextLabel")
         text.BackgroundTransparency = 1
+        text.BorderSizePixel = 0
         text.Size = UDim2.fromScale(1, 1)
         text.Font = Enum.Font.GothamMedium
         text.TextSize = 12
@@ -86,9 +93,31 @@ return function(ctx)
         text.TextStrokeTransparency = 0.6
         text.Active = false
         text.Parent = container
-        return {container = container, shade = shade, text = text}
+        return {container = container, shade = shade, text = text, corner = corner}
     end
     for name in pairs(states) do overlays[name] = newOverlay(name) end
+    local function applyStyle(overlay)
+        local card = hotbarStyle == "Video: escuro + timer"
+        local inset = card and 1 or 4
+        overlay.container.Position = UDim2.fromOffset(inset, inset)
+        overlay.container.Size = UDim2.new(1, -inset * 2, 1, -inset * 2)
+        overlay.shade.BackgroundColor3 = card and Color3.fromRGB(0, 0, 0) or Color3.fromRGB(115, 115, 115)
+        overlay.shade.BackgroundTransparency = 1 - (card and cardOpacity or opacity) / 100
+        overlay.corner.CornerRadius = UDim.new(0, card and 4 or 0)
+        overlay.text.Font = card and Enum.Font.SourceSansBold or Enum.Font.GothamMedium
+        overlay.text.TextSize = card and cardTextSize or 12
+        overlay.text.TextColor3 = card and Color3.fromRGB(255, 255, 255) or Color3.fromRGB(240, 240, 240)
+        overlay.text.TextStrokeTransparency = card and 0.7 or 0.6
+    end
+    local function refreshStyle()
+        for _, overlay in pairs(overlays) do applyStyle(overlay) end
+        for name, control in pairs(opacityControls) do
+            if control and control.SetVisible then
+                control:SetVisible(name == "legacy" and hotbarStyle ~= "Video: escuro + timer"
+                    or name ~= "legacy" and hotbarStyle == "Video: escuro + timer")
+            end
+        end
+    end
     local function scanHotbar()
         slots = {}
         local backpackGui = playerGui:FindFirstChild("BackpackGui")
@@ -124,6 +153,7 @@ return function(ctx)
             if not overlay.container.Parent then
                 overlay = newOverlay(name)
                 overlays[name] = overlay
+                applyStyle(overlay)
             end
             local state, button = states[name], slots[name]
             local remaining = state.start and math.max(0, state.duration - (now - state.start)) or 0
@@ -136,14 +166,12 @@ return function(ctx)
                     if stale and stale ~= overlay.container then stale:Destroy() end
                     overlay.container.Parent = button
                 end
-                -- Keep the shade INSIDE the slot; leave its decorative border clear.
-                overlay.container.Position = UDim2.fromOffset(4, 4)
-                overlay.container.Size = UDim2.new(1, -8, 1, -8)
                 overlay.container.ZIndex = button.ZIndex + 4
                 overlay.shade.ZIndex = overlay.container.ZIndex
                 overlay.text.ZIndex = overlay.container.ZIndex + 1
-                -- Bottom stays anchored; the top edge descends as cooldown expires.
-                overlay.shade.Size = UDim2.fromScale(1, math.clamp(remaining / state.duration, 0, 1))
+                -- Reference style stays fully shaded until ready; classic style drains downward.
+                overlay.shade.Size = UDim2.fromScale(1, hotbarStyle == "Video: escuro + timer" and 1
+                    or math.clamp(remaining / state.duration, 0, 1))
                 overlay.text.Visible = showNumbers
                 overlay.text.Text = string.format("%.1f", remaining)
             end
@@ -194,11 +222,23 @@ return function(ctx)
     group:AddLabel("Indicadores no jogo")
     group:AddToggle("NivenxideHotbarCooldowns", {Text = "Cooldown sobre a hotbar", Default = true,
         Callback = function(value) hotbarEnabled = value end})
-    group:AddSlider("NivenxideHotbarOpacity", {Text = "Opacidade cinza (%)", Default = 40,
+    group:AddDropdown("NivenxideHotbarStyle", {Text = "Visual do cooldown", Default = 1,
+        Values = {"Video: escuro + timer", "Classico: preenchimento cinza"},
+        Callback = function(value) hotbarStyle = value; refreshStyle() end})
+    opacityControls.legacy = group:AddSlider("NivenxideHotbarOpacity", {Text = "Opacidade cinza (%)", Default = 40,
         Min = 1, Max = 100, Rounding = 0, Callback = function(value)
             opacity = math.clamp(value, 1, 100)
-            for _, overlay in pairs(overlays) do overlay.shade.BackgroundTransparency = 1 - opacity / 100 end
+            refreshStyle()
         end})
+    opacityControls.card = group:AddSlider("NivenxideHotbarCardOpacity", {Text = "Opacidade do fundo escuro (%)", Default = 85,
+        Min = 1, Max = 100, Rounding = 0, Callback = function(value)
+            cardOpacity = math.clamp(value, 1, 100); refreshStyle()
+        end})
+    opacityControls.text = group:AddSlider("NivenxideHotbarCardTextSize", {Text = "Tamanho do timer", Default = 18,
+        Min = 10, Max = 28, Rounding = 0, Callback = function(value)
+            cardTextSize = math.clamp(value, 10, 28); refreshStyle()
+        end})
+    refreshStyle()
     group:AddToggle("NivenxideHotbarNumbers", {Text = "Segundos sobre a skill", Default = true,
         Callback = function(value) showNumbers = value end})
     group:AddToggle("NivenxideNoFallFeet", {Text = "Faixa branca de protecao nos pes", Default = true,
