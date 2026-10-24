@@ -174,6 +174,8 @@ Com Stay in Server ativo no mapa atual, as saídas automáticas de Blade/Sigil p
 
 ### Opção 23
 
+O modo **23 funciona somente em Gaia** (place 5208655184), mesmo que esteja salvo como ligado ao entrar em Khei. Aliados já gravados na lista continuam salvos.
+
 Na aba Blade 23, o toggle **23** salva automaticamente como aliados os jogadores atuais e quem entrar depois. Aliados adicionados permanecem na lista salva ao desligar a opção. O toggle é salvo no autosave e no Save Config, e fica fixo durante a execução.
 
 Com 23 ativo, a receptora não exige seleção em Alts: na etapa ROT, procura o downado livre mais próximo em até 30 studs, excluindo ela mesma, personagens já carregados/presos e contas na fila de receptoras. A vítima com função explícita de fornecedora continua sendo fornecedora. Permanecem a entrega no Officer de Renova, a confirmação individual e a meta de 16. Desligado, o fluxo usa a seleção manual de Alts.

@@ -34929,6 +34929,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return Toggles8[key] and Toggles8[key].Value==true
         end
         a1723.State.blade23Enabled=function()
+          if game.PlaceId~=5208655184 then return false end -- 23 is exclusive to Gaia, including saved runs.
           local run=__L3.bladeRunConfig
           if run and run.Blade23Mode~=nil then return run.Blade23Mode==true end
           return Toggles8.Blade23Mode and Toggles8.Blade23Mode.Value==true
@@ -41345,7 +41346,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end})
         __L3.hiddenSetup:AddDropdown("ProgRoute", {Text="Progression route",Values={"Original","Blade/Sigil (3 stages)"},Default="Blade/Sigil (3 stages)",Multi=false})
         progressionTab:AddToggle("Blade23Mode", {Text="23",Default=false,
-          Tooltip="Todos do servidor viram aliados salvos. Na etapa ROT, pega a conta downada livre mais proxima em ate 30 studs, sem selecionar Alts.",
+          Tooltip="Somente em Gaia: todos do servidor viram aliados salvos. Na etapa ROT, pega a conta downada livre mais proxima em ate 30 studs, sem selecionar Alts.",
           Callback=function()
             if a1723.State.bladeAddServerAllies then a1723.State.bladeAddServerAllies() end
           end})

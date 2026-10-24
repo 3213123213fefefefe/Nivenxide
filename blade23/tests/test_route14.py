@@ -2320,9 +2320,14 @@ assert(not run.Blade23Mode and not pcall(__L3.bladeValidateSetup,run,"B2_ORDERLY
     def test_mode23_uses_frozen_run_setting_until_setup_is_released(self):
         mode=self.part('        a1723.State.blade23Enabled=function()', '        __L3.bladeEnabled=function()')
         self.run_luau(r'''
+local game={PlaceId=5208655184}
 local a1723={State={}};local __L3={};local Toggles8={Blade23Mode={Value=true}}
 '''+mode+r'''
 assert(a1723.State.blade23Enabled())
+game.PlaceId=3541987450;assert(not a1723.State.blade23Enabled(),"Khei cannot enable 23 from a saved toggle")
+__L3.bladeRunConfig={Blade23Mode=true};assert(not a1723.State.blade23Enabled(),"Khei cannot enable 23 from frozen run settings")
+game.PlaceId=14341521240;assert(not a1723.State.blade23Enabled(),"other places cannot enable Gaia mode")
+game.PlaceId=5208655184
 __L3.bladeRunConfig={Blade23Mode=false};assert(not a1723.State.blade23Enabled())
 __L3.bladeRunConfig={Blade23Mode=true};Toggles8.Blade23Mode.Value=false
 assert(a1723.State.blade23Enabled())
