@@ -2086,5 +2086,51 @@ assert(fn703("Victim") and walks==2 and confirmed==2 and calls==2)
 ''')
 
 
+    def test_rot_failed_dialogue_retries_without_twelve_second_confirmation_stall(self):
+        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
+        self.run_luau(r'''
+local clock=10;local os={clock=function() return clock end};local carrying=true;local jail=false
+local waits=0;local counts=0;local victim={Parent=true};local rotCarriedCharacter=victim
+local rotDelivery={counted={}};local v1345={HasTag=function() return jail end}
+local fn697=function() return true end;local fn699=function() return carrying end
+local fn693=function() counts+=1;return true end;local rotWalkStatus={SetText=function() end}
+local onWait=function() end
+local task={wait=function(t) waits+=1;clock+=t;onWait() end}
+'''+ledger+r'''
+local tx=rotDelivery.begin(victim,true)
+assert(not rotDelivery.await(tx,true) and waits==0 and counts==0)
+assert(rotDelivery.pending==tx and rotCarriedCharacter==victim and tx.nextDialogueAt==10.5)
+-- Once the officer acknowledges, wait for delayed authoritative jail/release; never race another pickup.
+tx.dialogueSucceeded=true;local started=clock
+onWait=function() if clock-started>=4 then jail=true;carrying=false end end
+assert(rotDelivery.await(tx,true) and counts==1 and clock-started>=4.5)
+assert(rotDelivery.pending==nil and rotCarriedCharacter==nil)
+''')
+
+    def test_rot_dialogue_helper_exits_on_positive_server_line_before_silence_timeout(self):
+        run=self.part('      tbl241.run = function(', '      return tbl241\n')
+        self.run_luau(r'''
+local clock=0;local tick=function() return clock end;local inside=false;local callback;local due;local sent=false
+local exits=0;local disconnected=0;local task={}
+local remote={IsA=function() return true end,FireServer=function(_,data) if data.exit then exits+=1 end end}
+remote.OnClientEvent={Connect=function(_,cb) callback=cb;return {Disconnect=function() disconnected+=1 end} end}
+task.wait=function(t)
+ clock+=t
+ if due and clock>=due and not sent then sent=true;callback({speaker="Bounty Officer",msg="make the realm just a bit safer",choices={}}) end
+end
+local fn463=function() return 0.8 end;local fn464=function() return true end
+local tbl241={inDialogue=function() return inside end}
+local sResult5={root=function() return nil end};local v843={};local v846
+local v844={FindFirstChild=function() return {GetChildren=function() return {remote} end} end}
+local detector={IsA=function() return true end}
+local fireclickdetector_2=function() inside=true;due=clock+4 end
+'''+run+r'''
+local a,b,c,d,e,positive=tbl241.run(detector,{}, {openWait=0,holdPosition=false,
+ stopOnSuccess=true,successWhen={"make the realm just a bit safer"},answerDelay=0.1,timeout=12,silence=6})
+assert(positive and sent and disconnected==1)
+assert(clock<5 and exits==1,"success must return promptly, without waiting for silence/timeout or extra exit retries")
+''')
+
+
 if __name__ == '__main__':
     unittest.main()

@@ -33147,6 +33147,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               local v877 = tickResult7
               local str39, str40, v878, tostring_, num236, v879, v880, v881, num237
               while true do
+                -- Opt-in for transactional callers: the positive server line ends the talk promptly.
+                -- The caller still verifies its own authoritative delivery evidence afterwards.
+                if v852.stopOnSuccess and flag52 then return end
                 if not (v853() and not flag48 and tick() - tickResult7 < v854) then
                   str39 = tostring(flag48)
                   str40 = tostring(flag50)
@@ -43169,8 +43172,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           rotDelivery.pending=pending -- Arm before interacting; the tag can arrive before dialogue returns.
           return pending
         end
-        rotDelivery.await=function(pending)
+        rotDelivery.await=function(pending,retryWhileCarrying)
           if not pending or rotDelivery.pending~=pending then return false end
+          if retryWhileCarrying and fn699() and not pending.jailed
+            and not pending.dialogueSucceeded and not v1345:HasTag(pending.character,"Jailed") then
+            -- A failed/empty dialogue needs a retry, not twelve seconds of waiting for a jail it never sent.
+            pending.nextDialogueAt=os.clock()+0.5
+            rotWalkStatus:SetText("Walk: Officer nao confirmou; nova tentativa de dialogo em breve")
+            return false
+          end
           local deadline=os.clock()+12
           local settled
           while fn697() and rotDelivery.pending==pending and os.clock()<deadline do
@@ -43202,6 +43212,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return false
         end
         local fn703 = function(a1864)
+          local pending=rotDelivery.pending
+          if pending and pending.nextDialogueAt and os.clock()<pending.nextDialogueAt then return false end
           local res265, officerDistance = fn701()
           if not res265 then
             rotWalkStatus:SetText("Walk: Renova Bounty Officer not found; staying put")
@@ -43266,14 +43278,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               if v1345:HasTag(transaction.character,"Jailed") then transaction.jailed=true end
               return fn697() and os.clock()<dialogueDeadline and not (transaction.jailed and not fn699())
             end,
-            successWhen = tbl364, minHold = 0, openWait = 0, answerDelay=0.2,
-            holdPosition = false, timeout = 12, silence = 3, maxReplays = 1,
+            successWhen = tbl364, stopOnSuccess = true, minHold = 0, openWait = 0, answerDelay=0.1,
+            holdPosition = false, timeout = 12, silence = 6, reopenAfter = 2.5, maxReplays = 1,
             log = function(message) print("[Rot delivery] " .. tostring(message)) end,
           }))
           -- Sixth run return is the server's positive success marker (seventh after pcall).
           if result[1] and result[7]==true then transaction.dialogueSucceeded=true end
           FResult3.close(1)
-          local confirmed=rotDelivery.await(transaction)
+          local confirmed=rotDelivery.await(transaction,true)
           if confirmed then
             fn672("Rot Bot: Rot confirmado de "..tostring(a1864))
             return true
@@ -71446,3 +71458,4 @@ elseif __bootSession.state=="loading" then
   __bootSession.state="failed";__bootMark("entry-returned-before-ready")
 end
 return __ok and __bootSession.state=="running"
+
