@@ -43189,7 +43189,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             local confirmed=pending.jailed or (pending.dialogueSucceeded and retired)
             if confirmed and not fn699() then
               settled=settled or os.clock()
-              if os.clock()-settled>=0.5 then
+              if os.clock()-settled>=0.1 then
                 local counted=fn693(pending.character,pending)
                 rotDelivery.pending=nil
                 if rotCarriedCharacter==pending.character then rotCarriedCharacter=nil end
@@ -43198,7 +43198,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
             else settled=nil end
             rotWalkStatus:SetText(pending.jailed and "Walk: prisao confirmada; aguardando soltar a vitima" or "Walk: aguardando o jogo confirmar a prisao da vitima")
-            task.wait(0.1)
+            task.wait(0.05)
           end
           if not fn697() then
             rotWalkStatus:SetText("Walk: entrega pendente preservada para a retomada")
@@ -43270,7 +43270,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           -- The dialogue helper opens the NPC itself. Do not pre-click and then
           -- make it close the dialogue it has just opened.
-          FResult3.close(1)
+          FResult3.close(0.15)
           rotWalkStatus:SetText("Walk: delivering at Renova (dialogue, no position lock)")
           local dialogueDeadline = os.clock() + 20
           local result = table.pack(pcall(FResult3.run, res265, {}, {
@@ -43284,7 +43284,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           }))
           -- Sixth run return is the server's positive success marker (seventh after pcall).
           if result[1] and result[7]==true then transaction.dialogueSucceeded=true end
-          FResult3.close(1)
+          FResult3.close(0.15)
           local confirmed=rotDelivery.await(transaction,true)
           if confirmed then
             fn672("Rot Bot: Rot confirmado de "..tostring(a1864))
@@ -43539,10 +43539,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local function rotCollectSelected()
           if rotDelivery.pending and (rotDelivery.pending.jailed or not fn699()) then
-            rotDelivery.await(rotDelivery.pending)
-            return
+            return rotDelivery.await(rotDelivery.pending)
           end
-          if fn699() then fn703("carried account");return end
+          if fn699() then return fn703("carried account") end
           local function activeMarker(character,name)
             local marker=character and character:FindFirstChild(name)
             if not marker then return false end
@@ -43601,32 +43600,44 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if walkingAllowed() and distance and distance<=4 and fn702(player) then
             rotPickupRetry[character]=nil
             rotWalkStatus:SetText("Walk: carrying; delivery only to Renova Bounty Officer")
-            fn703(player.Name)
+            return fn703(player.Name)
           elseif fn697() and not fn699() then
             -- A blocked/broken target must not hold up every other eligible account.
             rotPickupRetry[character]=os.clock()+2
           end
         end
+        -- Continue directly to the next ready victim; never overlap carrier workers.
+        local function rotCollectBatch()
+          for _=1,4 do
+            if not fn697() or not fn670() or (rotQueueEntry and rotQueueEntry.progress>=16) then break end
+            if rotCollectSelected()~=true then break end
+            task.wait() -- one frame between confirmed transactions; recheck Stop/turn/goal above
+          end
+        end
         local rotWalkElapsed = 0
+        local rotRefreshAt = 0
         local Maid10 = a1849.Maid
         -- Explicit carrier loop: no beacon/file-write dependency or swallowed errors.
         Maid10:Give(v1342.Heartbeat:Connect(function(dt)
           rotWalkElapsed += dt
-          if rotWalkElapsed < 0.2 or tbl367[1] then return end
+          if rotWalkElapsed < 0.05 or tbl367[1] then return end
           rotWalkElapsed = 0
-          local refreshed, refreshError = pcall(rotRefreshPlayers)
-          if not refreshed then
-            rotWalkStatus:SetText("Walk list error: " .. tostring(refreshError))
-            return
-          end
           if not fn697() or rotWalkBusy then return end
+          if os.clock()>=rotRefreshAt then
+            rotRefreshAt=os.clock()+1
+            local refreshed, refreshError = pcall(rotRefreshPlayers)
+            if not refreshed then
+              rotWalkStatus:SetText("Walk list error: " .. tostring(refreshError))
+              return
+            end
+          end
           if not fn670() then
             rotWalkStatus:SetText("Walk: select the target account in Alts")
             return
           end
           rotWalkBusy = true
           task.spawn(function()
-            local ok, err = pcall(rotCollectSelected)
+            local ok, err = pcall(rotCollectBatch)
             rotWalkBusy = false
             if not ok then
               rotWalkStatus:SetText("Walk error: " .. tostring(err))

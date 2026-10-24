@@ -1215,7 +1215,7 @@ onWait=function()
  if clock-start>=2 then tx.jailed=true end -- Jailed event can be transient before rejoin.
  if clock-start>=2.4 then carrying=false end
 end
-assert(rotDelivery.await(tx) and v1346==1 and saved==1 and updated==1 and clock-start>=2.9)
+assert(rotDelivery.await(tx) and v1346==1 and saved==1 and updated==1 and clock-start>=2.5)
 assert(not rotDelivery.await(tx) and not fn693(victim) and v1346==1,"dialogue replay and duplicate tag cannot count twice")
 assert(rotDelivery.begin(victim)==nil)
 rotCarriedCharacter=other;carrying=true;local tx2=rotDelivery.begin(other);active=false
@@ -1730,7 +1730,7 @@ for round=1,4 do
    tx.jailed=true -- latches a transient Jailed event from this pickup even if the tag is gone now
   end
   carrying=false;local before=clock
-  assert(rotDelivery.await(tx) and clock-before>=0.5)
+  assert(rotDelivery.await(tx) and clock-before>=0.1)
   assert(not fn693(character,tx) and not rotDelivery.await(tx),"duplicate callbacks cannot count a delivery twice")
   character.Parent=true;players[character].Character=character
   assert(rotDelivery.begin(character)==nil,"NPC/dialogue replay alone cannot rearm a counted delivery")
@@ -2103,7 +2103,7 @@ assert(rotDelivery.pending==tx and rotCarriedCharacter==victim and tx.nextDialog
 -- Once the officer acknowledges, wait for delayed authoritative jail/release; never race another pickup.
 tx.dialogueSucceeded=true;local started=clock
 onWait=function() if clock-started>=4 then jail=true;carrying=false end end
-assert(rotDelivery.await(tx,true) and counts==1 and clock-started>=4.5)
+assert(rotDelivery.await(tx,true) and counts==1 and clock-started>=4.1)
 assert(rotDelivery.pending==nil and rotCarriedCharacter==nil)
 ''')
 
@@ -2129,6 +2129,47 @@ local a,b,c,d,e,positive=tbl241.run(detector,{}, {openWait=0,holdPosition=false,
  stopOnSuccess=true,successWhen={"make the realm just a bit safer"},answerDelay=0.1,timeout=12,silence=6})
 assert(positive and sent and disconnected==1)
 assert(clock<5 and exits==1,"success must return promptly, without waiting for silence/timeout or extra exit retries")
+''')
+
+
+    def test_rot_batch_continues_next_frame_but_respects_stop_turn_and_sixteen_goal(self):
+        batch=self.part('        local function rotCollectBatch()', '        local rotWalkElapsed =')
+        self.run_luau(r'''
+local enabled=true;local turn=true;local rotQueueEntry={progress=14};local calls=0;local frames=0
+local fn697=function() return enabled and turn end;local fn670=function() return true end
+local task={wait=function() frames+=1 end}
+local rotCollectSelected=function() calls+=1;if rotQueueEntry then rotQueueEntry.progress+=1 end;return true end
+'''+batch+r'''
+rotCollectBatch();assert(calls==2 and frames==2 and rotQueueEntry.progress==16,"never collect a seventeenth ROT")
+rotQueueEntry=nil;calls=0;frames=0
+task.wait=function() frames+=1;enabled=false end
+rotCollectBatch();assert(calls==1 and frames==1,"Stop between deliveries prevents another pickup")
+enabled=true;calls=0;task.wait=function() turn=false end
+rotCollectBatch();assert(calls==1,"queue ownership must be rechecked before every pickup")
+turn=true;calls=0;rotCollectSelected=function() calls+=1;return false end
+rotCollectBatch();assert(calls==1,"unconfirmed delivery or no victim cannot spin")
+calls=0;task.wait=function() end;rotCollectSelected=function() calls+=1;return true end
+rotCollectBatch();assert(calls==4,"bounded batch yields back to the main worker")
+''')
+
+    def test_fast_rot_confirmation_requires_stable_release_and_retains_jail_evidence(self):
+        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local carrying=false;local counts=0
+local victim={Parent=true};local rotCarriedCharacter=victim;local rotDelivery={counted={}}
+local v1345={HasTag=function() return true end}
+local fn697=function() return true end;local fn699=function() return carrying end
+local fn693=function() counts+=1;assert(clock>=0.3);return true end
+local rotWalkStatus={SetText=function() end}
+local task={wait=function(t)
+ clock+=t
+ -- A brief release followed by a still-carried marker must restart the stable interval.
+ carrying=clock>=0.05 and clock<0.2
+end}
+'''+ledger+r'''
+local tx={character=victim,jailed=true};rotDelivery.pending=tx
+assert(rotDelivery.await(tx) and counts==1 and clock<0.5)
+assert(rotDelivery.pending==nil and rotCarriedCharacter==nil)
 ''')
 
 
