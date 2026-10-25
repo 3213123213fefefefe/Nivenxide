@@ -7613,6 +7613,7 @@ function Library:Unload()
 	end
 
 	Library.Unloaded = true -- Guard reentrant unload callbacks before cleaning anything.
+	if Library.BeforeUnload then pcall(Library.BeforeUnload) end
 	for _, callback in Library.UnloadSignals do
 		Library:SafeCallback(callback)
 	end
@@ -42929,6 +42930,43 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local fn689 = function()
           return fn671() ~= nil
         end
+        rotSupplier.refreshLife=function(manual)
+          if Library9.Unloaded or not tbl365[1] or fn670() or rotSupplier.stopped then return false end
+          local character=LocalPlayer24.Character
+          local root=character and character:FindFirstChild("HumanoidRootPart")
+          local hum=character and character:FindFirstChildOfClass("Humanoid")
+          if not root or not hum or hum.Health<=0 then return false end
+          local now=os.clock()
+          if rotSupplier.refreshCharacter~=character then
+            rotSupplier.refreshCharacter=character;rotSupplier.refreshSince=now;rotSupplier.refreshPending=nil
+          end
+          local lives=tonumber(a1849.State.getServerValue and a1849.State.getServerValue("Lives"))
+          if rotSupplier.refreshPending then
+            if lives and lives<rotSupplier.refreshPending then
+              rotSupplier.status:SetText("Fornecedor: perda de vida confirmada")
+            end
+            return true -- Never request another death on this same character.
+          end
+          if (root.Position-rotSupplier.receiverPoint).Magnitude>20 or character:FindFirstChild("Carried") or v1345:HasTag(character,"Jailed") then
+            rotSupplier.refreshSince=now;rotSupplier.refreshRequested=nil;return false
+          end
+          if manual then rotSupplier.refreshRequested=true end
+          if not manual and not rotSupplier.refreshRequested and (not rotSupplier.settings.refreshLife or now-(rotSupplier.refreshSince or now)<(tonumber(rotSupplier.settings.refreshSeconds) or 120)) then return false end
+          if not lives or lives<=0 then return false end
+          if not v1345:HasTag(character,"Danger") then
+            rotSupplier.status:SetText("Fornecedor: aguardando Danger para perder vida, sem fazer reset comum")
+            if now>=(rotSupplier.refreshDamageAt or 0) then
+              rotSupplier.refreshDamageAt=now+3
+              if a1849.State.fireFall then a1849.State.fireFall(2.39,"rot life refresh") end
+            end
+            return true
+          end
+          rotSupplier.refreshRequested=nil
+          rotSupplier.refreshPending=lives
+          rotSupplier.status:SetText("Fornecedor: perdendo uma vida para renovar o ciclo ROT")
+          sResult10.clearVeil();sResult10.kill()
+          return true
+        end
         local fn690 = function()
           local v1364
           local v1365
@@ -42946,6 +42984,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if sResult10.near(vector328, 75) and (fn675() or 0) <= 0 then
               return "ferryman"
             end
+            if rotSupplier.refreshLife(false) then task.wait(0.25);continue end
             local Character74 = LocalPlayer24.Character
             local v1366 = Character74 and Character74:FindFirstChild("HumanoidRootPart")
             local v1367 = v1366 ~= nil and sResult10.near(vector327, 100)
@@ -43042,6 +43081,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not tbl365[1] or fn670() then return end
           -- A supplier can count its own prison event, never another receiver's event.
           if getResult26:GetPlayerFromCharacter(a1861)==LocalPlayer24 then
+            rotSupplier.refreshSince=os.clock();rotSupplier.refreshPending=nil
             rotSupplier.jailCharacter=a1861 -- Latch even if lag removes Jailed before the supplier loop polls it.
             fn693(a1861)
           end
@@ -44071,6 +44111,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if not value then qResult4.remove("rotbot_active")
             elseif tbl365[1] and not fn670() then qResult4.set("rotbot_active","true"); DResult3.setupResume() end
           end})
+        rotBotTab:AddToggle("RotSupplierRefreshLife",{Text="Perder vida se esperar muito por ROT",Default=rotSupplier.settings.refreshLife==true,
+          Callback=function(value) rotSupplier.settings.refreshLife=value;rotSupplier.refreshSince=os.clock();rotSupplier.saveSettings() end})
+        rotBotTab:AddSlider("RotSupplierRefreshSeconds",{Text="Espera antes de perder vida",Default=tonumber(rotSupplier.settings.refreshSeconds) or 120,
+          Min=15,Max=600,Rounding=0,Suffix=" s",Callback=function(value) rotSupplier.settings.refreshSeconds=value;rotSupplier.saveSettings() end})
+        rotBotTab:AddButton({Text="Perder 1 vida perto de P14 (vitima)",Func=function() rotSupplier.refreshLife(true) end})
         rotBotTab:AddButton({Text="Parar Rot Bot e cancelar retomada",Func=rotSupplier.stop})
         rotBotTab:AddLabel("Tecla para parar Rot Bot"):AddKeyPicker("RotSupplierStopKey",{
           Default=rotSupplier.settings.stopKey or "F8",Mode="Press",Modes={"Press"},Text="Parar Rot Bot",
@@ -70364,10 +70409,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         a11542.State.restoreMenuKeybind()
         addLeftGroupboxResult19:AddLabel("Unload Keybind"):AddKeyPicker("UnloadKeybind", {
           Default = "End",
-          Mode = "Toggle",
+          Mode = "Press", Modes = {"Press"},
           Text = "Unload",
           Callback = function()
-            Library23:Unload()
+            if Library23.Unloaded or Library23.UnloadQueued then return end
+            Library23.UnloadQueued=true
+            task.defer(function() Library23:Unload() end)
           end,
         })
         addLeftGroupboxResult19:AddButton({
@@ -71625,9 +71672,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         __bootMark("unloaded")
         __bootSession.library=nil
         if __bootEnv.__BLADE23_SESSION==__bootSession then __bootEnv.__BLADE23_SESSION=nil end
-        if cleardrawcache then
-          pcall(cleardrawcache)
-        end
       end)
       local CreateWindowResult = res653:CreateWindow({
         Title = "sentinel.bz",
@@ -71686,6 +71730,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       tbl743.State.bots = {}
       tbl743.State.registerBot = function(a11599)
         table.insert(tbl743.State.bots, a11599)
+      end
+      res653.BeforeUnload=function()
+        tbl743.State.unloading=true
+        for _,bot in tbl743.State.bots do
+          if type(bot.stop)=="function" then pcall(bot.stop) end
+        end
+        task.wait() -- Let stopped workers observe cancellation before Maid/hook/UI teardown.
       end
       local v3327 = http and http.request or http_request or request
       local str151 = "https://sentinel.heroinhound.cc/api/v1/"

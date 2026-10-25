@@ -744,7 +744,9 @@ local RunService={UnbindFromRenderStep=function() end}
 local UserInputService={};local OriginalMouseIconEnabled=true
 local ScreenGui={Destroy=function() destroyed+=1 end};local Cursor;local CursorOutline;local DimState={}
 for _,name in {"Toggles","Options","Registry","Tabs","KeybindRows","SearchIndex","SearchBoxes"} do Library[name]={} end
-Library.UnloadSignals[1]=function() calls+=1;Library:Unload() end
+local stopped=false
+Library.BeforeUnload=function() stopped=true end
+Library.UnloadSignals[1]=function() assert(stopped);calls+=1;Library:Unload() end
 '''+unload+r'''
 Library:Unload();Library:Unload()
 assert(calls==1 and destroyed==1 and #Library.UnloadSignals==0 and Library.Unloaded)
@@ -2943,6 +2945,31 @@ local tbl362={};local tbl363={};local vector326={}
 assert(rotSupplier.ensurePlaying() and clicks>=2 and clock>=1.5)
 fn695()
 assert(table.concat(events,",")=="Santorini,Brom,reset,travel,Fir,Renova,rot")
+''')
+
+    def test_supplier_life_refresh_requires_proximity_skips_carry_and_confirms_real_loss(self):
+        helper=self.part('        rotSupplier.refreshLife=function(', '        local fn690 = function()')
+        self.run_luau(VEC+r'''
+local clock=0;local os={clock=function() return clock end};local lives=3;local danger=false;local held=false;local jailed=false
+local kills=0;local damage=0;local root={Position=Vector3.new(0,0,0)};local hum={Health=100}
+local character={FindFirstChild=function(_,name) if name=="HumanoidRootPart" then return root end;if name=="Carried" then return held end end,
+ FindFirstChildOfClass=function() return hum end}
+local LocalPlayer24={Character=character};local Library9={};local tbl365={true};local carrier=false
+local fn670=function() return carrier end
+local rotSupplier={settings={refreshLife=true,refreshSeconds=30},receiverPoint=Vector3.new(0,0,0),status={SetText=function() end}}
+local a1849={State={getServerValue=function() return lives end,fireFall=function() damage+=1 end}}
+local v1345={HasTag=function(_,_,tag) return tag=="Danger" and danger or tag=="Jailed" and jailed end}
+local sResult10={clearVeil=function() end,kill=function() kills+=1 end}
+'''+helper+r'''
+assert(not rotSupplier.refreshLife(false));clock=31
+assert(rotSupplier.refreshLife(false) and damage==1 and kills==0,"ordinary reset must not be confused with losing a life")
+danger=true;held=true;assert(not rotSupplier.refreshLife(true) and kills==0)
+held=false;root.Position=Vector3.new(100,0,0);assert(not rotSupplier.refreshLife(true) and kills==0)
+root.Position=Vector3.new(0,0,0);assert(rotSupplier.refreshLife(true) and kills==1)
+for i=1,50 do clock+=1;assert(rotSupplier.refreshLife(true)) end
+assert(kills==1 and rotSupplier.refreshPending==3,"do not repeatedly kill while waiting for the server")
+lives=2;assert(rotSupplier.refreshLife(false) and kills==1)
+Library9.Unloaded=true;assert(not rotSupplier.refreshLife(true) and kills==1)
 ''')
 
 if __name__ == '__main__':

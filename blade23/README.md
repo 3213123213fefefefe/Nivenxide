@@ -164,7 +164,7 @@ Ao marcar spawn em Khei, a progressão procura chão firme e espaço livre ao la
 
 A entrega de ROT aproxima a conta do Bounty Officer, espera o movimento assentar e dá mais tempo para respostas do servidor. A navegação usa também MoveToFinished para não perder a chegada entre frames a 15 FPS, e libera caminhos e conexões ao terminar ou recalcular. A contagem continua exigindo confirmação de entrega.
 
-Validação: compilação Luau e 108 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
+Validação: compilação Luau e 109 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
 
 Em servidor lagado, o diálogo de ROT termina assim que recebe a mensagem positiva do Officer. Se o diálogo falhar com a vítima ainda carregada e sem evidência de entrega, a próxima tentativa fica disponível após 0,5 s, sem a espera extra de 12 s. Uma resposta positiva ou prisão já detectada mantém a espera pela confirmação e soltura; o contador não presume entregas. As outras conversas mantêm o comportamento anterior.
 
@@ -209,3 +209,9 @@ Esse reinício pós-wipe passa pelo rejoin mesmo com Stay in Server ligado. As r
 A retomada é enfileirada antes do pedido de rejoin e não é removida/recriada a cada evento do mesmo teleporte. A descoberta aceita `queueteleport`, `queue_on_teleport`, `queueonteleport` e os aliases disponíveis de Syn/Fluxus. Se o executor não conseguir preparar a retomada, o status mostra o motivo e a vítima espera, sem sair para um servidor onde ficaria sem o bot.
 
 Os testes simulam vidas ausentes por 40 s, rejoin recusado, Started seguido de falha, Started sem conclusão, Stop durante a espera, Play com replicação atrasada e reinício do caminho completo. O teleporte e a execução real da fila do executor ainda precisam de validação dentro do jogo.
+
+### Unload e renovação de vida da vítima
+
+O Unload pela tecla é acionado uma vez por pressão e executado fora do callback de teclado. Para os bots registrados antes da limpeza de Maid, hooks e interface; a limpeza global cleardrawcache do executor foi removida, mantendo a remoção dos desenhos pertencentes ao script. Isso reduz conflitos durante o descarregamento; não comprova a resolução de um crash nativo do executor.
+
+Na subaba Rot há um botão **Perder 1 vida perto de P14 (vitima)** e a opção salva **Perder vida se esperar muito por ROT**, desligada por padrão, com espera de 15 a 600 segundos (padrão 120). Só age na fornecedora ativa a até 20 studs de P14, fora do colo e da jail. Aguarda Danger antes de pedir a morte, usando o down existente para tentar preparar essa condição. Não trata um reset comum como perda de vida: acompanha a redução do contador do servidor e não envia outra morte no mesmo personagem. Uma entrega reinicia a espera. A perda efetiva e a renovação das condições de ROT precisam ser verificadas no jogo.
