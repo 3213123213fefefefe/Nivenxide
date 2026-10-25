@@ -130,7 +130,7 @@ As opções e as rotinas de XP, mana, ROT, skills, movimentação e segurança f
 
 ## Validação
 
-O runtime passou pela compilação Luau. Noventa e dois testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
+O runtime passou pela compilação Luau. Os testes verificam as coordenadas e a interface, filas locais, coleta e limites por método, espera inicial de HP cheio, contagem com cura, espada seguida de socos, carga de mana, saída por P10, turnos de P14, bloqueios das fornecedoras e wipe antes do rejoin. Também verificam pouso, mil atualizações sem nova subida, tentativas de compra com falha e confirmação de inventário, e coleta sem aproximação às bolsas.
 
 Para executar os testes de rota com o CLI oficial Luau instalado:
 
@@ -164,7 +164,7 @@ Ao marcar spawn em Khei, a progressão procura chão firme e espaço livre ao la
 
 A entrega de ROT aproxima a conta do Bounty Officer, espera o movimento assentar e dá mais tempo para respostas do servidor. A navegação usa também MoveToFinished para não perder a chegada entre frames a 15 FPS, e libera caminhos e conexões ao terminar ou recalcular. A contagem continua exigindo confirmação de entrega.
 
-Validação: compilação Luau e 103 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
+Validação: compilação Luau e 108 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
 
 Em servidor lagado, o diálogo de ROT termina assim que recebe a mensagem positiva do Officer. Se o diálogo falhar com a vítima ainda carregada e sem evidência de entrega, a próxima tentativa fica disponível após 0,5 s, sem a espera extra de 12 s. Uma resposta positiva ou prisão já detectada mantém a espera pela confirmação e soltura; o contador não presume entregas. As outras conversas mantêm o comportamento anterior.
 
@@ -172,7 +172,7 @@ O pickup identifica a vítima pelos marcadores replicados de quem carrega/é car
 
 A coleta encadeia até quatro entregas confirmadas no mesmo worker, com uma passagem de frame e nova checagem de Stop, turno e meta de 16 antes de cada vítima. A confirmação mantém evidência de prisão e soltura estável por 0,1 s (amostras a cada 0,05 s). Ao receber a resposta positiva, solicita o fechamento imediatamente. Enquanto aguarda a prisão e a soltura, acompanha o diálogo e pode repetir o pedido de saída no máximo uma vez a cada 0,5 s. A próxima coleta só começa quando InDialogue desaparecer; essa espera não cria tarefas adicionais. A atualização da lista visual fica limitada a uma vez por segundo e não roda enquanto o carrier está ocupado.
 
-Com Stay in Server ativo no mapa atual, as saídas automáticas de Blade/Sigil por erro, morte, moderador e hop direto passam pelo menu manual. Uma etapa em execução preserva o progresso e retoma depois de Play manual; um término normal fica parado. A terminação central respeita a mesma regra, e o fornecedor ROT substitui rejoin por menu sem forçar Play. Gaia e Khei continuam com opções independentes. Stay desligado mantém o comportamento anterior.
+Com Stay in Server ativo no mapa atual, as saídas automáticas de Blade/Sigil por erro, morte, moderador e hop direto passam pelo menu manual. Uma etapa em execução preserva o progresso e retoma depois de Play manual; um término normal fica parado. A terminação central respeita a mesma regra. O reinício da vítima ROT após wipe é a exceção: com retomada habilitada, faz rejoin no servidor das receptoras, usa Play e reinicia as quests. Fora desse reinício, as ações de menu do fornecedor continuam aguardando Play manual. Gaia e Khei continuam com opções independentes. Stay desligado mantém o comportamento anterior.
 
 ### Opção 23
 
@@ -199,3 +199,13 @@ O ROT pula a espera de silêncio anterior à abertura da conversa; as outras con
 A trava da coleta agora abrange também a atualização da lista de alts. Uma falha interna libera a trava e só é tentada novamente após 1 s. Notificações de ROT têm limite global de uma por segundo e de uma a cada 5 s para a mesma mensagem consecutiva, sem acumular histórico. A lista de receptoras reutiliza uma única leitura por até 0,5 s, não faz leituras concorrentes e ignora arquivos de contas ausentes do servidor.
 
 Os testes simulam saída perdida e fechamento atrasado a 15 FPS, respostas duplicadas, callbacks suspensos após cancelamento, atualização da lista cedendo a execução, falhas temporárias de arquivos e repetição de erros. Eles não identificam por si só a causa de um crash nativo do Roblox ou do executor.
+
+### Reinício automático da vítima após wipe
+
+Com **Retomar fornecedor apos hop/rejoin** ligado, o ciclo é: concluir o wipe → confirmar vidas positivas do personagem novo → preparar o loader na fila de teleporte → rejoin no mesmo servidor das receptoras → Play automático → Santorini → Brom → reset/deslocamento → Fir → Renova → fornecer ROT novamente.
+
+Esse reinício pós-wipe passa pelo rejoin mesmo com Stay in Server ligado. As reações de segurança e proximidade mantêm o menu manual. Se a confirmação de vidas demorar, vier ausente, ou o rejoin falhar, a vítima permanece na fase de reinício e tenta novamente; não volta a esperar uma receptora em Renova sem refazer as quests. Started/InProgress não são tratados como sucesso: falhas, ausência de resposta e teleporte que nunca termina permitem nova tentativa. As conexões são liberadas ao terminar a tentativa, e F8/Parar interrompe a espera.
+
+A retomada é enfileirada antes do pedido de rejoin e não é removida/recriada a cada evento do mesmo teleporte. A descoberta aceita `queueteleport`, `queue_on_teleport`, `queueonteleport` e os aliases disponíveis de Syn/Fluxus. Se o executor não conseguir preparar a retomada, o status mostra o motivo e a vítima espera, sem sair para um servidor onde ficaria sem o bot.
+
+Os testes simulam vidas ausentes por 40 s, rejoin recusado, Started seguido de falha, Started sem conclusão, Stop durante a espera, Play com replicação atrasada e reinício do caminho completo. O teleporte e a execução real da fila do executor ainda precisam de validação dentro do jogo.

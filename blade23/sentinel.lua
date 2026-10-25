@@ -30614,30 +30614,40 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       end
       local flag35 = false
       local v688
+      tbl208.resumeQueueFunction = function()
+        for _,candidate in {queueteleport,queue_on_teleport,queueonteleport,
+          syn and syn.queue_on_teleport,fluxus and fluxus.queue_on_teleport} do
+          if type(candidate)=="function" then return candidate end
+        end
+      end
+      tbl208.queueResume = function(force)
+        if not force and tbl208.resumeQueuedJob==game.JobId then return true end
+        local queue=tbl208.resumeQueueFunction()
+        if not queue then return false,"executor sem queue_on_teleport" end
+        local code=fn406()
+        if not code then return false,"loader de retomada indisponivel" end
+        local clear=clearteleportqueue or clear_teleport_queue or clearqueueonteleport
+        if type(clear)=="function" then pcall(clear) end
+        local ok,result=pcall(queue,code)
+        if not ok or result==false then
+          tbl208.resumeQueuedJob=nil
+          return false,tostring(result)
+        end
+        tbl208.resumeQueuedJob=game.JobId
+        return true
+      end
       local setupResume = function()
-        if flag35 then
-          return
-        end
-        flag35 = true
-        local v710 = queueteleport or queue_on_teleport
-        if not v710 then
-          return
-        end
-        pcall(function()
-          v688 = LocalPlayer14.OnTeleport:Connect(function()
-            if not tbl208.shouldResume() then
-              return
-            end
-            local res160 = fn406()
-            if res160 then
-              local v711 = clearteleportqueue or clear_teleport_queue or clearqueueonteleport
-              if v711 then
-                pcall(v711)
-              end
-              pcall(v710, res160)
-            end
+        if flag35 then return true end
+        if not tbl208.resumeQueueFunction() then return false end
+        local ok,connection=pcall(function()
+          return LocalPlayer14.OnTeleport:Connect(function(state)
+            if state==Enum.TeleportState.Failed then tbl208.resumeQueuedJob=nil;return end
+            if tbl208.shouldResume() then tbl208.queueResume() end
           end)
         end)
+        if not ok or not connection then return false end
+        v688=connection;flag35=true
+        return true
       end
       tbl208.setupResume = setupResume
       tbl208.teardown = function()
@@ -30655,9 +30665,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         v685 = nil
         v686 = nil
         flag35 = false
+        tbl208.resumeQueuedJob=nil
       end
       tbl208.canResume = function()
-        return (queueteleport or queue_on_teleport) ~= nil
+        return tbl208.resumeQueueFunction()~=nil
       end
       local num179 = 10
       local num180 = 12
@@ -42840,64 +42851,79 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local fn687 = function(master)
           return rotSupplier.approach and rotSupplier.approach(master) or false
         end
-        local fn688 = function()
-          if a1849.State.bladeMenuInsteadOfLeave and a1849.State.bladeMenuInsteadOfLeave("ROT: rejoin substituido por menu",true) then
+        local fn688 = function(afterWipe)
+          -- The supplier's explicit post-wipe restart is an exception to Stay in Server.
+          -- Safety/proximity menu actions and receiver bots keep their existing policy.
+          if not afterWipe and a1849.State.bladeMenuInsteadOfLeave and a1849.State.bladeMenuInsteadOfLeave("ROT: rejoin substituido por menu",true) then
             rotSupplier.rejoining=false
+            return false
+          end
+          if not tbl365[1] or rotSupplier.stopped then return false end
+          if not (Library9.Toggles.RotSupplierResume and Library9.Toggles.RotSupplierResume.Value) then
+            rotSupplier.status:SetText("Fornecedor: ative Retomar fornecedor apos hop/rejoin para reiniciar apos wipe")
+            return false
+          end
+          qResult4.set("rotbot_active","true")
+          qResult4.set("rotbot_target",Options9.RotMaster and Options9.RotMaster.Value or "")
+          DResult3.setupResume()
+          local queued,queueError=DResult3.queueResume(true)
+          if not queued then
+            rotSupplier.status:SetText("Fornecedor: retomada nao preparada; "..tostring(queueError))
+            return false
+          end
+          if not fn685() or not tbl365[1] then
+            rotSupplier.status:SetText("Fornecedor: aguardando menu para rejoin apos wipe")
+            return false
+          end
+          local remote=eResult8.requestRemote("JoinPublicServer")
+          if not remote then
+            rotSupplier.status:SetText("Fornecedor: aguardando JoinPublicServer para rejoin apos wipe")
             return false
           end
           rotSupplier.rejoining=true
-          if Library9.Toggles.RotSupplierResume and Library9.Toggles.RotSupplierResume.Value then
-            qResult4.set("rotbot_active", "true")
-            qResult4.set("rotbot_target", Options9.RotMaster and Options9.RotMaster.Value or "")
-            DResult3.setupResume()
-          else qResult4.remove("rotbot_active") end
-          if not fn685() then
-            rotSupplier.rejoining=false
-            qResult4.remove("rotbot_active")
-            fn672("Rot Bot: could not reach the menu, carrying on in this server")
-            return false
-          end
-          local requestRemoteResult5 = eResult8.requestRemote("JoinPublicServer")
-          if not requestRemoteResult5 then
-            rotSupplier.rejoining=false
-            qResult4.remove("rotbot_active")
-            fn672("Rot Bot: no JoinPublicServer on this realm, carrying on in this server")
-            return false
-          end
-          local flag78 = false
-          local connectResult13 = LocalPlayer24.OnTeleport:Connect(function(a1858)
-            if a1858 ~= Enum.TeleportState.Failed then
-              flag78 = true
-            end
-          end)
-          local JobId2 = game.JobId
-          for i78 = 1, num416 do
-            fn672(i78 == 1 and "Rot Bot: wiped, rejoining the server" or "Rot Bot: rejoin attempt " .. i78)
-            pcall(function()
-              requestRemoteResult5:FireServer(JobId2)
-            end)
-            local num424 = 0
-            while true do
-              if not (tbl365[1] and num424 < num415 and not flag78) then
-                break
+          local sourceJob=game.JobId
+          local started,failed=false,false
+          local connections={}
+          local function onFailed() failed=true end
+          local ok,result=pcall(function()
+            table.insert(connections,LocalPlayer24.OnTeleport:Connect(function(state)
+              if state==Enum.TeleportState.Failed then failed=true else started=true end
+            end))
+            local service=game:GetService("TeleportService")
+            table.insert(connections,service.TeleportInitFailed:Connect(function(player)
+              if player==LocalPlayer24 then onFailed() end
+            end))
+            for attempt=1,num416 do
+              if not tbl365[1] or rotSupplier.stopped then return false end
+              if attempt>1 then
+                local ready,why=DResult3.queueResume(true)
+                if not ready then rotSupplier.status:SetText("Fornecedor: falha ao preparar retomada: "..tostring(why));return false end
               end
-              task.wait(0.25)
-              num424 += 0.25
+              started=false;failed=false
+              rotSupplier.status:SetText("Fornecedor: rejoin apos wipe (tentativa "..attempt.."/"..num416..")")
+              local sent=pcall(function() remote:FireServer(sourceJob) end)
+              if not sent then failed=true end
+              local deadline=os.clock()+num415
+              local extended=false
+              while tbl365[1] and not rotSupplier.stopped and not failed and os.clock()<deadline do
+                if game.JobId~=sourceJob then return true end
+                if started and not extended then
+                  extended=true;deadline=math.max(deadline,os.clock()+25)
+                end
+                task.wait(0.1)
+              end
+              -- A successful rejoin replaces this Lua VM. If it is still running here,
+              -- Started/InProgress alone is not proof of success: retry instead of ending the bot.
+              if tbl365[1] and not rotSupplier.stopped then task.wait(1) end
             end
-            if flag78 or not tbl365[1] then
-              break
-            end
-          end
-          pcall(function()
-            connectResult13:Disconnect()
+            return false
           end)
-          if flag78 then
-            task.wait(num415)
-            return true
-          end
+          for _,connection in connections do pcall(function() connection:Disconnect() end) end
+          if ok and result then return true end
           rotSupplier.rejoining=false
-          qResult4.remove("rotbot_active")
-          fn672("Rot Bot: rejoin did not land after " .. num416 .. " tries, carrying on in this server")
+          if tbl365[1] and not rotSupplier.stopped then
+            rotSupplier.status:SetText("Fornecedor: rejoin nao concluiu; mantendo reinicio apos wipe para tentar novamente")
+          end
           return false
         end
         local fn689 = function()
@@ -43027,15 +43053,25 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               return
             end
             if res260 == "ferryman" then
-              -- Finish the wipe and respawn first; only then rejoin and queue the supplier loader.
               fn691()
-              if not tbl365[1] then return end
-              local deadline=os.clock()+15
-              while tbl365[1] and a1849.State.getServerValue and a1849.State.getServerValue("Lives")==0 and os.clock()<deadline do task.wait(0.25) end
-              if not tbl365[1] then return end
-              if not a1849.State.getServerValue or a1849.State.getServerValue("Lives")~=0 then
-                if fn688() then return end
-              else task.wait(0.5) end
+              local retryWipeAt=os.clock()+15
+              -- Stay in this phase until the new life is confirmed and rejoin succeeds.
+              -- Never fall back to waiting for ROT in Renova after a failed teleport.
+              while tbl365[1] and not rotSupplier.stopped do
+                local lives=a1849.State.getServerValue and tonumber(a1849.State.getServerValue("Lives"))
+                if lives and lives>0 then
+                  rotSupplier.jailCharacter=nil
+                  if fn688(true) then return "teleporting" end
+                  if tbl365[1] and not rotSupplier.stopped then task.wait(2) end
+                else
+                  rotSupplier.status:SetText("Fornecedor: aguardando wipe concluir e vidas do novo personagem")
+                  if lives==0 and os.clock()>=retryWipeAt and sResult10.near(vector328,75) then
+                    fn691();retryWipeAt=os.clock()+15
+                  end
+                  task.wait(0.25)
+                end
+              end
+              return
             else
               if res260 ~= "menu" then
                 return
@@ -43088,7 +43124,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   break
                 end
                 if res263 then
-                  fn694()
+                  if fn694()=="teleporting" then return end
                 else
                   fn672("Rot Bot: Renova inn failed - restarting")
                   task.wait(2)

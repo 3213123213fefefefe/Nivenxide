@@ -325,10 +325,11 @@ assert(not rotSupplier.masterReady())
         flow=self.part('        local fn694 = function()', '        local fn695 = function()')
         self.run_luau(r'''
 local tbl365={true};local events={};local lives=0
+local rotSupplier={status={SetText=function() end}}
 local a1849={State={getServerValue=function() return lives end}}
 local fn690=function() return "ferryman" end
 local fn691=function() table.insert(events,"wipe");lives=3 end
-local fn688=function() assert(lives==3);table.insert(events,"rejoin");return true end
+local fn688=function(afterWipe) assert(afterWipe and lives==3);table.insert(events,"rejoin");return true end
 local fn686=function() return false end
 local task={wait=function() end}
 '''+flow+r'''
@@ -2216,7 +2217,7 @@ stay=false;assert(not a1723.State.bladeMenuInsteadOfLeave("normal exit",true) an
 ''')
 
     def test_rot_supplier_stay_blocks_rejoin_and_auto_play_until_manual_spawn(self):
-        rejoin=self.part('        local fn688 = function()', '        local fn689 = function()')
+        rejoin=self.part('        local fn688 = function(afterWipe)', '        local fn689 = function()')
         play=self.part('        rotSupplier.ensurePlaying=function()', '        local fn687 = function(')
         self.run_luau(r'''
 local menus=0;local a1849={State={bladeMenuInsteadOfLeave=function(reason,terminal) assert(terminal);menus+=1;return true end}}
@@ -2797,6 +2798,151 @@ end)
 advance(0.35)
 assert(done and positive and sends==1 and live==0 and #jobs==0)
 assert(firstClick-started<0.15,"ROT must not add the legacy quiet delay before every delivery")
+''')
+
+    def test_resume_queue_is_prepared_once_before_teleport_supports_aliases_and_retries_failures(self):
+        resume=self.part('      local flag35 = false\n', '      local num179 = 10')
+        self.run_luau(r'''
+local tbl208={shouldResume=function() return true end};local queued=0;local cleared=0;local connected=0;local disconnected=0;local callback
+local game={JobId="source"};local Enum={TeleportState={Failed="failed"}}
+local fn406=function() return "current loader" end
+local queueonteleport;local clearteleportqueue=function() cleared+=1 end
+local LocalPlayer14={OnTeleport={Connect=function(_,fn)
+ connected+=1;callback=fn;return {Disconnect=function() disconnected+=1 end}
+end}}
+local v685;local v686;local reject=false
+'''+resume+r'''
+assert(not tbl208.canResume() and not tbl208.setupResume() and connected==0)
+queueonteleport=function(code) assert(code=="current loader");queued+=1;return not reject end
+assert(tbl208.canResume() and tbl208.setupResume() and connected==1,"missing API must not permanently latch setup as complete")
+assert(tbl208.queueResume(true) and queued==1 and cleared==1,"prepare the loader before any teleport event")
+callback("started");callback("inprogress")
+assert(queued==1 and cleared==1,"teleport phases must not repeatedly clear/requeue the loader")
+callback("failed");assert(tbl208.resumeQueuedJob==nil)
+assert(tbl208.queueResume() and queued==2)
+reject=true;assert(not tbl208.queueResume(true) and tbl208.resumeQueuedJob==nil)
+reject=false;assert(tbl208.queueResume(true))
+tbl208.teardown();assert(disconnected==1 and tbl208.resumeQueuedJob==nil)
+assert(tbl208.setupResume() and connected==2)
+''')
+
+    def test_postwipe_rejoin_bypasses_stay_retries_failed_teleports_and_cleans_connections(self):
+        rejoin=self.part('        local fn688 = function(afterWipe)', '        local fn689 = function()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local tbl365={true};local attempts=0;local prepares=0;local alive=0
+local onTeleport;local onInitFailed;local due;local menus=0;local saved={}
+local rotSupplier={status={SetText=function() end}};local Library9={Toggles={RotSupplierResume={Value=true}}}
+local Options9={RotMaster={Value="Receiver"}};local qResult4={set=function(k,v) saved[k]=v end}
+local a1849={State={bladeMenuInsteadOfLeave=function() error("post-wipe supplier restart must bypass the manual Stay menu") end}}
+local DResult3={setupResume=function() end,queueResume=function(force) assert(force);prepares+=1;return true end}
+local fn685=function() assert(prepares>0);menus+=1;return true end
+local Enum={TeleportState={Failed="failed"}};local num416=3;local num415=1
+local LocalPlayer24={OnTeleport={Connect=function(_,fn)
+ onTeleport=fn;alive+=1;return {Disconnect=function() alive-=1 end}
+end}}
+local game={JobId="receiver-server",GetService=function(_,name)
+ assert(name=="TeleportService")
+ return {TeleportInitFailed={Connect=function(_,fn)
+  onInitFailed=fn;alive+=1;return {Disconnect=function() alive-=1 end}
+ end}}
+end}
+local eResult8={requestRemote=function(name)
+ assert(name=="JoinPublicServer")
+ return {FireServer=function(_,job)
+  attempts+=1;assert(job=="receiver-server" and prepares==attempts)
+  assert(saved.rotbot_active=="true" and saved.rotbot_target=="Receiver")
+  due=clock+0.3;onTeleport("started")
+ end}
+end}
+local task={wait=function(dt)
+ clock+=dt
+ if due and clock>=due then
+  due=nil
+  if attempts==1 then onTeleport("failed")
+  elseif attempts==2 then onInitFailed(LocalPlayer24)
+  else game.JobId="replacement-vm" end
+ end
+ assert(clock<10,"failures must be retried without treating Started as a completed teleport")
+end}
+'''+rejoin+r'''
+assert(fn688(true) and attempts==3 and prepares==3 and menus==1 and alive==0 and rotSupplier.rejoining)
+''')
+
+    def test_postwipe_rejoin_requires_resume_queue_and_stop_cancels_started_teleport_wait(self):
+        rejoin=self.part('        local fn688 = function(afterWipe)', '        local fn689 = function()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local tbl365={true};local attempts=0;local alive=0;local queues=0;local ready=false
+local rotSupplier={status={SetText=function() end}};local Library9={Toggles={RotSupplierResume={Value=true}}}
+local Options9={};local qResult4={set=function() end};local a1849={State={}}
+local DResult3={setupResume=function() end,queueResume=function() queues+=1;return ready,"unavailable" end}
+local fn685=function() return true end
+local Enum={TeleportState={Failed="failed"}};local num416=3;local num415=1;local onTeleport
+local function connect(fn) alive+=1;return {Disconnect=function() alive-=1 end} end
+local LocalPlayer24={OnTeleport={Connect=function(_,fn) onTeleport=fn;return connect(fn) end}}
+local game={JobId="receiver-server",GetService=function() return {TeleportInitFailed={Connect=function(_,fn) return connect(fn) end}} end}
+local eResult8={requestRemote=function() return {FireServer=function() attempts+=1;onTeleport("started") end} end}
+local task={wait=function(dt) clock+=dt;tbl365[1]=false;rotSupplier.stopped=true end}
+'''+rejoin+r'''
+assert(not fn688(true) and attempts==0 and alive==0,"do not leave without a queued resume loader")
+ready=true;assert(not fn688(true) and attempts==1 and alive==0 and not rotSupplier.rejoining)
+assert(clock<1,"Stop must interrupt the extended Started wait")
+-- If Started never completes and no failure event arrives, stay active and retry instead of declaring success.
+clock=0;attempts=0;tbl365[1]=true;rotSupplier.stopped=false
+task.wait=function(dt) clock+=dt;assert(clock<90) end
+assert(not fn688(true) and attempts==3 and alive==0 and not rotSupplier.rejoining and clock>=75)
+''')
+
+    def test_postwipe_phase_waits_for_positive_lives_and_retries_rejoin_without_renova_idle(self):
+        flow=self.part('        local fn694 = function()', '        local fn695 = function()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local tbl365={true};local lives=0;local wipes=0;local hops=0;local polls=0
+local rotSupplier={jailCharacter={},status={SetText=function() end}}
+local a1849={State={getServerValue=function() return lives end}}
+local fn690=function() polls+=1;assert(polls==1,"after a failed rejoin, do not return to waiting for ROT at Renova");return "ferryman" end
+local fn691=function() wipes+=1;lives=nil end
+local fn688=function(afterWipe)
+ assert(afterWipe and lives==3 and rotSupplier.jailCharacter==nil)
+ hops+=1;return hops==3
+end
+local fn686=function() error("wipe restart must not wait for a master before Play") end
+local sResult10={near=function() return false end};local vector328={}
+local task={wait=function(dt)
+ clock+=dt
+ if clock>=40 then lives=3 end
+ assert(clock<50)
+end}
+'''+flow+r'''
+assert(fn694()=="teleporting" and wipes==1 and hops==3 and polls==1 and clock>=44)
+-- Stop while the wipe is still unconfirmed cancels without another join.
+clock=0;lives=0;polls=0;hops=0
+rotSupplier.stopped=false;tbl365[1]=true
+task.wait=function(dt) clock+=dt;tbl365[1]=false end
+fn694();assert(hops==0 and polls==1)
+''')
+
+    def test_supplier_resume_plays_then_restarts_full_route_and_propagates_teleport_exit(self):
+        play=self.part('        rotSupplier.ensurePlaying=function()', '        local fn687 = function(')
+        route=self.part('        local fn695 = function()', '        local fn696 = function()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local tbl365={true};local menu=true;local clicks=0;local events={}
+local a1849={State={}};local rotSupplier={status={SetText=function() end}}
+local sResult10={root=function() return clock>=1.5 and {} or nil end}
+local vResult6={startMenu=function() return menu end,clickPlay=function() clicks+=1 end}
+local task={wait=function(dt) clock+=dt;if clock>=1 then menu=nil end;assert(clock<5) end}
+local fn682=function(name)
+ assert(not menu and clock>=1.5);table.insert(events,name);assert(#events<=7,"a pending teleport must leave the old route loop")
+ return true
+end
+local fn679=function(points,name) table.insert(events,name);return true end
+local fn681=function() table.insert(events,"reset") end
+local fn683=function() table.insert(events,"travel") end
+local fn694=function() table.insert(events,"rot");return "teleporting" end
+local fn672=function() error("unexpected route failure") end
+local tbl362={};local tbl363={};local vector326={}
+'''+play+route+r'''
+assert(rotSupplier.ensurePlaying() and clicks>=2 and clock>=1.5)
+fn695()
+assert(table.concat(events,",")=="Santorini,Brom,reset,travel,Fir,Renova,rot")
 ''')
 
 if __name__ == '__main__':
