@@ -32738,6 +32738,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local Character33 = LocalPlayer16.Character
         return Character33 ~= nil and Character33:FindFirstChild("InDialogue") ~= nil
       end
+      -- Nonblocking exit used by ROT while it also waits for jail/carry replication.
+      tbl241.requestClose = function(remote)
+        remote=remote or v846 or eResult5.getRemote("PostDialogue") or eResult5.getRemote("SendDialogue")
+        if not remote then return false end
+        local now=tick()
+        if tbl241.lastCloseRemote==remote and now-(tbl241.lastCloseAt or -math.huge)<0.5 then return false end
+        tbl241.lastCloseRemote=remote;tbl241.lastCloseAt=now
+        return pcall(function() remote:FireServer({exit=true}) end)
+      end
       tbl241.close = function(a1651)
         if not tbl241.inDialogue() then
           return true
@@ -32938,6 +32947,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 end
               end
             end
+            if v852.stopOnSuccess and flag52 then
+              flag50=true
+              tbl241.requestClose(a1659)
+              return -- No sleeping response task survives this successful transaction.
+            end
             if v852.doneWhen and num226 == 1 and type(a2196.msg) == "string" then
               local gsubResult3 = a2196.msg:gsub("^%s+", ""):gsub("%s+$", "")
               local cond14 = not (type(a2196.choices) == "table" and #a2196.choices > 0)
@@ -32952,6 +32966,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   flag48 = true
                   fn465("out exit (opened on its done line)")
                   task.wait(v857)
+                  if flag51 or not v853() then return end
                   pcall(function()
                     a1659:FireServer({ exit = true })
                   end)
@@ -32968,12 +32983,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 flag50 = true
                 fn465("out exit (all: nothing left to pick)")
                 task.wait(v857)
+                if flag51 or not v853() then return end
                 pcall(function()
                   a1659:FireServer({ exit = true })
                 end)
                 return
               end
               task.wait(v857)
+              if flag51 or not v853() then return end
               num227 += 1
               fn465("out choice %q (all)", tostring(v874[1]))
               if pcall(function()
@@ -32991,6 +33008,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               flag50 = true
               fn465("out exit (choiceless line, the talk stays open until we close it)")
               task.wait(v857)
+              if flag51 or not v853() then return end
               pcall(function()
                 a1659:FireServer({ exit = true })
               end)
@@ -33002,6 +33020,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               flag50 = true
               fn465("out exit ([0] asked for it)")
               task.wait(v857)
+              if flag51 or not v853() then return end
               pcall(function()
                 a1659:FireServer({ exit = true })
               end)
@@ -33017,6 +33036,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 pcall(v852.beforeAnswer, a1660, a2196.msg)
               end
               task.wait(v857)
+              if flag51 or not v853() then return end
               num223 = a2197 + 1
               num227 += 1
               fn465("out choice %q (want #%d)", a1660, a2197)
@@ -33066,6 +33086,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             flag50 = true
             fn465("out exit (nothing we planned is on offer)")
             task.wait(v857)
+            if flag51 or not v853() then return end
             pcall(function()
               a1659:FireServer({ exit = true })
             end)
@@ -33096,8 +33117,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               num231 += 0.1
             end
             local num232 = 0
+            local quietPeriod=v852.quietPeriod or 0.4
             while true do
-              if not (v853() and num232 < 0.4) then
+              if not (v853() and num232 < quietPeriod) then
                 break
               end
               num232 = tick() - num228 < 0.25 and 0 or num232 + 0.1
@@ -42496,8 +42518,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local num415 = 6
         local num416 = 3
         local tbl366 = { false }
+        local rotNotice={at=-math.huge,message=nil}
         local fn672 = function(a1850)
+          local now=os.clock()
+          if now-rotNotice.at<1 or (rotNotice.message==a1850 and now-rotNotice.at<5) then return false end
+          rotNotice.at=now;rotNotice.message=a1850
           Library9:Notify({ Title = "sentinel.bz", Description = a1850 })
+          return true
         end
         local v1348
         local flag77 = false
@@ -43473,6 +43500,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not ready then return false end
           return rotSupplier.flyTo(root.Position+Vector3.new(0,2,0))
         end
+        rotDelivery.closeDialogue=function()
+          if not FResult3.inDialogue() then return true end
+          FResult3.requestClose() -- Rate-limited by the dialogue helper; no extra worker or blocking wait.
+          return not FResult3.inDialogue()
+        end
         rotDelivery.begin=function(character,fromPickup)
           local pending=rotDelivery.pending
           if pending then return pending.character==character and pending or nil end
@@ -43494,6 +43526,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           local deadline=os.clock()+12
           local settled
           while fn697() and rotDelivery.pending==pending and os.clock()<deadline do
+            rotDelivery.closeDialogue()
             if v1345:HasTag(pending.character,"Jailed") then pending.jailed=true end
             local retired=pending.character.Parent==nil or (pending.player and pending.player.Character~=pending.character)
             local confirmed=pending.jailed or (pending.dialogueSucceeded and retired)
@@ -43594,7 +43627,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           -- The dialogue helper opens the NPC itself. Do not pre-click and then
           -- make it close the dialogue it has just opened.
-          FResult3.close(0.15)
+          if not rotDelivery.closeDialogue() then return false end
           rotWalkStatus:SetText("Walk: delivering at Renova (dialogue, no position lock)")
           local dialogueDeadline = os.clock() + 20
           local result = table.pack(pcall(FResult3.run, res265, {}, {
@@ -43602,13 +43635,13 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               if v1345:HasTag(transaction.character,"Jailed") then transaction.jailed=true end
               return fn697() and os.clock()<dialogueDeadline and not (transaction.jailed and not fn699())
             end,
-            successWhen = tbl364, stopOnSuccess = true, minHold = 0, openWait = 0, answerDelay=0.1,
+            successWhen = tbl364, stopOnSuccess = true, minHold = 0, openWait = 0, quietPeriod = 0, answerDelay=0.1,
             holdPosition = false, timeout = 12, silence = 6, reopenAfter = 2.5, maxReplays = 1,
             log = function(message) print("[Rot delivery] " .. tostring(message)) end,
           }))
           -- Sixth run return is the server's positive success marker (seventh after pcall).
           if result[1] and result[7]==true then transaction.dialogueSucceeded=true end
-          FResult3.close(0.15)
+          rotDelivery.closeDialogue()
           local confirmed=rotDelivery.await(transaction,true)
           if confirmed then
             fn672("Rot Bot: Rot confirmado de "..tostring(a1864))
@@ -43638,26 +43671,36 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         local function queueWrite(entry)
           return MResult.writeJson(rotQueuePath, entry)
         end
+        local rotRosterCache={entries={},at=-math.huge,busy=false}
         local function queueRoster()
-          local entries={}
-          for _, file in MResult.sharedList(rotQueueFolder) do
-            if tostring(file):match("%.json$") then
-              local e=MResult.readJson(file)
-              if type(e)=="table" and e.jobId==game.JobId and e.state=="waiting"
-                and type(e.at)=="number" and MResult.sharedNow()-e.at<=MResult.sharedLease()
-                and type(e.joined)=="number" and type(e.userId)=="number"
-                and getResult26:GetPlayerByUserId(e.userId) then
-                table.insert(entries,e)
+          if rotRosterCache.busy or os.clock()-rotRosterCache.at<0.5 then return rotRosterCache.entries end
+          rotRosterCache.busy=true
+          local ok,result=pcall(function()
+            local entries={}
+            for _, file in MResult.sharedList(rotQueueFolder) do
+              local fileUserId=tonumber(tostring(file):match("([^/\\]+)%.json$"))
+              if fileUserId and getResult26:GetPlayerByUserId(fileUserId) then
+                local e=MResult.readJson(file)
+                if type(e)=="table" and e.userId==fileUserId and e.jobId==game.JobId and e.state=="waiting"
+                  and type(e.at)=="number" and MResult.sharedNow()-e.at<=MResult.sharedLease()
+                  and type(e.joined)=="number" and type(e.userId)=="number"
+                  and getResult26:GetPlayerByUserId(e.userId) then
+                  table.insert(entries,e)
+                end
               end
             end
-          end
-          table.sort(entries,function(a,b)
-            local aOrder=a._order or a.joined
-            local bOrder=b._order or b.joined
-            if aOrder==bOrder then return a.userId<b.userId end
-            return aOrder<bOrder
+            table.sort(entries,function(a,b)
+              local aOrder=a._order or a.joined
+              local bOrder=b._order or b.joined
+              if aOrder==bOrder then return a.userId<b.userId end
+              return aOrder<bOrder
+            end)
+            return entries
           end)
-          return entries
+          rotRosterCache.busy=false
+          if not ok then error(result,0) end
+          rotRosterCache.entries=result;rotRosterCache.at=os.clock()
+          return result
         end
         local function queueJoin()
           rotSupplier.explicitSupplier=false
@@ -43862,6 +43905,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
         end
         local function rotCollectSelected()
+          if not rotDelivery.closeDialogue() then
+            rotWalkStatus:SetText("Walk: fechando a fala do Officer antes da proxima coleta")
+            return false
+          end
           if rotDelivery.pending and (rotDelivery.pending.jailed or rotDelivery.pending.dialogueSucceeded or not fn699()) then
             return rotDelivery.await(rotDelivery.pending)
           end
@@ -43941,33 +43988,34 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local rotWalkElapsed = 0
         local rotRefreshAt = 0
+        local rotRetryAt = 0
         local Maid10 = a1849.Maid
-        -- Explicit carrier loop: no beacon/file-write dependency or swallowed errors.
+        -- One worker owns refresh and collection together, including yielding executor/UI calls.
         Maid10:Give(v1342.Heartbeat:Connect(function(dt)
           rotWalkElapsed += dt
           if rotWalkElapsed < 0.05 or tbl367[1] then return end
           rotWalkElapsed = 0
-          if not fn697() or rotWalkBusy then return end
-          if os.clock()>=rotRefreshAt then
-            rotRefreshAt=os.clock()+1
-            local refreshed, refreshError = pcall(rotRefreshPlayers)
-            if not refreshed then
-              rotWalkStatus:SetText("Walk list error: " .. tostring(refreshError))
-              return
-            end
-          end
-          if not fn670() then
-            rotWalkStatus:SetText("Walk: select the target account in Alts")
-            return
-          end
+          if not fn697() or rotWalkBusy or os.clock()<rotRetryAt then return end
           rotWalkBusy = true
           task.spawn(function()
-            local ok, err = pcall(rotCollectBatch)
+            local ok, err = pcall(function()
+              if os.clock()>=rotRefreshAt then
+                rotRefreshAt=os.clock()+1
+                rotRefreshPlayers()
+              end
+              if not fn697() then return end
+              if not fn670() then
+                rotWalkStatus:SetText("Walk: select the target account in Alts")
+                return
+              end
+              rotCollectBatch()
+            end)
+            if not ok then rotRetryAt=os.clock()+1 end
             rotWalkBusy = false
             if not ok then
-              rotWalkStatus:SetText("Walk error: " .. tostring(err))
-              warn("[Rot Walk] " .. tostring(err))
-              fn672("Rot Walk error: " .. tostring(err))
+              local message="Rot Walk error: "..tostring(err)
+              rotWalkStatus:SetText(message)
+              if fn672(message) then warn("[Rot Walk] "..tostring(err)) end
             end
           end)
         end))

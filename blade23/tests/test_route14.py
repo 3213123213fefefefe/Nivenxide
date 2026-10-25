@@ -481,7 +481,7 @@ assert(calls==5 and tbl308[1].bladeTraining.jagen.confirmed==1)
 ''')
 
     def test_supplier_approach_uses_flight_and_cleans_it_up(self):
-        flight=self.part('rotSupplier.flyTo=function', '        rotDelivery.begin=')
+        flight=self.part('rotSupplier.flyTo=function', '        rotDelivery.closeDialogue=')
         self.run_luau(VEC+r'''
 Vector3.zero=Vector3.new(0,0,0)
 local player={UserId=1};local target={Position=Vector3.new(10,20,30)}
@@ -1194,8 +1194,8 @@ decharge();assert(releases==1 and fired==2)
 
     def test_rot_counts_only_tracked_jail_after_carry_release_and_settles_once(self):
         counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
-        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
-        self.run_luau(r'''
+        ledger=self.part('        rotDelivery.closeDialogue=function(', '        local fn703 = function(')
+        self.run_luau('local FResult3={inDialogue=function() return false end,requestClose=function() end}\n'+r'''
 local clock=0;local os={clock=function() return clock end};local active=true;local carrying=true;local jail=false
 local task={wait=function(t) clock+=t end}
 local v1346=0;local saved;local updated=0;local fn692=function() end
@@ -1605,7 +1605,7 @@ v2585.Text="Character Name";flush();assert(v2585.Text=="Character Name","unrelat
         self.run_luau(VEC+r"""
 local clock=10;local os={clock=function() return clock end};local active=true;local carrying=false
 local fn697=function() return active end;local fn699=function() return carrying end
-local rotDelivery={counted={},await=function() error("no pending transaction") end}
+local rotDelivery={closeDialogue=function() return true end,counted={},await=function() error("no pending transaction") end}
 local rotPickupRetry=setmetatable({}, {__mode="k"});local players={};local names={}
 local function add(name,id,distance,opts)
  opts=opts or {};local tags={Unconscious=opts.down~=false,Jailed=opts.jailed}
@@ -1682,7 +1682,7 @@ local victim={};local rotCarriedCharacter=victim;local tx={character=victim,jail
 local v1345={HasTag=function(_,c) assert(c==victim);return jail end}
 local closed=0;local confirmed=0;local tbl364={};local str52="looking for a job"
 local fn672=function() end;local print=function() end
-local rotDelivery={identify=function() return victim end,begin=function(c) assert(c==victim);return tx end,
+local rotDelivery={closeDialogue=function() closed+=1;return true end,identify=function() return victim end,begin=function(c) assert(c==victim);return tx end,
  await=function(t) assert(t==tx and t.jailed and not carrying);confirmed+=1;return true end}
 local FResult3={close=function() closed+=1 end,run=function(npc,answers,opts)
  assert(npc==officer and opts.holdPosition==false and opts.shouldRun())
@@ -1705,8 +1705,8 @@ assert(fn703("Victim") and confirmed==2)
 
     def test_four_rot_alts_can_each_confirm_four_deliveries_without_character_dedup_loss(self):
         counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
-        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
-        self.run_luau(r"""
+        ledger=self.part('        rotDelivery.closeDialogue=function(', '        local fn703 = function(')
+        self.run_luau('local FResult3={inDialogue=function() return false end,requestClose=function() end}\n'+r"""
 local clock=0;local os={clock=function() return clock end};local active=true;local carrying=true
 local fn697=function() return active end;local fn699=function() return carrying end
 local fn692=function() end;local saved=0;local v1346=0;local rotCarriedCharacter
@@ -1743,8 +1743,8 @@ assert(v1346==16 and saved==16 and updates==16,"four deliveries for each of four
 
     def test_rot_respawn_fallback_requires_positive_npc_ack_and_release(self):
         counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
-        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
-        self.run_luau(r"""
+        ledger=self.part('        rotDelivery.closeDialogue=function(', '        local fn703 = function(')
+        self.run_luau('local FResult3={inDialogue=function() return false end,requestClose=function() end}\n'+r"""
 local clock=0;local os={clock=function() return clock end};local carrying=true
 local fn697=function() return true end;local fn699=function() return carrying end
 local fn692=function() end;local v1346=0;local qResult4={set=function() end}
@@ -2073,7 +2073,7 @@ local rotWalkTo=function(destination,keepGoing,range)
  assert(keepGoing() and destination()==npcRoot.Position);walks+=1
  root.Position=Vector3.new(range,root.Position.Y,0);return true
 end
-local rotDelivery={identify=function() return victim end,begin=function() return tx end,await=function(t)
+local rotDelivery={closeDialogue=function() return true end,identify=function() return victim end,begin=function() return tx end,await=function(t)
  assert(t.jailed and not carrying);confirmed+=1;return true
 end}
 local FResult3={close=function() end,run=function(npc,answers,opts)
@@ -2091,8 +2091,8 @@ assert(fn703("Victim") and walks==2 and confirmed==2 and calls==2)
 
 
     def test_rot_failed_dialogue_retries_without_twelve_second_confirmation_stall(self):
-        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
-        self.run_luau(r'''
+        ledger=self.part('        rotDelivery.closeDialogue=function(', '        local fn703 = function(')
+        self.run_luau('local FResult3={inDialogue=function() return false end,requestClose=function() end}\n'+r'''
 local clock=10;local os={clock=function() return clock end};local carrying=true;local jail=false
 local waits=0;local counts=0;local victim={Parent=true};local rotCarriedCharacter=victim
 local rotDelivery={counted={}};local v1345={HasTag=function() return jail end}
@@ -2123,7 +2123,7 @@ task.wait=function(t)
  if due and clock>=due and not sent then sent=true;callback({speaker="Bounty Officer",msg="make the realm just a bit safer",choices={}}) end
 end
 local fn463=function() return 0.8 end;local fn464=function() return true end
-local tbl241={inDialogue=function() return inside end}
+local tbl241={inDialogue=function() return inside end,requestClose=function(r) r:FireServer({exit=true}) end}
 local sResult5={root=function() return nil end};local v843={};local v846
 local v844={FindFirstChild=function() return {GetChildren=function() return {remote} end} end}
 local detector={IsA=function() return true end}
@@ -2157,8 +2157,8 @@ rotCollectBatch();assert(calls==4,"bounded batch yields back to the main worker"
 ''')
 
     def test_fast_rot_confirmation_requires_stable_release_and_retains_jail_evidence(self):
-        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
-        self.run_luau(r'''
+        ledger=self.part('        rotDelivery.closeDialogue=function(', '        local fn703 = function(')
+        self.run_luau('local FResult3={inDialogue=function() return false end,requestClose=function() end}\n'+r'''
 local clock=0;local os={clock=function() return clock end};local carrying=false;local counts=0
 local victim={Parent=true};local rotCarriedCharacter=victim;local rotDelivery={counted={}}
 local v1345={HasTag=function() return true end}
@@ -2284,7 +2284,7 @@ local near=add("Near",2,3,true);add("Far",3,31,true);add("Awake",4,1,false)
 add("Jailed",5,1,true,true);add("Held",6,1,true,false,true);add("Receiver",7,1,true)
 local getResult26={GetPlayers=function() return roster end};local Options9={RotAlts={Value={}}}
 local fn697=function() return true end;local fn699=function() return carrying end
-local rotDelivery={};local rotPickupRetry={};local queueRoster=function() return {{userId=7}} end
+local rotDelivery={closeDialogue=function() return true end,};local rotPickupRetry={};local queueRoster=function() return {{userId=7}} end
 local rotTargetDown=function(c) return c and c.tags.Unconscious end
 local v1345={HasTag=function(_,c,key) return c.tags[key] end}
 local MResult={playerByName=function(n) return byName[n] end,distanceTo=function(p) return p.distance end}
@@ -2582,8 +2582,8 @@ assert(fn702(players[2]) and sent==1 and recorded==actual and clock>=0.4)
 
     def test_rot_preserves_acknowledged_delivery_until_jail_arrives_after_timeout(self):
         counter=self.part('        local rotQueueOnCount\n', '        local Maid9 = a1849.Maid')
-        ledger=self.part('        rotDelivery.begin=function(', '        local fn703 = function(')
-        self.run_luau(r'''
+        ledger=self.part('        rotDelivery.closeDialogue=function(', '        local fn703 = function(')
+        self.run_luau('local FResult3={inDialogue=function() return false end,requestClose=function() end}\n'+r'''
 local clock=0;local os={clock=function() return clock end};local character={Parent=true};local player={Character=character}
 local fn697=function() return true end;local fn699=function() return false end
 local fn692=function() end;local v1346=0;local saved=0;local qResult4={set=function(_,count) saved=count end}
@@ -2641,6 +2641,162 @@ assert(__L3.bladeConeCount(above,direction,targets,8,math.rad(55))==1)
 assert(__L3.bladeConeCount(above,direction,{{Position=Vector3.new(0,0,20)}},8,math.rad(55))==0,"horizontal range still applies")
 local blocked=__L3.bladeAimPlan(anchor,above,direction,targets,{},function() return false end,function() return false end)
 assert(blocked.count==0,"height tolerance must not bypass a wall")
+''')
+
+    def test_rot_dialogue_close_retries_nonblocking_and_blocks_pickup_until_server_closes(self):
+        request=self.part('      tbl241.requestClose = function(', '      tbl241.close = function(')
+        close=self.part('        rotDelivery.closeDialogue=function()', '        rotDelivery.begin=function(')
+        collect=self.part('        local function rotCollectSelected()', '        local rotWalkElapsed =')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local tick=function() return clock end
+local inside=true;local sends={};local scans=0;local running=true
+local remote={FireServer=function(_,data) assert(data.exit);table.insert(sends,clock) end}
+local v846=remote;local eResult5={};local tbl241={inDialogue=function() return inside end}
+local FResult3=tbl241;local rotDelivery={}
+local rotWalkStatus={SetText=function() end}
+local task={wait=function() error("closing must not sleep or start another worker") end}
+local fn699=function() return false end;local fn697=function() return running end;local fn670=function() return true end
+local queueRoster=function() scans+=1;return {} end;local fn698=function() return {} end
+local a1849={State={}};local rotQueueEntry
+'''+request+close+collect+r'''
+-- The first exit was lost; server replication takes 1.4 seconds. No pickup/queue scan during that time.
+for i=0,20 do clock=i/15;assert(rotCollectSelected()==false and scans==0) end
+assert(#sends==3 and sends[1]==0 and sends[2]>=0.5 and sends[3]>=1)
+inside=false;clock=1.4;rotCollectSelected()
+assert(scans==1 and #sends==3,"resume selection immediately when the old dialogue actually closes")
+''')
+
+    def test_rot_worker_serializes_yielding_refresh_recovers_errors_and_obeys_stop(self):
+        worker=self.part('        local rotWalkElapsed = 0', '        rotSupplier.stop=function()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local enabled=true;local heartbeat
+local tbl367={false};local rotWalkBusy=false;local threads={};local refreshes=0;local batches=0
+local fn697=function() return enabled end;local fn670=function() return true end
+local a1849={Maid={Give=function() end}};local v1342={Heartbeat={Connect=function(_,fn) heartbeat=fn end}}
+local task={spawn=function(fn)
+ local co=coroutine.create(fn);table.insert(threads,co)
+ local ok,err=coroutine.resume(co);assert(ok,err)
+end}
+local rotRefreshPlayers=function() refreshes+=1;coroutine.yield() end
+local fail=false;local rotCollectBatch=function() batches+=1;if fail then error("temporary carry error") end end
+local messages=0;local fn672=function() messages+=1;return true end;local warn=function() end
+local rotWalkStatus={SetText=function() end}
+'''+worker+r'''
+heartbeat(0.1);assert(rotWalkBusy and refreshes==1 and #threads==1)
+for i=1,100 do heartbeat(0.1) end
+assert(#threads==1 and batches==0,"a yielding list refresh must already own the carrier lock")
+assert(coroutine.resume(threads[1]));assert(batches==1 and not rotWalkBusy)
+fail=true;heartbeat(0.1);assert(batches==2 and messages==1 and not rotWalkBusy)
+for i=1,14 do clock=i/15;heartbeat(1/15) end
+assert(batches==2,"persistent errors cannot retry at frame rate")
+clock=1.1;heartbeat(0.1);assert(rotWalkBusy and refreshes==2)
+enabled=false;assert(coroutine.resume(threads[#threads]));assert(not rotWalkBusy and batches==2,"Stop during refresh prevents a pickup")
+enabled=true;fail=false;heartbeat(0.1);assert(batches==3 and not rotWalkBusy)
+''')
+
+    def test_rot_roster_cache_bounds_reads_skips_absent_accounts_and_unlocks_after_error(self):
+        roster=self.part('        local rotRosterCache=', '        local function queueJoin()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local scans=0;local reads=0
+local rotQueueFolder="queue";local game={JobId="this"};local fail=false;local pause=false
+local getResult26={GetPlayerByUserId=function(_,id) return (id==1 or id==2) and {} or nil end}
+local MResult={sharedList=function()
+ scans+=1;local files={"queue/1.json","C:\\queue\\2.json","junk.json"}
+ for i=3,1002 do table.insert(files,"queue/"..i..".json") end
+ return files
+end,readJson=function(file)
+ reads+=1;if fail then error("file temporarily unavailable") end
+ if pause then pause=false;coroutine.yield() end
+ local id=tonumber(file:match("(%d+)%.json$"))
+ return {userId=id,jobId="this",state="waiting",at=100,joined=3-id}
+end,sharedNow=function() return 100 end,sharedLease=function() return 8 end}
+'''+roster+r'''
+local first=queueRoster();assert(#first==2 and first[1].userId==2 and reads==2 and scans==1)
+for i=1,20 do clock=i/100;assert(queueRoster()==first) end
+assert(reads==2 and scans==1,"idle pickup polling must not rescan every file every frame")
+clock=0.6;pause=true;local co=coroutine.create(queueRoster)
+assert(coroutine.resume(co));assert(rotRosterCache.busy)
+assert(queueRoster()==first and scans==2,"a scan that yields cannot spawn a parallel scan")
+assert(coroutine.resume(co));assert(not rotRosterCache.busy and reads==4)
+clock=1.2;fail=true;assert(not pcall(queueRoster));assert(not rotRosterCache.busy)
+fail=false;local result=queueRoster();assert(#result==2 and not rotRosterCache.busy)
+''')
+
+    def test_rot_notifications_bound_repeated_and_alternating_errors(self):
+        notices=self.part('        local rotNotice=', '        local v1348\n')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local shown=0
+local Library9={Notify=function() shown+=1 end}
+'''+notices+r'''
+for i=0,99 do clock=i/20;fn672("Officer missing") end
+assert(shown==1,"a missing NPC must not create twenty notifications per second")
+clock=5;assert(fn672("Officer missing") and shown==2)
+for i=1,100 do clock=5+i/20;fn672("error "..i) end
+assert(shown<=7,"different errors must also have a global rate bound")
+local fields=0;for _ in rotNotice do fields+=1 end
+assert(fields==2,"notification throttling must not retain an unbounded message history")
+''')
+
+    def test_dialogue_cancels_sleeping_callbacks_and_rot_success_does_not_leave_exit_tasks(self):
+        request=self.part('      tbl241.requestClose = function(', '      tbl241.close = function(')
+        run=self.part('      tbl241.run = function(', '      return tbl241\n')
+        self.run_luau(r'''
+local clock=0;local tick=function() return clock end;local jobs={};local connections={};local live=0
+local sends=0;local clicks=0;local firstClick;local event={speaker="Trainer",msg="choose",choices={"Learn"}}
+local copies=1;local inside=false
+local function enqueue(fn)
+ local co=coroutine.create(fn);table.insert(jobs,{co=co,at=clock})
+end
+local task={wait=function(dt) return coroutine.yield(math.max(dt or 1/15,1/15)) end}
+local function advance(duration)
+ local untilTime=clock+duration
+ while clock<untilTime do
+  clock+=1/60
+  local ready={};for i=#jobs,1,-1 do if jobs[i].at<=clock then table.insert(ready,table.remove(jobs,i)) end end
+  for _,job in ready do
+   local ok,delay=coroutine.resume(job.co);assert(ok,delay)
+   if coroutine.status(job.co)~="dead" then job.at=clock+(delay or 1/60);table.insert(jobs,job) end
+  end
+ end
+end
+local remote={IsA=function() return true end,FireServer=function() sends+=1 end}
+remote.OnClientEvent={Connect=function(_,fn)
+ local c={active=true,fn=fn};connections[#connections+1]=c;live+=1
+ return {Disconnect=function() if c.active then c.active=false;live-=1 end end}
+end}
+local fireclickdetector_2=function()
+ clicks+=1;firstClick=firstClick or clock;inside=true
+ for _,c in connections do if c.active then
+  for _=1,copies do local fn=c.fn;enqueue(function() fn(event) end) end
+ end end
+end
+local detector={IsA=function() return true end};local fn463=function() return 0.4 end;local fn464=function() return true end
+local sResult5={root=function() return nil end};local v843={};local v846;local eResult5={}
+local v844={FindFirstChild=function() return {GetChildren=function() return {remote} end} end}
+local tbl241={inDialogue=function() return inside end}
+'''+request+run+r'''
+local done=false;local started=clock
+-- An answer callback sleeps while the main conversation is stopped and cleaned up.
+enqueue(function()
+ tbl241.run(detector,{"Learn"},{quietPeriod=0,openWait=0,holdPosition=false,answerDelay=1,
+  shouldRun=function() return clock-started<0.3 end})
+ done=true
+end)
+advance(0.6);assert(done and live==0 and #jobs>0,"the original callback is still sleeping after Disconnect")
+inside=true -- A subsequent conversation is now open.
+advance(1);assert(sends==0 and #jobs==0,"a callback from a finished run must not answer or close the next talk")
+-- A burst of duplicate success replies closes immediately, with one rate-limited request and no sleeping exits.
+event={speaker="Bounty Officer",msg="make the realm just a bit safer",choices={}};copies=100
+inside=false;firstClick=nil;done=false;started=clock
+local positive=false
+enqueue(function()
+ local a,b,c,d,e,result=tbl241.run(detector,{}, {quietPeriod=0,openWait=0,holdPosition=false,answerDelay=1,
+  stopOnSuccess=true,successWhen={"make the realm just a bit safer"}})
+ positive=result;done=true
+end)
+advance(0.35)
+assert(done and positive and sends==1 and live==0 and #jobs==0)
+assert(firstClick-started<0.15,"ROT must not add the legacy quiet delay before every delivery")
 ''')
 
 if __name__ == '__main__':

@@ -164,13 +164,13 @@ Ao marcar spawn em Khei, a progressão procura chão firme e espaço livre ao la
 
 A entrega de ROT aproxima a conta do Bounty Officer, espera o movimento assentar e dá mais tempo para respostas do servidor. A navegação usa também MoveToFinished para não perder a chegada entre frames a 15 FPS, e libera caminhos e conexões ao terminar ou recalcular. A contagem continua exigindo confirmação de entrega.
 
-Validação: compilação Luau e 98 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
+Validação: compilação Luau e 103 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
 
 Em servidor lagado, o diálogo de ROT termina assim que recebe a mensagem positiva do Officer. Se o diálogo falhar com a vítima ainda carregada e sem evidência de entrega, a próxima tentativa fica disponível após 0,5 s, sem a espera extra de 12 s. Uma resposta positiva ou prisão já detectada mantém a espera pela confirmação e soltura; o contador não presume entregas. As outras conversas mantêm o comportamento anterior.
 
 O pickup identifica a vítima pelos marcadores replicados de quem carrega/é carregado ou pela ligação física entre os personagens. Com marcadores booleanos, considera apenas uma nova vítima próxima, descartando quem já estava carregado antes da tentativa. Se houver ambiguidade, aguarda a identificação sem reenviar Carry. Isso evita atribuir a prisão à alt inicialmente escolhida quando outra foi pega. Uma resposta positiva do Officer ou sinal de prisão permanece pendente se o prazo de confirmação expirar; só conta após a confirmação da vítima e a soltura estável.
 
-A coleta encadeia até quatro entregas confirmadas no mesmo worker, com uma passagem de frame e nova checagem de Stop, turno e meta de 16 antes de cada vítima. A confirmação mantém evidência de prisão e soltura estável por 0,1 s (amostras a cada 0,05 s). O fechamento do diálogo usa orçamento de 0,15 s; a próxima conversa continua limpando qualquer diálogo antigo. A atualização da lista visual fica limitada a uma vez por segundo e não roda enquanto o carrier está ocupado.
+A coleta encadeia até quatro entregas confirmadas no mesmo worker, com uma passagem de frame e nova checagem de Stop, turno e meta de 16 antes de cada vítima. A confirmação mantém evidência de prisão e soltura estável por 0,1 s (amostras a cada 0,05 s). Ao receber a resposta positiva, solicita o fechamento imediatamente. Enquanto aguarda a prisão e a soltura, acompanha o diálogo e pode repetir o pedido de saída no máximo uma vez a cada 0,5 s. A próxima coleta só começa quando InDialogue desaparecer; essa espera não cria tarefas adicionais. A atualização da lista visual fica limitada a uma vez por segundo e não roda enquanto o carrier está ocupado.
 
 Com Stay in Server ativo no mapa atual, as saídas automáticas de Blade/Sigil por erro, morte, moderador e hop direto passam pelo menu manual. Uma etapa em execução preserva o progresso e retoma depois de Play manual; um término normal fica parado. A terminação central respeita a mesma regra, e o fornecedor ROT substitui rejoin por menu sem forçar Play. Gaia e Khei continuam com opções independentes. Stay desligado mantém o comportamento anterior.
 
@@ -191,3 +191,11 @@ A vítima de ROT mantém a prisão registrada mesmo se o tag Jailed desaparecer 
 A conta continua dando M1 quando sobe nos Shriekers: a altura não interrompe o ataque nem exclui alvos da estimativa horizontal de mira. Ao subir, recalcula a mira a partir da posição atual sem escolher um ponto no chão apenas para descer. Isso vale para espada, os três socos normais e os socos de mana. Alcance horizontal e paredes continuam limitando a mira; o XP só aumenta com o dano observado no HP dos mobs, nunca pela estimativa de alcance.
 
 Se sair horizontalmente da região de ataque, ainda tenta voltar andando por pontos seguros dentro da cela. A recuperação preserva o progresso de XP e não repete a checagem inicial de HP cheio.
+
+### Estabilidade e fechamento do diálogo de ROT
+
+O ROT pula a espera de silêncio anterior à abertura da conversa; as outras conversas mantêm o intervalo padrão. Respostas pendentes que estavam dormindo deixam de enviar escolhas ou saídas depois que a conversa termina ou é cancelada. Isso evita uma resposta antiga interferir no próximo NPC. A contagem ainda exige confirmação da vítima e soltura, sem presumir ROT por fechar o diálogo.
+
+A trava da coleta agora abrange também a atualização da lista de alts. Uma falha interna libera a trava e só é tentada novamente após 1 s. Notificações de ROT têm limite global de uma por segundo e de uma a cada 5 s para a mesma mensagem consecutiva, sem acumular histórico. A lista de receptoras reutiliza uma única leitura por até 0,5 s, não faz leituras concorrentes e ignora arquivos de contas ausentes do servidor.
+
+Os testes simulam saída perdida e fechamento atrasado a 15 FPS, respostas duplicadas, callbacks suspensos após cancelamento, atualização da lista cedendo a execução, falhas temporárias de arquivos e repetição de erros. Eles não identificam por si só a causa de um crash nativo do Roblox ou do executor.
