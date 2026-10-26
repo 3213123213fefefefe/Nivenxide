@@ -164,7 +164,7 @@ Ao marcar spawn em Khei, a progressão procura chão firme e espaço livre ao la
 
 A entrega de ROT aproxima a conta do Bounty Officer, espera o movimento assentar e dá mais tempo para respostas do servidor. A navegação usa também MoveToFinished para não perder a chegada entre frames a 15 FPS, e libera caminhos e conexões ao terminar ou recalcular. A contagem continua exigindo confirmação de entrega.
 
-Validação: compilação Luau e 109 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
+Validação: compilação Luau e 117 testes de regressão simulados, incluindo falta de chão no inn, interrupção do diálogo, recuperação sobre mobs, vítima diferente da escolhida e prisão confirmada após mais de 12 segundos. Ainda é necessário conferir a física e as respostas reais no jogo.
 
 Em servidor lagado, o diálogo de ROT termina assim que recebe a mensagem positiva do Officer. Se o diálogo falhar com a vítima ainda carregada e sem evidência de entrega, a próxima tentativa fica disponível após 0,5 s, sem a espera extra de 12 s. Uma resposta positiva ou prisão já detectada mantém a espera pela confirmação e soltura; o contador não presume entregas. As outras conversas mantêm o comportamento anterior.
 
@@ -215,3 +215,21 @@ Os testes simulam vidas ausentes por 40 s, rejoin recusado, Started seguido de f
 O Unload pela tecla é acionado uma vez por pressão e executado fora do callback de teclado. Para os bots registrados antes da limpeza de Maid, hooks e interface; a limpeza global cleardrawcache do executor foi removida, mantendo a remoção dos desenhos pertencentes ao script. Isso reduz conflitos durante o descarregamento; não comprova a resolução de um crash nativo do executor.
 
 Na subaba Rot há um botão **Perder 1 vida perto de P14 (vitima)** e a opção salva **Perder vida se esperar muito por ROT**, desligada por padrão, com espera de 15 a 600 segundos (padrão 120). Só age na fornecedora ativa a até 20 studs de P14, fora do colo e da jail. Aguarda Danger antes de pedir a morte, usando o down existente para tentar preparar essa condição. Não trata um reset comum como perda de vida: acompanha a redução do contador do servidor e não envia outra morte no mesmo personagem. Uma entrega reinicia a espera. A perda efetiva e a renovação das condições de ROT precisam ser verificadas no jogo.
+
+### Seleção das fornecedoras e proximity específico de ROT
+
+**Selecionar Alts fornecedoras** atualiza a lista do servidor mesmo com o ROT parado. Selecione as contas antes de iniciar o Sigil/ROT; as opções permanecem fixas durante a execução. Uma retomada passa a considerar a seleção atual da interface, sem recuperar uma lista vazia de uma configuração antiga. O modo 23 continua opcional.
+
+Na subaba **Rot**, o slider salvo **ROT Proximity Check (0 desliga)** define um alcance de 0 a 2.000 studs, independente de ProgProximity/ProgKheiProximity do Blade. Exclui aliados, alts selecionadas e clientes reconhecidos nos arquivos deste PC. Essa identificação local depende de as instâncias compartilharem a mesma pasta de arquivos do executor. Como o modo 23 torna todos aliados, eles também não acionam o proximity. Há tolerância de 5 s após iniciar/retomar para receber os anúncios locais.
+
+Com **Stay in Server** do mapa ligado, uma ameaça pausa o ROT, aguarda os trabalhadores atuais terminarem, entra no menu quando o jogo permite e só retoma depois de **Play manual** e do personagem reaparecer. A vítima preserva o checkpoint Santorini/Brom/reset/deslocamento/Fir/Renova/coleta/wipe, sem refazer quests já concluídas. A receptora preserva a entrega pendente e a contagem/fila; quando integra a progressão Blade, utiliza a pausa dessa progressão. A fila não pode religar o ROT enquanto aguarda Play. F8/Parar/Unload cancelam a retomada. Sem Stay, utiliza o hop existente e salva o checkpoint da vítima para a retomada.
+
+### Controles de ida a Khei
+
+**Auto Go To Khei** desligado impede o início automático, inclusive quando existe `khei_run` de uma execução antiga. Desligar a caixa também cancela uma tentativa automática em andamento. Uma retomada manual só é aceita após um hop autorizado pelo loader.
+
+O botão **Go To Khei / Parar tentativa** funciona independentemente da caixa automática. Primeiro clique: para os bots ativos, espera os trabalhadores terminarem e tenta a passagem por Yaalda. Segundo clique: cancela a tentativa e suas respostas de diálogo pendentes. Não apaga o progresso confirmado de Gaia. Um teleporte já aceito pelo servidor pode concluir mesmo após o cancelamento local.
+
+A espera alternativa de retorno ao menu agora cede execução e respeita Stop, em vez de repetir sem avançar o tempo. O cancelamento durante a conversa de um inn também libera o movimento sem pedir o reset que viria depois.
+
+Validação adicional simulada: lista de alts com bot parado, seleção atual em configuração antiga, exclusão de aliados/clientes locais, alcance independente, pausa com trabalhador ainda ativo, Play manual, retomada por checkpoint, checkbox Khei desligado com estado salvo e cancelamento de respostas atrasadas. Física, UI e teleporte reais ainda precisam de validação no jogo.

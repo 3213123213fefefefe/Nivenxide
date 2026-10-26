@@ -834,7 +834,7 @@ Options8.ProgKheiProximity.Value=0;assert(__L3.bladeThreatDistance()==0)
     def test_menu_pause_waits_for_old_worker_and_manual_play_preserving_progress(self):
         pause=self.part('__L3.bladePauseForMenu=function(reason)', '        -- Shared safety exit used by termination')
         self.run_luau(r'''
-local __L3={bladeCoreRunning=true,progStatusLabel={SetText=function() end},bladeLand=function() end}
+local __L3={kheiAllowed=function() return true end,bladeCoreRunning=true,progStatusLabel={SetText=function() end},bladeLand=function() end}
 local tbl303={true};local tbl307={};local tbl308={};local Toggles8={};local game={JobId="job",PlaceId=1};local num274=2
 local save={phase="B1_XP",bladeDamage=4000,bladeFistDamage=0,bladeUnlockHits=2};local saves=0;local resumes=0;local menu=false;local spawned=false;local forced=0
 local a1723={State={mana={decharge=function() end}}}
@@ -918,10 +918,11 @@ watcher(0.1);assert(reported==1)
     def test_only_manual_stop_cancels_menu_pause_while_previous_stage_unwinds(self):
         stop=self.part('v1009 = function(a1824)', '        __L3.bladePauseForMenu=function(reason)')
         self.run_luau(r'''
-local v1009;local tbl303={false};local __L3={bladeMenuPause={},bladePausing=false};local a1723={State={bladeManualMenu=true}}
+local qResult3={remove=function() end}
+local v1009;local tbl303={false};local __L3={bladeMenuPause={},bladePausing=false,kheiManualRequested=true};local a1723={State={bladeManualMenu=true}}
 local fn531=function() end;local fn532=function() end
 '''+stop+r'''
-v1009();assert(__L3.bladeMenuPause and a1723.State.bladeManualMenu)
+v1009();assert(__L3.kheiManualRequested and __L3.bladeMenuPause and a1723.State.bladeManualMenu)
 v1009(true);assert(__L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
 ''')
 
@@ -2322,6 +2323,10 @@ local run=__L3.bladeCaptureSetup(saved);assert(run.Blade23Mode and not next(run.
 assert(pcall(__L3.bladeValidateSetup,run,"B2_ORDERLY"))
 Toggles8.Blade23Mode.Value=false;run=__L3.bladeCaptureSetup(saved)
 assert(not run.Blade23Mode and not pcall(__L3.bladeValidateSetup,run,"B2_ORDERLY"))
+Options8.RotAlts={Value={SupplierA=true,SupplierB=true}}
+run=__L3.bladeCaptureSetup(saved)
+assert(run.alts.SupplierA and run.alts.SupplierB and not next(saved.bladeRunConfig.alts),"resume must use the currently selected alts without mutating the old run")
+assert(pcall(__L3.bladeValidateSetup,run,"B2_ORDERLY"))
 ''')
 
     def test_mode23_uses_frozen_run_setting_until_setup_is_released(self):
@@ -2448,7 +2453,7 @@ end
 Vector3.zero=Vector3.new(0,0,0)
 local CFrame={new=function(p) return {Position=p} end}
 local Enum={HumanoidStateType={Freefall=5}}
-local connected=false;local connectCount=0;local step;local protections=0;local restored=0;local fail=false;local waits=0
+local connected=false;local connectCount=0;local step;local protections=0;local restored=0;local fail=false;local waits=0;local running=true;local cancel=false
 local root={Parent=true,Position=Vector3.new(0,20,0)}
 local head={Name="Head",CanCollide=true,IsA=function() return true end}
 local hum={Health=100,SetStateEnabled=function(_,state,enabled)
@@ -2481,6 +2486,7 @@ local task={spawn=function(fn) fn() end,wait=function(dt)
  step()
  assert(root.CFrame.Position==landing and root.AssemblyLinearVelocity.Magnitude==0 and not head.CanCollide)
  if fail then error("simulated dialogue interruption") end
+ if cancel then running=false end
  return dt or 1/15
 end}
 '''+release+inn+r'''
@@ -2493,6 +2499,8 @@ assert(not pcall(tbl252.setInn,"Cavern",opts))
 assert(not connected and head.CanCollide and restored==2,"errors must restore collision and FPS lift")
 fail=false;available=false;local before=connectCount
 assert(not tbl252.setInn("Cavern",opts) and connectCount==before and restored==3)
+available=true;cancel=true;opts.shouldRun=function() return running end
+assert(not tbl252.setInn("Cavern",opts) and not connected and head.CanCollide and restored==4,"safety Stop during inn dialogue must release hold without resetting")
 ''')
 
     def test_shrieker_horizontal_displacement_tries_another_safe_side_after_stalled_step(self):
@@ -2917,6 +2925,7 @@ end}
 assert(fn694()=="teleporting" and wipes==1 and hops==3 and polls==1 and clock>=44)
 -- Stop while the wipe is still unconfirmed cancels without another join.
 clock=0;lives=0;polls=0;hops=0
+rotSupplier.routeStage=nil
 rotSupplier.stopped=false;tbl365[1]=true
 task.wait=function(dt) clock+=dt;tbl365[1]=false end
 fn694();assert(hops==0 and polls==1)
@@ -2970,6 +2979,148 @@ for i=1,50 do clock+=1;assert(rotSupplier.refreshLife(true)) end
 assert(kills==1 and rotSupplier.refreshPending==3,"do not repeatedly kill while waiting for the server")
 lives=2;assert(rotSupplier.refreshLife(false) and kills==1)
 Library9.Unloaded=true;assert(not rotSupplier.refreshLife(true) and kills==1)
+''')
+
+    def test_rot_selector_refreshes_before_start_without_requiring_mode23(self):
+        refresh=self.part('        local function rotRefreshPlayers()', '        local function rotCollectSelected()')
+        worker=self.part('        local rotWalkElapsed = 0', '        rotSupplier.stop=function()')
+        self.run_luau(r'''
+local clock=0;local os={clock=function() return clock end};local tbl365={false};local tbl367={false};local rotWalkBusy=false
+local LocalPlayer24={Name="Self"};local players={LocalPlayer24,{Name="Alt B"},{Name="Alt A"}}
+local getResult26={GetPlayers=function() return players end};local tbl368={};local tbl369={};local set=0
+local Options9={RotAlts={Value={Offline=true},SetValues=function(self,values) self.Values=values;set+=1 end}}
+local fn697=function() return tbl365[1] end;local fn670=function() return true end
+local batches=0;local rotCollectBatch=function() batches+=1 end
+local a1849={Maid={Give=function() end}};local tick;local v1342={Heartbeat={Connect=function(_,fn) tick=fn end}}
+local task={spawn=function(fn) fn() end};local rotWalkStatus={SetText=function() end};local fn672=function() end
+'''+refresh+worker+r'''
+tick(0.1);assert(set==1 and batches==0 and table.concat(Options9.RotAlts.Values,",")=="Alt A,Alt B,Offline")
+Options9.RotAlts.Value["Alt A"]=true
+clock=1.1;tick(0.1);assert(set==1 and Options9.RotAlts.Value["Alt A"],"unchanged refresh must preserve the chosen selection")
+table.insert(players,{Name="New Alt"});clock=2.2;tick(0.1)
+assert(set==2 and table.find(Options9.RotAlts.Values,"New Alt") and batches==0)
+''')
+
+    def test_rot_proximity_ignores_allies_local_clients_alts_and_uses_own_range(self):
+        scan=self.part('        rotSupplier.proximityAlly=function(', '        rotSupplier.pauseForProximity=function(')
+        self.run_luau(VEC+r'''
+local own={UserId=1,Name="Self"};local friends={UserId=2,Name="Friend"};local localAlt={UserId=3,Name="PC Alt"}
+local supplier={UserId=4,Name="Selected"};local enemy={UserId=5,Name="Enemy"}
+for _,p in {own,friends,localAlt,supplier,enemy} do p.Character={FindFirstChild=function() return {Position=Vector3.new(p.UserId,0,0)} end} end
+local LocalPlayer24=own;local Options9={RotProximity={Value=10},ProgProximity={Value=1000},RotAlts={Value={Selected=true}}}
+local a1849={State={isFriend=function(p) return p==friends end,bladeLocalClients={isAlly=function(p) return p==localAlt end}}}
+local rotSupplier={};local getResult26={GetPlayers=function() return {own,friends,localAlt,supplier,enemy} end}
+local sResult10={root=function() return {Position=Vector3.new(0,0,0)} end}
+'''+scan+r'''
+assert(rotSupplier.proximityThreat()==enemy)
+Options9.RotProximity.Value=4;assert(rotSupplier.proximityThreat()==nil,"Blade range must not control ROT")
+Options9.RotProximity.Value=0;assert(rotSupplier.proximityThreat()==nil)
+Options9.RotProximity.Value=10;a1849.State.isFriendly=function(p) return p==enemy end
+assert(rotSupplier.proximityThreat()==nil,"explicitly selected allies are always excluded")
+''')
+
+    def test_rot_safety_menu_preserves_checkpoint_and_waits_for_manual_play_and_worker_exit(self):
+        cancel=self.part('        rotSupplier.cancelSafety=function()', '        rotSupplier.proximityAlly=function(')
+        pause=self.part('        rotSupplier.pauseForProximity=function(', '        local rotSafety=')
+        self.run_luau(r'''
+local rotSupplier={routeStage="Fir",workerRunning=true,status={SetText=function() end}}
+local a1849={State={bladeStayHere=function() return true end}};local enabled=true;local starts=0;local forced=0
+local Library9={Toggles={RotBotEnabled={SetValue=function(_,v) enabled=v;if v then starts+=1 end end}}}
+local fn670=function() return false end;local rotWalkBusy=false;local jobs={};local clock=0;local os={clock=function() return clock end}
+local task={spawn=function(fn) jobs[#jobs+1]=coroutine.create(fn) end,wait=function() coroutine.yield() end}
+local menu=false;local root=false;local vResult6={forceMenu=function(active) assert(active() and not rotSupplier.workerRunning);forced+=1;menu=true;return true end,startMenu=function() return menu end}
+local sResult10={root=function() return root end};local DResult3={hop=function() error("Stay cannot hop") end}
+local function step() for _,co in jobs do if coroutine.status(co)~="dead" then local ok,err=coroutine.resume(co);assert(ok,err) end end end
+'''+cancel+pause+r'''
+rotSupplier.pauseForProximity("Enemy");assert(not enabled and a1849.State.bladeManualMenu)
+step();assert(forced==0 and starts==0)
+rotSupplier.workerRunning=false;step();assert(forced==1)
+for i=1,10 do step() end;assert(starts==0,"no automatic Play")
+menu=false;step();assert(starts==0,"wait for the character too")
+root=true;step();assert(starts==1 and enabled and rotSupplier.routeStage=="Fir" and not a1849.State.rotManualMenu)
+rotSupplier.pauseForProximity("Enemy");step();rotSupplier.cancelSafety();menu=false;root=true;step();assert(starts==1,"Stop cancels the delayed restart")
+''')
+
+    def test_rot_supplier_route_checkpoint_does_not_replay_finished_quests_after_menu(self):
+        route=self.part('        local fn695 = function()', '        local fn696 = function()')
+        self.run_luau(r'''
+local tbl365={true};local rotSupplier={routeStage="Fir"};local calls={}
+local fn679=function(_,name) calls[#calls+1]=name;return true end
+local fn682=function(name) calls[#calls+1]=name;return true end
+local fn681=function() error("already completed reset") end;local fn683=function() error("already completed travel") end
+local fn694=function() calls[#calls+1]="ROT";return "teleporting" end
+local fn672=function() end;local tbl362={};local tbl363={};local vector326={};local task={wait=function() end}
+'''+route+r'''
+fn695();assert(table.concat(calls,",")=="Fir,Renova,ROT")
+''')
+
+    def test_khei_disabled_blocks_saved_handoff_but_manual_button_toggles_start_stop(self):
+        allowed=self.part('        __L3.kheiAllowed=function()', '        __L3.fn635 = function(')
+        entry=self.part('        a1723.State.progKheiHandoff = function(', '        __L3.fn636 = function()')
+        button=self.part('        progressionTab:AddButton({Text="Go To Khei / Parar tentativa"', '        __L3.Maid7 =')
+        self.run_luau(r'''
+local __L3={};local Toggles8={ProgGoToKhei={Value=false}};local a1723={State={}};local stored={khei_run="true"};local starts=0;local stops=0
+local qResult3={get=function(k) return stored[k] end,set=function(k,v) stored[k]=v end,remove=function(k) stored[k]=nil end}
+local tbl303={false};local tbl304={false};local num276=20;local fn534=function() end;local fn531=function() end;local fn532=function() end;local fn568=function() end
+local task={spawn=function(fn) fn() end};local __L2={fn521=function() end}
+local v1009=function() stops+=1;tbl303[1]=false;__L3.kheiHandoffActive=false;stored.khei_run=nil end
+local button;local progressionTab={AddButton=function(_,opts) button=opts.Func end}
+local game={PlaceId=5208655184};local num274=3541987450;local iResult5={allow=function() return true end}
+local DResult2={setupResume=function() end};local fn535=function() end
+'''+allowed+entry+r'''
+a1723.State.progYaaldaHandoff=function() starts+=1 end
+a1723.State.progKheiHandoff();assert(starts==0 and not tbl303[1] and stored.khei_run==nil,"saved intent must obey the current checkbox")
+'''+button+r'''
+button();assert(starts==1 and __L3.kheiManualRequested and not Toggles8.ProgGoToKhei.Value)
+button();assert(stops==1 and not __L3.kheiManualRequested and not tbl303[1] and stored.khei_manual==nil)
+''')
+
+    def test_khei_delayed_dialogue_reply_is_cancelled_with_the_attempt(self):
+        talk=self.part('        __L3.fn635 = function(', '        a1723.State.progYaaldaHandoff =')
+        self.run_luau(r'''
+local __L3={};local active=true;local sends=0;local clicks=0;local cb;local delayed={};local disconnected=0
+local remote={IsA=function() return true end,OnClientEvent={Connect=function(_,fn) cb=fn;return {Disconnect=function() disconnected+=1 end} end},FireServer=function() sends+=1 end}
+local npc={FindFirstChildWhichIsA=function() return {} end};local v970={FindFirstChild=function() return {GetChildren=function() return {remote} end} end}
+local num291=0.1;local num292=0;local clock=0;local tick=function() return clock end
+local tbl303={true};local fireclickdetector=function() clicks+=1;cb({speaker="Yaalda",choices={"Yes"}}) end;local fn534=function() end
+local task={delay=function(_,fn) delayed[#delayed+1]=fn end,wait=function(dt) clock+=dt;active=false end}
+'''+talk+r'''
+__L3.fn635(npc,15,75,function() return active end)
+assert(#delayed==1 and disconnected==1)
+for _,fn in delayed do fn() end
+assert(sends==0 and clicks==1,"Stop must suppress delayed Yes replies after a Khei attempt is cancelled")
+''')
+
+    def test_saved_khei_intent_cannot_bypass_auto_checkbox_without_authorized_manual_resume(self):
+        branch=self.part('          elseif qResult3.get("khei_run") == "true" then', '        end)\n      end\n    end\n    tbl44.K')
+        self.run_luau(r'''
+local store={khei_run="true"};local starts=0;local authorized=false;local enabled=false
+local qResult3={get=function(k) return store[k] end,remove=function(k) store[k]=nil end}
+local __L3={kheiAllowed=function() return enabled or __L3Manual==true end,fn647=function() starts+=1 end}
+-- Use the production helper's manual field in this fixture too.
+__L3.kheiAllowed=function() return enabled or __L3.kheiManualRequested==true end
+local DResult2={resumedFromHop=function() return authorized end}
+local game={PlaceId=5208655184};local num274=3541987450
+local a1723={State={progKheiHandoff=function() starts+=1 end}};local task={spawn=function(fn) fn() end}
+local function resume()
+ if false then
+'''+branch+r'''
+end
+resume();assert(starts==0 and store.khei_run==nil)
+store={khei_run="true",khei_manual="true"};resume();assert(starts==0 and store.khei_manual==nil)
+store={khei_run="true",khei_manual="true"};authorized=true;resume();assert(starts==1)
+store={khei_run="true"};authorized=false;enabled=true;resume();assert(starts==2)
+''')
+
+    def test_force_menu_fallback_yields_and_stop_cancels_instead_of_busy_spinning(self):
+        force=self.part('      tbl151.forceMenu = function(', '      local fn307 = function()')
+        self.run_luau(r'''
+local active=true;local waits=0;local readiness=0
+local fn305=function() return active end;local tResult={tagged=function() return false end}
+local task={wait=function(dt) assert(dt>=0.1);waits+=1;if waits==2 then active=false end end}
+local tbl151={startMenu=function() return nil end,waitMenuReady=function() readiness+=1 end,returnToMenu=function() return false end}
+'''+force+r'''
+assert(not tbl151.forceMenu(function() return active end) and waits==2 and readiness==1)
 ''')
 
 if __name__ == '__main__':

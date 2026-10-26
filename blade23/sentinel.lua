@@ -27458,12 +27458,15 @@ __modules.m356b75b2d82b = function()
               tbl151.park(a2152)
             end
             tbl151.waitMenuReady(6, true)
+            if not v513() then return false end
             if tbl151.returnToMenu(4) then
               return true
             end
             local num125 = 0
             local randomResult = math.random(12, 47)
             repeat
+              task.wait(0.1)
+              num125+=0.1
               if num125 < randomResult and v513() then
               else
                 __ml = 1
@@ -34099,6 +34102,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                     task.wait(0.2)
                   end
                 end
+                if not v942() then releaseInnHold();return false end
                 if v941.onBeforeBreak then
                   v941.onBeforeBreak()
                 end
@@ -34188,6 +34192,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                 task.wait(0.2)
               end
             end
+            if not v942() then releaseInnHold();return false end
             if v941.onBeforeBreak then
               v941.onBeforeBreak()
             end
@@ -38354,7 +38359,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           Vector3.new(6754, 1402, -143),
           Vector3.new(6857, 1411, -164),
         }
-        __L3.fn635 = function(a1816, a2266, a390)
+        __L3.kheiAllowed=function()
+          return __L3.kheiManualRequested==true or (Toggles8.ProgGoToKhei and Toggles8.ProgGoToKhei.Value==true) or false
+        end
+        __L3.fn635 = function(a1816, a2266, a390, shouldRun)
+          local active=shouldRun or function() return tbl303[1] end
           local Requests10 = v970:FindFirstChild("Requests")
           local v1241 = a1816 and a1816:FindFirstChildWhichIsA("ClickDetector", true)
           if not (Requests10 and v1241 and fireclickdetector) then
@@ -38375,6 +38384,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               table.insert(
                 tbl353,
                 v1244.OnClientEvent:Connect(function(a1817)
+                  if not active() then return end
                   if type(a1817) ~= "table" or a1817.choices == nil and a1817.speaker == nil then
                     return
                   end
@@ -38386,6 +38396,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   if v1247 then
                     num376 += 1
                     task.delay(num291 + math.random() * num292, function()
+                      if not active() then return end
                       pcall(function()
                         v1244:FireServer(v1247)
                       end)
@@ -38398,11 +38409,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           fireclickdetector(v1241)
           local tickResult11 = tick()
           while true do
-            if not (num376 < (a2266 or 15) and tick() - tickResult11 < (a390 or 25)) then
+            if not (active() and num376 < (a2266 or 15) and tick() - tickResult11 < (a390 or 25)) then
               break
             end
             task.wait(0.5)
-            if tick() - num377 > 3 then
+            if active() and tick() - num377 > 3 then
               fireclickdetector(v1241)
               num377 = tick()
             end
@@ -38415,8 +38426,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
         end
         a1723.State.progYaaldaHandoff = function()
+          if not __L3.kheiAllowed() or not tbl303[1] then return end
+          local token={};__L3.kheiAttempt=token;__L3.kheiHandoffActive=true
+          local function active() return tbl303[1] and __L3.kheiAttempt==token and __L3.kheiAllowed() end
           for i67 = 1, num275 do
-            if not tbl303[1] then
+            if not active() then
               return
             end
             local NPCs4 = v966:FindFirstChild("NPCs")
@@ -38431,7 +38445,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
                   return v1250 and v1250.Position or nil
                 end, 1)
               then
-                __L3.fn635(v1248, 15, 75)
+                if active() then __L3.fn635(v1248, 15, 75,active) end
               else
                 fn534("finish: the teleport to Yaalda did not take, not clicking from here")
               end
@@ -38446,7 +38460,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               end
             end
           end
-          if not tbl303[1] then
+          if not active() then
             return
           end
           __L2.fn521(string.format("Khei: Yaalda never took the handoff after %d tries", num275))
@@ -38458,6 +38472,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
         end
         a1723.State.progKheiHandoff = function(sameServerResume)
+          if not __L3.kheiAllowed() then
+            qResult3.remove("khei_run");qResult3.remove("khei_handoff_servers")
+            return
+          end
           if tbl303[1] then
             return
           end
@@ -39580,6 +39598,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             local run=table.clone(saved.bladeRunConfig)
             run.BladeShrCount=__L3.bladeValue("BladeShrCount",50)
             run.Blade23Mode=Toggles8.Blade23Mode and Toggles8.Blade23Mode.Value==true or false
+            if Options8.RotAlts then
+              run.alts={}
+              for name,selected in pairs(Options8.RotAlts.Value or {}) do if selected then run.alts[name]=true end end
+            end
             return run
           end
           local run={version=2,ProgRoute="Blade/Sigil (3 stages)",points={},alts={}}
@@ -41281,6 +41303,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
         end
         v1009 = function(a1824)
+          if __L3.bladeMenuPause and not __L3.bladePausing and a1824~=true then return end
+          __L3.kheiHandoffActive=false;__L3.kheiAttempt=nil
+          if not __L3.bladePausing then __L3.kheiManualRequested=nil;qResult3.remove("khei_manual") end
           if a1824==true and __L3.bladeTerminalMenu then
             __L3.bladeTerminalMenu=nil;a1723.State.bladeManualMenu=false
           end
@@ -41369,7 +41394,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             __L3.bladeMenuPause=nil;a1723.State.bladeManualMenu=false
             __L3.bladeSameServerResume=game.PlaceId~=num274
             local resumed,message
-            if pause.handoff then
+            if pause.handoff and __L3.kheiAllowed() then
               qResult3.set("khei_run","true")
               resumed,message=pcall(a1723.State.progKheiHandoff,true)
             else resumed,message=pcall(__L3.fn648,true) end
@@ -41381,6 +41406,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return true
         end
         -- Shared safety exit used by termination and the ROT supplier; never rejoins or presses Play.
+        a1723.State.rotSafetyExit=function(reason)
+          if not tbl303[1] then return false end
+          if not __L3.bladeStayHere() and a1723.Library.Toggles.RotBotEnabled then a1723.Library.Toggles.RotBotEnabled:SetValue(false) end
+          return fn557(reason)
+        end
         a1723.State.bladeStayHere=__L3.bladeStayHere
         a1723.State.bladeMenuInsteadOfLeave=function(reason,terminal)
           if not __L3.bladeStayHere() then return false end
@@ -41592,7 +41622,28 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         __L2.str42 = Options8.ProgWebhook and Options8.ProgWebhook.Value or ""
         progressionTab:AddToggle("ProgGoToKhei", {
           Text="Auto Go To Khei",Default=false,Tooltip="Segue para Khei ao concluir Gaia; protecoes de Khei sao independentes",
+          Callback=function(value)
+            if not value and __L3.kheiHandoffActive and not __L3.kheiManualRequested then v1009(true) end
+          end,
         })
+        progressionTab:AddButton({Text="Go To Khei / Parar tentativa",Func=function()
+          if __L3.kheiManualRequested or __L3.kheiHandoffActive then
+            __L3.kheiManualRequested=nil;qResult3.remove("khei_manual")
+            v1009(true)
+            return
+          end
+          if game.PlaceId==num274 then fn535("A conta ja esta em Khei");return end
+          if not iResult5.allow(a1723,"Blatant","Go To Khei") then return end
+          for _,bot in a1723.State.bots or {} do if bot.name=="Rot Bot" then pcall(bot.stop) end end
+          if tbl303[1] then v1009(true) end
+          qResult3.remove("progression_active");qResult3.remove("khei_handoff_servers")
+          __L3.kheiManualRequested=true;qResult3.set("khei_manual","true");qResult3.set("khei_run","true")
+          DResult2.setupResume()
+          task.spawn(function()
+            while __L3.kheiManualRequested and (__L3.bladeCoreRunning or (a1723.State.rotWorkerRunning and a1723.State.rotWorkerRunning())) do task.wait(0.1) end
+            if __L3.kheiManualRequested then a1723.State.progKheiHandoff(true) end
+          end)
+        end})
         __L3.Maid7 = a1723.Maid
         __L3.Maid7:Give(v967.Heartbeat:Connect(__NATIVE[116]({ 0 }, a1723, { nil }, __L3.tbl335, function()
           local res250 = __L3.fn649()
@@ -41700,6 +41751,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               __L3.fn648(true)
             end
           elseif qResult3.get("khei_run") == "true" then
+            __L3.kheiManualRequested=qResult3.get("khei_manual")=="true" and DResult2.resumedFromHop()
+            if not __L3.kheiAllowed() then
+              qResult3.remove("khei_run");qResult3.remove("khei_handoff_servers");qResult3.remove("khei_manual")
+              return
+            end
             if game.PlaceId == num274 then
               qResult3.remove("khei_run")
               qResult3.remove("khei_handoff_servers")
@@ -43088,12 +43144,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end))
         local fn694 = function()
           while tbl365[1] do
-            local res260 = fn690()
+            local res260 = rotSupplier.routeStage=="wipe" and "ferryman" or fn690()
             if not tbl365[1] then
               return
             end
             if res260 == "ferryman" then
-              fn691()
+              rotSupplier.routeStage="wipe"
+              local lives=a1849.State.getServerValue and tonumber(a1849.State.getServerValue("Lives"))
+              if not lives or lives<=0 then fn691() end
               local retryWipeAt=os.clock()+15
               -- Stay in this phase until the new life is confirmed and rejoin succeeds.
               -- Never fall back to waiting for ROT in Renova after a failed teleport.
@@ -43124,52 +43182,31 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         local fn695 = function()
           while tbl365[1] do
-            fn682("Santorini")
-            if not tbl365[1] then
-              break
-            end
-            local res261 = fn679(
-              tbl362,
-              "Brom",
-              { "You're a merchant?", "If I see her." },
-              { settle = 0.25, range = 30, anchor = true, speed = 100 }
-            )
-            if not tbl365[1] then
-              break
-            end
-            if not res261 then
-              fn672("Rot Bot: Brom not in range - restarting")
+            local stage=rotSupplier.routeStage or "Santorini"
+            local nextStage
+            if stage=="Santorini" then
+              if fn682("Santorini") then nextStage="Brom" end
+            elseif stage=="Brom" then
+              if fn679(tbl362,"Brom",{"You're a merchant?","If I see her."},{settle=0.25,range=30,anchor=true,speed=100}) then nextStage="reset" end
+            elseif stage=="reset" then
+              rotSupplier.routeStage="travel" -- The reset must not be repeated after a safety pause.
+              fn681();nextStage="travel"
+            elseif stage=="travel" then
+              fn683(vector326,100);nextStage="Fir"
+            elseif stage=="Fir" then
+              if fn679(tbl363,"Fir",{"What's wrong?","Do you mean Brom?","Yeah, I saw him earlier.","I saw him napping on the job."}) then nextStage="Renova" end
+            elseif stage=="Renova" then
+              if fn682("Renova") then nextStage="collect" end
+            elseif stage=="collect" or stage=="wipe" then
+              if fn694()=="teleporting" then return end
+              if not tbl365[1] then return end
+              task.wait(0.5)
+            else error("Etapa ROT desconhecida: "..tostring(stage)) end
+            if not tbl365[1] then return end
+            if nextStage then rotSupplier.routeStage=nextStage
+            elseif stage~="collect" and stage~="wipe" then
+              fn672("Rot Bot: "..stage.." indisponivel; nova tentativa")
               task.wait(2)
-            else
-              fn681()
-              if not tbl365[1] then
-                break
-              end
-              fn683(vector326, 100)
-              local res262 = fn679(tbl363, "Fir", {
-                "What's wrong?",
-                "Do you mean Brom?",
-                "Yeah, I saw him earlier.",
-                "I saw him napping on the job.",
-              })
-              if not tbl365[1] then
-                break
-              end
-              if not res262 then
-                fn672("Rot Bot: Fir not in range - restarting")
-                task.wait(2)
-              else
-                local res263 = fn682("Renova")
-                if not tbl365[1] then
-                  break
-                end
-                if res263 then
-                  if fn694()=="teleporting" then return end
-                else
-                  fn672("Rot Bot: Renova inn failed - restarting")
-                  task.wait(2)
-                end
-              end
             end
           end
         end
@@ -43243,7 +43280,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           rotBotTab:AddLabel("This executor has no file access, so alts cannot be listed", true)
         end
         rotReceiverTab:AddDropdown("RotAlts", {
-          Text = "Alts",
+          Text = "Selecionar Alts fornecedoras",
           Values = {},
           Multi = true,
           Default = {},
@@ -43922,7 +43959,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             for index,e in roster do if e.userId==LocalPlayer24.UserId then position=index; break end end
             rotQueueLabel:SetText(string.format("Queue: #%d | Master: %s | mine: %d/16",position,
               rotQueueOwner or "waiting",rotQueueEntry.progress))
-            if rotQueueCanRun() and not tbl365[1] and Library9.Toggles.RotBotEnabled then
+            if not rotSupplier.safetyToken and not a1849.State.rotManualMenu and rotQueueCanRun() and not tbl365[1] and Library9.Toggles.RotBotEnabled then
               Library9.Toggles.RotBotEnabled:SetValue(true)
             end
           elseif owner then
@@ -44071,7 +44108,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           rotWalkElapsed += dt
           if rotWalkElapsed < 0.05 or tbl367[1] then return end
           rotWalkElapsed = 0
-          if not fn697() or rotWalkBusy or os.clock()<rotRetryAt then return end
+          if rotWalkBusy or os.clock()<rotRetryAt then return end
+          if not fn697() and os.clock()<rotRefreshAt then return end
           rotWalkBusy = true
           task.spawn(function()
             local ok, err = pcall(function()
@@ -44096,7 +44134,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
         end))
         rotSupplier.stop=function()
+          if rotSupplier.cancelSafety then rotSupplier.cancelSafety() end
           rotSupplier.stopped=true
+          qResult4.remove("rotbot_safety_stage")
           qResult4.remove("rotbot_active")
           qResult4.remove("rotbot_target")
           queueLeave("left")
@@ -44110,6 +44150,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             rotSupplier.saveSettings()
             if not value then qResult4.remove("rotbot_active")
             elseif tbl365[1] and not fn670() then qResult4.set("rotbot_active","true"); DResult3.setupResume() end
+          end})
+        rotBotTab:AddSlider("RotProximity",{Text="ROT Proximity Check (0 desliga)",Default=tonumber(rotSupplier.settings.proximity) or 0,
+          Min=0,Max=2000,Rounding=0,Suffix=" studs",Callback=function(value)
+            rotSupplier.settings.proximity=value;rotSupplier.saveSettings()
           end})
         rotBotTab:AddToggle("RotSupplierRefreshLife",{Text="Perder vida se esperar muito por ROT",Default=rotSupplier.settings.refreshLife==true,
           Callback=function(value) rotSupplier.settings.refreshLife=value;rotSupplier.refreshSince=os.clock();rotSupplier.saveSettings() end})
@@ -44126,6 +44170,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             return
           end
           rotSupplier.explicitSupplier=true
+          rotSupplier.routeStage=nil
           Library9.Toggles.RotBotEnabled:SetValue(true)
         end})
         rotHidden:AddToggle("RotBotEnabled", {
@@ -44140,6 +44185,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               fn696()
               return
             end
+            if rotSupplier.safetyToken then
+              Library9.Toggles.RotBotEnabled:SetValue(false)
+              fn672("ROT pausado: use Play manual ou Parar para cancelar a espera")
+              return
+            end
             local BlatantMode2 = Library9.Toggles.BlatantMode
             if not (BlatantMode2 and BlatantMode2.Value) then
               Library9.Toggles.RotBotEnabled:SetValue(false)
@@ -44152,6 +44202,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             tbl365[1] = true
             rotSupplier.stopped=false
             rotSupplier.rejoining=false
+            rotSupplier.safetyGraceUntil=os.clock()+5
             if not fn670() and Library9.Toggles.RotSupplierResume.Value then
               qResult4.set("rotbot_active","true")
               DResult3.setupResume()
@@ -44169,6 +44220,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if Library9.Options.ProximityDistance then
               Library9.Options.ProximityDistance:SetValue(1000)
             end
+            rotSupplier.workerRunning=true
             task.spawn(function()
               if fn670() then
                 fn672("Rot Bot: carrier walking mode; waiting for selected downed accounts")
@@ -44191,10 +44243,98 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               tbl365[1] = false
               if not rotSupplier.rejoining then qResult4.remove("rotbot_active") end
               channelResult.clearCommand()
-              fn696()
+              pcall(fn696)
+              rotSupplier.workerRunning=false
             end)
           end,
         })
+        a1849.State.rotWorkerRunning=function() return rotSupplier.workerRunning or rotWalkBusy end
+        rotSupplier.cancelSafety=function()
+          if not rotSupplier.safetyToken then return end
+          rotSupplier.safetyToken=nil
+          a1849.State.rotManualMenu=nil
+          a1849.State.bladeManualMenu=false
+        end
+        rotSupplier.proximityAlly=function(player)
+          if player==LocalPlayer24 then return true end
+          local state=a1849.State
+          if state.bladeSafetyAlly and state.bladeSafetyAlly(player) then return true end
+          if state.bladeLocalClients and state.bladeLocalClients.isAlly(player) then return true end
+          if state.isFriend and state.isFriend(player) then return true end
+          if state.isFriendly and state.isFriendly(player) then return true end
+          local alts=state.bladeRunAlts or (Options9.RotAlts and Options9.RotAlts.Value) or {}
+          return alts[player.Name]==true or alts[tostring(player.UserId)]==true or alts[player.UserId]==true
+        end
+        rotSupplier.proximityThreat=function()
+          local range=tonumber(Options9.RotProximity and Options9.RotProximity.Value) or 0
+          local root=sResult10.root()
+          if range<=0 or not root then return nil end
+          for _,player in getResult26:GetPlayers() do
+            if not rotSupplier.proximityAlly(player) then
+              local part=player.Character and player.Character:FindFirstChild("HumanoidRootPart")
+              if part and (part.Position-root.Position).Magnitude<=range then return player end
+            end
+          end
+        end
+        rotSupplier.pauseForProximity=function(reason)
+          if rotSupplier.safetyToken or Library9.Unloaded then return end
+          if a1849.State.progActive and a1849.State.progActive() and a1849.State.rotSafetyExit then
+            a1849.State.rotSafetyExit(reason)
+            return
+          end
+          local token={};rotSupplier.safetyToken=token
+          local supplier=not fn670()
+          local stay=a1849.State.bladeStayHere and a1849.State.bladeStayHere()
+          if stay then a1849.State.rotManualMenu=true;a1849.State.bladeManualMenu=true end
+          Library9.Toggles.RotBotEnabled:SetValue(false)
+          task.spawn(function()
+            local function active() return rotSupplier.safetyToken==token and not Library9.Unloaded and not rotSupplier.stopped end
+            local ok,err=pcall(function()
+              while active() and (rotSupplier.workerRunning or rotWalkBusy) do task.wait(0.1) end
+              if not active() then return end
+              if stay then
+                rotSupplier.status:SetText("ROT: indo ao menu por proximidade; "..reason)
+                if not vResult6.forceMenu(active) then return end
+                rotSupplier.status:SetText("ROT: aguardando Play manual para retomar a etapa")
+                repeat task.wait(0.25) until not active() or (not vResult6.startMenu() and sResult10.root())
+                if not active() then return end
+                rotSupplier.cancelSafety()
+                rotSupplier.safetyGraceUntil=os.clock()+5
+                Library9.Toggles.RotBotEnabled:SetValue(true)
+              else
+                if supplier then
+                  qResult4.set("rotbot_safety_stage",rotSupplier.routeStage or "Santorini")
+                  qResult4.set("rotbot_active","true")
+                  DResult3.setupResume()
+                  local prepared=DResult3.queueResume(true)
+                  if not prepared then error("executor nao preparou a retomada ROT") end
+                end
+                DResult3.hop({reason=reason,strategy="smallest"})
+              end
+            end)
+            if rotSupplier.safetyToken==token then
+              rotSupplier.cancelSafety()
+              if not ok then rotSupplier.status:SetText("ROT pausado: "..tostring(err)) end
+            end
+          end)
+        end
+        local rotSafety={elapsed=0,busy=false}
+        a1849.Maid:Give(v1342.Heartbeat:Connect(function(dt)
+          rotSafety.elapsed+=dt
+          if rotSafety.elapsed<0.25 or rotSafety.busy then return end
+          rotSafety.elapsed=0
+          if not tbl365[1] or rotSupplier.safetyToken or a1849.State.bladeManualMenu or os.clock()<(rotSupplier.safetyGraceUntil or 0) then return end
+          rotSafety.busy=true
+          local ok,err=pcall(function()
+            local threat=rotSupplier.proximityThreat()
+            if threat and tbl365[1] and not rotSupplier.proximityAlly(threat) then
+              rotSupplier.pauseForProximity("player "..threat.Name.." dentro do range ROT")
+            end
+          end)
+          rotSafety.busy=false
+          if not ok then rotSupplier.status:SetText("ROT proximity: "..tostring(err)) end
+        end))
+        a1849.Maid:Give(rotSupplier.cancelSafety)
         local netUI={busy=false,nextCheck=0,elapsed=0}
         netUI.box=a1849.Tabs.Blade23:AddRightGroupbox("Conexao facil")
         netUI.box:AddLabel("Para todas as contas no mesmo computador, use Tudo neste PC. Nao precisa de Python nem iniciar_servidor.bat. Os botoes de servidor/convite sao apenas para dois PCs.",true)
@@ -44295,12 +44435,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         a1849.State.registerBot({
           name = "Rot Bot",
           running = function()
-            return tbl365[1] == true
+            return tbl365[1] == true or rotSupplier.safetyToken~=nil
           end,
           stop = function()
-            if Library9.Toggles.RotBotEnabled then
-              Library9.Toggles.RotBotEnabled:SetValue(false)
-            end
+            rotSupplier.stop()
           end,
         })
         task.spawn(function()
@@ -44328,6 +44466,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           task.wait(2)
           if not rotSupplier.stopped and Library9.Toggles.RotSupplierResume.Value then
+            rotSupplier.routeStage=qResult4.get("rotbot_safety_stage")
+            qResult4.remove("rotbot_safety_stage")
             rotSupplier.explicitSupplier=true
             Library9.Toggles.RotBotEnabled:SetValue(true)
           end
