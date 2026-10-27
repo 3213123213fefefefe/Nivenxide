@@ -45,6 +45,262 @@ class RouteTests(unittest.TestCase):
             result = subprocess.run([self.luau, str(script)], capture_output=True, text=True, timeout=25)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
 
+    def test_verified_config_writes_recover_partial_files_and_delete_backups(self):
+        io=self.part('    function SaveManager:ReadConfig(', '    function SaveManager:Save(name)')
+        delete=self.part('    function SaveManager:Delete(name)', '    function SaveManager:RefreshConfigList()')
+        self.run_luau(r'''
+local disk={};local failedPath;local silent=false
+local payloads={old={version=1,objects={{idx="RotAlts",value={Offline=true}}}},new={version=1,objects={{idx="RotAlts",value={NewAlt=true}}}}}
+local HttpService={JSONDecode=function(_,value) assert(payloads[value],"invalid JSON");return payloads[value] end}
+local isfile=function(path) return disk[path]~=nil end
+local readfile=function(path) return disk[path] end
+local writefile=function(path,value)
+ if path==failedPath then
+  if silent then disk[path]="truncated";return end
+  error("disk error")
+ end
+ disk[path]=value
+end
+local delfile=function(path) disk[path]=nil end
+local SaveManager={Folder="sentinel",CheckSubFolder=function() return false end}
+'''+io+delete+r'''
+local file="sentinel/configs/Bots.json"
+assert(SaveManager:WriteConfig(file,"old") and disk[file]=="old" and not disk[file..".pending"])
+failedPath=file;silent=true
+local ok,why=SaveManager:WriteConfig(file,"new")
+assert(not ok and why:find("verificar",1,true),"a silent short write must not report success")
+assert(disk[file..".bak"]=="old" and disk[file..".pending"]=="new")
+local data,path=SaveManager:ReadConfig(file,1)
+assert(data==payloads.new and path==file..".pending","recover the completed pending copy after an interrupted primary write")
+disk[file..".pending"]="invalid"
+data,path=SaveManager:ReadConfig(file,1);assert(data==payloads.old and path==file..".bak")
+failedPath=nil;assert(SaveManager:WriteConfig(file,"new"))
+assert(disk[file..".bak"]=="old","an invalid primary must not replace the last valid backup")
+assert(SaveManager:ReadConfig(file,1)==payloads.new)
+failedPath=file..".pending";silent=false
+assert(not SaveManager:WriteConfig(file,"old") and disk[file]=="new","a staging failure preserves the committed config")
+assert(SaveManager:Delete("Bots"));assert(not SaveManager:ReadConfig(file),"Delete must not resurrect a backup")
+''')
+
+    def test_profile_load_awaits_yielding_setters_and_aborts_on_unload(self):
+        load=self.part('    function SaveManager:Load(name)', '    function SaveManager:Delete(name)')
+        self.run_luau(r'''
+local completed={};local returned=false;local task={wait=function() coroutine.yield() end}
+local SaveManager={Folder="sentinel",Ignore={},Library={},Parser={},CheckFolderTree=function() end,CheckSubFolder=function() return false end}
+SaveManager.ReadConfig=function() return {objects={{idx="BladeFarm",type="Input"},{idx="RotAlts",type="Input"}}} end
+SaveManager.Parser.Input={Load=function(idx)
+ coroutine.yield();table.insert(completed,idx)
+end}
+'''+load+r'''
+local co=coroutine.create(function() assert(SaveManager:Load("Bots"));returned=true end)
+assert(coroutine.resume(co) and not returned and #completed==0)
+assert(coroutine.resume(co) and not returned and completed[1]=="BladeFarm")
+assert(coroutine.resume(co) and returned and completed[2]=="RotAlts")
+completed={};returned=false
+co=coroutine.create(function() assert(not SaveManager:Load("Bots"));returned=true end)
+assert(coroutine.resume(co));SaveManager.Library.Unloaded=true
+assert(coroutine.resume(co) and returned and #completed==1,"never apply further controls after Unload")
+''')
+
+    def test_preference_flush_waits_for_inflight_write_then_saves_latest_controls(self):
+        save=self.part('        bladePrefs.save=function()', '        bladePrefs.restore=function()')
+        self.run_luau(r'''
+local version="old";local disk;local count=0;local paused=true
+local bladePrefs={ready=true,file="settings",snapshot=function() return version end}
+local a11542={State={}};local writefile=function() end;local warn=function() end
+local game={GetService=function() return {JSONEncode=function(_,v) return v end} end}
+local SaveManager={WriteConfig=function(_,_,text)
+ count+=1;if paused then coroutine.yield() end;disk=text;return true
+end}
+local task={wait=function() coroutine.yield() end}
+'''+save+r'''
+local writer=coroutine.create(bladePrefs.save);assert(coroutine.resume(writer) and bladePrefs.saving)
+version="new";local flushed=false
+local close=coroutine.create(function() assert(bladePrefs.flush());flushed=true end)
+assert(coroutine.resume(close) and not flushed and count==1)
+paused=false;assert(coroutine.resume(writer) and disk=="old")
+assert(coroutine.resume(close) and flushed and disk=="new" and bladePrefs.last=="new" and count==2)
+''')
+
+    def test_profile_wrapper_always_releases_loading_guard_and_flushes_manual_load(self):
+        wrapper=self.part('        local Load = SaveManager.Load', '        a11542.Maid:Give(function()\n          qResult11.remove("loaded_config")')
+        self.run_luau(r'''
+local a11542={State={}};local fail=false;local pause=true;local flushes=0
+local SaveManager={Load=function()
+ if pause then coroutine.yield() end
+ if fail then error("unreadable profile") end
+ return true
+end}
+local Library23={Toggles={BlatantMode={Value=true},RiskyMode={Value=false},PersistentConfigs={Value=true}}}
+local fn1401=function() end;local Callback14=function() end;local qResult11={set=function() end}
+local bladePrefs={ready=true,flush=function() flushes+=1;return true end}
+'''+wrapper+r'''
+local done=false
+local co=coroutine.create(function() assert(SaveManager:Load("Bots"));done=true end)
+assert(coroutine.resume(co) and a11542.State.loadingConfig and not done and flushes==0)
+assert(not SaveManager:Load("Other"),"do not interleave two config loads")
+assert(coroutine.resume(co) and done and not a11542.State.loadingConfig and flushes==1)
+pause=false;fail=true
+local ok,why=SaveManager:Load("Broken")
+assert(not ok and why:find("unreadable",1,true) and not a11542.State.loadingConfig and flushes==1)
+fail=false;assert(SaveManager:Load("Bots") and flushes==2,"a failed load cannot permanently block saving")
+''')
+
+    def test_unload_continues_after_cleanup_errors_and_preserves_new_library_owner(self):
+        unload=self.part('function Library:Unload()', 'Library:GiveSignal(UserInputService.WindowFocused:')
+        self.run_luau(r'''
+local warnings=0;local warn=function() warnings+=1 end
+local env={};local getgenv=function() return env end;local other={};env.Library=other
+local Library={Signals={},UnloadSignals={}};local after=false;local stopped=false;local destroyed=0;local detached=0
+for _,k in {"Toggles","Options","Registry","Tabs","KeybindRows","SearchIndex","SearchBoxes"} do Library[k]={test=true} end
+local DimState={};local ScreenGui={Destroy=function() destroyed+=1 end}
+local Cursor={Remove=function() error("broken Drawing") end};local CursorOutline={Remove=function() detached+=1 end}
+local RunService={UnbindFromRenderStep=function() end};local UserInputService={};local OriginalMouseIconEnabled=true
+Library.BeforeUnload=function() stopped=true;error("one stop callback failed") end
+Library.UnloadSignals={function() assert(stopped);error("failed cleanup") end,function() detached+=1;Library:Unload() end}
+Library.Signals={{Disconnect=function() detached+=1 end},{Disconnect=function() error("bad connection") end}}
+Library.AfterUnload=function() after=true end
+'''+unload+r'''
+Library:Unload();Library:Unload()
+assert(after and Library.UnloadFinished and Library.Unloaded and not Library.Unloading)
+assert(destroyed==1 and detached==3 and warnings==4 and next(Library.Options)==nil)
+assert(env.Library==other,"a late cleanup must not erase a newer library")
+''')
+
+    def test_maid_cleans_remaining_resources_after_error_without_cancelling_itself(self):
+        maid=self.part('    local fn42 = function()', '    tbl44.d = function()')
+        self.run_luau(r'''
+local warnings=0;local warn=function() warnings+=1 end
+local cancelled={};local task={cancel=function(thread) table.insert(cancelled,thread) end,defer=function() error("must not cancel the cleanup thread") end}
+'''+maid+r'''
+local cleaned=0;local m=fn42().new()
+local other=coroutine.create(function() end)
+m:Give(function() error("failed one resource") end)
+m:Give(coroutine.running());m:Give(other)
+m:Give(function() cleaned+=1 end)
+m:DoCleaning();m:DoCleaning()
+assert(cleaned==1 and warnings==1 and #cancelled==1 and cancelled[1]==other and next(m._tasks)==nil)
+''')
+
+    def test_loader_recovers_stale_flags_missing_ui_and_new_datamodel_for_same_job(self):
+        loader=(ROOT/'loader.lua').read_text()
+        self.run_luau(r'''
+local env={};local getgenv=function() return env end;local warn=function() end
+local clock=100;local os={clock=function() return clock end,time=function() return 1 end}
+local game={JobId="same",PlaceId=1,IsLoaded=function() return true end,HttpGet=function() return "runtime" end}
+local starts=0;local cleaned=0
+local loadstring=function() return function()
+ starts+=1
+ local session=env.__BLADE23_SESSION
+ session.runtimeHandoff=nil;session.state="running";session.library={ScreenGui={Parent=true}}
+ return true
+end end
+local function execute()
+'''+loader+r'''
+end
+env.__BLADE23_SESSION={state="failed",executing=true,jobId="same",started=100}
+assert(execute() and starts==1,"failed executing flags must not block recovery")
+assert(not execute() and starts==1,"a healthy UI must remain protected from a duplicate instance")
+local old=env.__BLADE23_SESSION
+old.library.ScreenGui.Parent=nil;old.cleanup=function() cleaned+=1 end
+assert(execute() and starts==2 and cleaned==1,"missing UI requires reclaiming the old runtime")
+env.__BLADE23_SESSION={state="loading",jobId="same",started=0,updated=0}
+assert(execute() and starts==3,"a stalled load must release its lock")
+old=env.__BLADE23_SESSION;old.gameRef={};old.cleanup=function() error("do not restore hooks from another DataModel") end
+assert(execute() and starts==4,"rejoin to the same JobId can still be a new DataModel")
+''')
+
+    def test_startup_watchdog_cancels_abandoned_loader_and_allows_retry(self):
+        helper=(ROOT/'loader.lua').read_text().split('local session=__bladeSession(false)')[0]
+        self.run_luau(r'''
+local env={};local getgenv=function() return env end;local game={JobId="same",PlaceId=1}
+local clock=0;local os={clock=function() return clock end};local jobs={};local cancelled={};local notices=0;local warn=function() notices+=1 end
+local task={wait=function() coroutine.yield() end,cancel=function(thread) cancelled[thread]=true end}
+task.spawn=function(fn) local co=coroutine.create(fn);table.insert(jobs,co);assert(coroutine.resume(co));return co end
+'''+helper+r'''
+local first=__bladeSession(false);local cleaned=0
+first.guardKey="legacy";env.legacy=first;first.cleanup=function() cleaned+=1 end
+clock=91;assert(coroutine.resume(jobs[1]))
+assert(first.cancelled and first.state=="failed" and cleaned==1 and env.legacy==nil and notices==1)
+local second=__bladeSession(false)
+assert(second~=first and env.__BLADE23_SESSION==second and second.state=="loading")
+second.runtimeHandoff=true;assert(__bladeSession(true)==second and not second.runtimeHandoff)
+assert(__bladeSession(true)==nil,"only the authorized runtime may consume the loader handoff")
+env.__BLADE23_SESSION={state="loading",phase="execute",jobId="same",started=clock,report={test=true}}
+local legacy=env.__BLADE23_SESSION
+assert(__bladeSession(true)==legacy and legacy.abort and legacy.report.test and legacy.executing,"cached loaders must be upgraded in place")
+''')
+
+    def test_unload_flushes_settings_before_stopping_bots(self):
+        before=self.part('      res653.BeforeUnload=function()', '      local v3327 =')
+        self.run_luau(r'''
+local __bootSession={};local res653={};local value="selected";local saved;local observed=false
+local tbl743={State={bots={{stop=function() value="cleared" end}},flushBladeSettings=function() saved=value;return true end}}
+local task={wait=function() observed=true end};local warn=function() error("no errors expected") end
+'''+before+r'''
+res653.BeforeUnload()
+assert(saved=="selected" and value=="cleared" and observed and tbl743.State.unloading)
+assert(__bootSession.state=="unloading" and __bootSession.unloadThread==coroutine.running())
+''')
+
+    def test_teleport_resume_flushes_even_when_already_queued_and_blocks_unsaved_hop(self):
+        queue=self.part('      tbl208.queueResume = function(force)', '      local setupResume = function()')
+        self.run_luau(r'''
+local game={JobId="same"};local flushes=0;local queued=0;local success=true
+local tbl208={beforeResume=function() flushes+=1;return success,"disk full" end,resumeQueueFunction=function() return function() queued+=1 end end}
+local fn406=function() return "loader" end
+'''+queue+r'''
+assert(tbl208.queueResume() and flushes==1 and queued==1)
+assert(tbl208.queueResume() and flushes==2 and queued==1)
+success=false;local ok,why=tbl208.queueResume(true)
+assert(not ok and queued==1 and why:find("disk full",1,true))
+''')
+
+    def test_rot_resume_waits_for_full_configuration_and_cancels_on_unload(self):
+        start=self.source.index('        task.spawn(function()\n          if qResult4.get("rotbot_active")')
+        code=self.source[start:self.source.index('\n      end\n    end\n    tbl44.N',start)]
+        self.run_luau(r'''
+local readyAt=30;local clock=0;local starts=0;local stoppedAt;local callback
+local task={spawn=function(fn) callback=fn end,wait=function(dt)
+ clock+=dt
+ if clock>=readyAt then a1849.State.notificationsReady=true end
+ if stoppedAt and clock>=stoppedAt then Library9.Unloaded=true end
+end}
+local qResult4={get=function(k) if k=="rotbot_active" then return "true" end end,remove=function() end}
+local DResult3={claimResume=function() return true end};local Options9={}
+local rotSupplier={}
+a1849={State={}}
+Library9={Toggles={RotSupplierResume={Value=true},RotBotEnabled={SetValue=function(_,v) assert(v and clock>=readyAt+2);starts+=1 end}}}
+'''+code+r'''
+callback();assert(starts==1 and clock>=32,"15 seconds is not a safe deadline for configs on a loaded PC")
+clock=0;starts=0;readyAt=30;stoppedAt=1;a1849.State.notificationsReady=false
+callback();assert(starts==0 and clock<2,"Unload must cancel a pending automatic restart")
+''')
+
+    def test_diagnostic_samples_cannot_keep_stalled_startup_alive(self):
+        startup=self.source[:self.source.index('local __UI_FILES =')]
+        self.run_luau(r'''
+local env={};local getgenv=function() return env end;local game={JobId="job",PlaceId=1}
+local clock=0;local os={clock=function() return clock end}
+'''+startup+r'''
+assert(__bootSession.updated==0)
+clock=89;__bootMark("sample",true)
+assert(__bootSession.updated==0,"background memory samples are not startup progress")
+__bootMark("next-module");assert(__bootSession.updated==89)
+__bootSession.cancelled=true
+assert(pcall(__bootMark,"sample",true),"late diagnostics must be silent after Unload")
+assert(not pcall(__bootMark,"ready"),"an unloaded initializer must not become running later")
+''')
+
+    def test_runtime_and_loader_share_the_session_gate_and_no_backpack_boot_deadlock(self):
+        loader=(ROOT/'loader.lua').read_text().split('local session=__bladeSession(false)')[0]
+        runtime=self.source.split('local __bootSession=__bladeSession(true)')[0]
+        self.assertEqual(loader,runtime)
+        startup=self.part('    local Players = aResult.Players\n    if not ({', '    local flag11 = false')
+        self.assertNotIn('WaitForChild("Backpack")',startup)
+        self.assertNotIn('type(getgenv()[res42])',startup)
+        self.assertIn('getgenv()[res42]=__bootSession',startup)
+
     def test_exact_attached_points_and_gui(self):
         expected = json.loads((ROOT / 'routes' / 'Blade.json').read_text())['points']
         route = self.part('__L3.bladeRoute={', 'a1723.State.bladeRoutePoints=')
@@ -698,7 +954,11 @@ local downloads,compiles,runs=0,0,0;local nested;local broken=false
 local game={JobId="same-job",IsLoaded=function() return true end}
 local loadstring=function(source)
  compiles+=1;if broken then return nil,"compile failure" end
- return function() runs+=1;env.__BLADE23_SESSION.state="running";return true end
+ return function()
+  runs+=1;env.__BLADE23_SESSION.state="running"
+  env.__BLADE23_SESSION.library={ScreenGui={Parent={}}}
+  return true
+ end
 end
 local function execute()
 '''+loader+r'''
@@ -929,7 +1189,7 @@ v1009(true);assert(__L3.bladeMenuPause==nil and not a1723.State.bladeManualMenu)
 
     def test_config_roundtrip_restores_alts_and_allies_including_offline_and_empty_lists(self):
         parser=self.part('        Dropdown = {', '        ColorPicker = {')
-        methods=self.part('    function SaveManager:Save(name)', '    function SaveManager:Delete(name)')
+        methods=self.part('    function SaveManager:ReadConfig(', '    function SaveManager:Delete(name)')
         setter=self.part('function Dropdown:SetValue(value)', '\tfunction Dropdown:GetValue()')
         self.assertNotIn('"RotAlts"',self.part('local tbl732 = {','        for i135'))
         self.assertNotIn('SetIgnoreIndexes({"ServerAllies"})',self.source)
@@ -986,6 +1246,7 @@ rotSupplier.explicitSupplier=true;a1849.State.bladeRunAlts={OfflineAlt=true};ass
     def test_blade_autosave_restores_all_control_types_and_never_starts_workers(self):
         prefs=self.part('        local bladePrefs={', '        local function allowBladeProfileSettings()')
         parsers=self.part('    SaveManager.Parser = {', '    function SaveManager:SetLibrary(library)')
+        io=self.part('    function SaveManager:ReadConfig(', '    function SaveManager:Save(name)')
         self.run_luau(r'''
 local function clone(x) if type(x)~="table" then return x end;local t={};for k,v in x do t[k]=clone(v) end;return t end
 local function encode(x)
@@ -998,7 +1259,8 @@ local http={JSONEncode=function(_,data) local json=encode(data);dataByJSON[json]
 local game={GetService=function(_,name) if name=="Players" then return {LocalPlayer={UserId=123}} end;return http end}
 local warn=function() warnings+=1 end
 local isfile=function(path) return disk[path]~=nil end;local readfile=function(path) return disk[path] end
-local writefile=function(path,value) writes+=1;disk[path]=value end
+local writefile=function(path,value) if path:sub(-5)==".json" then writes+=1 end;disk[path]=value end
+local delfile=function(path) disk[path]=nil end
 local isfolder=function() return true end;local makefolder=function() end
 local tab={};local a11542={Tabs={Blade23={Container=tab}},State={}}
 local function color(hex) return {hex=hex,ToHex=function(self) return self.hex end} end
@@ -1015,8 +1277,8 @@ local Library23={Toggles={Stay=control("Toggle",true),RotBotEnabled=control("Tog
  Speed=control("Slider",100),Text=control("Input","url"),RotAlts=control("Dropdown",{Offline=true}),ServerAllies=control("Dropdown",{["Friend [42]"]=true}),
  Stop=control("KeyPicker","F8"),Tint=control("ColorPicker",color("abcdef")),OtherTab=control("Input","outside",false)}}
 Library23.Options.RotAlts.Multi=true;Library23.Options.ServerAllies.Multi=true
-local SaveManager={Library=Library23}
-'''+parsers+prefs+r'''
+local SaveManager={Library=Library23};local HttpService=http
+'''+io+parsers+prefs+r'''
 assert(bladePrefs.file:find("123",1,true))
 bladePrefs.ready=true;assert(bladePrefs.save() and writes==1)
 assert(bladePrefs.save() and writes==1,"unchanged settings must not keep writing files")
@@ -1037,7 +1299,8 @@ a11542.State.loadingConfig=false;bladePrefs.save();assert(writes==2)
 Library23.Options.RotAlts.Value={};Library23.Options.ServerAllies.Value={};bladePrefs.save()
 Library23.Options.RotAlts.Value={Someone=true};Library23.Options.ServerAllies.Value={Someone=true};bladePrefs.restore()
 assert(next(Library23.Options.RotAlts.Value)==nil and next(Library23.Options.ServerAllies.Value)==nil)
-disk[bladePrefs.file]="invalid";assert(not bladePrefs.restore() and disk[bladePrefs.file]=="invalid" and warnings==1)
+disk[bladePrefs.file]="invalid";disk[bladePrefs.file..".bak"]=nil
+assert(not bladePrefs.restore() and disk[bladePrefs.file]=="invalid" and warnings==1)
 ''')
 
     def test_latest_blade_preferences_are_loaded_before_workers_and_not_overwritten_by_legacy(self):
@@ -1578,6 +1841,9 @@ local a11542={State={}};local version=1;local writes=0;local pause=true;local fa
 local game={GetService=function() return {JSONEncode=function() return tostring(version) end} end}
 local writefile=function() writes+=1;if pause then coroutine.yield() end;if fail then error("disk") end end
 local warn=function() end
+local SaveManager={WriteConfig=function(_,path,text)
+ local ok,err=pcall(writefile,path,text);return ok,err
+end}
 """+save+r"""
 local co=coroutine.create(bladePrefs.save);assert(coroutine.resume(co));assert(bladePrefs.saving)
 for i=1,200 do bladePrefs.save() end;assert(writes==1)

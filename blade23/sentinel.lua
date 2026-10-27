@@ -1,20 +1,95 @@
--- Blade 23 session lifecycle and bounded local RAM diagnostics.
+-- A live interface owns the session; a stale flag alone must never block a retry.
 local __bootEnv=(getgenv and getgenv()) or shared
-local __bootPrevious=__bootEnv.__BLADE23_SESSION
-if __bootPrevious and __bootPrevious.jobId==game.JobId and (__bootPrevious.executing or __bootPrevious.state=="running") then
-  warn("[blade 23] Ja existe uma instancia carregando ou ativa. Use Config > Unload antes de recarregar.")
-  return false
+local function __bladeSession(runtime)
+  local previous=__bootEnv.__BLADE23_SESSION
+  local same=type(previous)=="table" and previous.jobId==game.JobId
+    and (previous.gameRef==nil or previous.gameRef==game)
+    and (previous.placeId==nil or previous.placeId==game.PlaceId)
+  local inherited
+  local legacyHandoff=same and previous.phase=="execute" and previous.thread==nil and not previous.executing
+  if same and previous.state=="loading" and runtime and (previous.runtimeHandoff or legacyHandoff) and not previous.cancelled then
+    previous.runtimeHandoff=nil;previous.executing=true
+    if type(previous.abort)=="function" then return previous end
+    inherited=previous;previous=nil;same=false -- Upgrade a loader cached before this lifecycle version.
+  end
+  if same then
+    local live=false
+    if previous.state=="running" then
+      pcall(function()
+        local lib=previous.library
+        live=lib~=nil and not lib.Unloaded and lib.ScreenGui~=nil and lib.ScreenGui.Parent~=nil
+      end)
+    elseif previous.state=="loading" and not previous.cancelled then
+      local age=os.clock()-(previous.updated or previous.started or 0)
+      local dead=previous.thread and coroutine.status(previous.thread)=="dead"
+      live=not dead and age>=0 and age<90
+    elseif previous.state=="unloading" then
+      local age=os.clock()-(previous.updated or 0)
+      live=age>=0 and age<15
+    end
+    if live then
+      warn("[blade 23] Ja existe uma instancia carregando, ativa ou encerrando. Aguarde ou use Config > Unload.")
+      return nil
+    end
+  end
+  if type(previous)=="table" then
+    if same and type(previous.abort)=="function" then
+      pcall(previous.abort,"sessao anterior incompleta")
+    else
+      previous.cancelled=true;previous.executing=false
+      if same then
+        if previous.library and previous.library.Unload then pcall(function() previous.library:Unload() end) end
+        if previous.coreCleanup then pcall(previous.coreCleanup) end
+      elseif __bootEnv.Library==previous.library then
+        __bootEnv.Library=nil -- Do not invoke old-world hooks from the next DataModel.
+      end
+    end
+  end
+  local session=inherited or {state="loading",jobId=game.JobId,started=os.clock()}
+  session.gameRef=game;session.placeId=game.PlaceId;session.updated=os.clock();session.thread=coroutine.running()
+  __bootEnv.__BLADE23_SESSION=session
+  session.abort=function(reason)
+    if session.state=="unloaded" then return end
+    local loading=session.state=="loading"
+    local unloading=session.state=="unloading"
+    session.cancelled=true;session.executing=false;session.error=tostring(reason)
+    for _,thread in {loading and session.thread or nil,unloading and session.unloadThread or nil} do
+      if thread and thread~=coroutine.running() and task and task.cancel then pcall(task.cancel,thread) end
+    end
+    if session.library and session.library.Unload then
+      session.library.Unloading=false -- The abandoned cleanup coroutine has been cancelled above.
+      pcall(function() session.library:Unload() end)
+    end
+    if session.cleanup then pcall(session.cleanup) end
+    if session.coreCleanup then pcall(session.coreCleanup);session.coreCleanup=nil end
+    if session.guardKey and __bootEnv[session.guardKey]==session then __bootEnv[session.guardKey]=nil end
+    if session.state~="unloaded" then session.state="failed" end
+  end
+  if task and task.spawn and task.wait then
+    task.spawn(function()
+      while __bootEnv.__BLADE23_SESSION==session and session.state=="loading" and not session.cancelled do
+        task.wait(1)
+        if session.state=="loading" and os.clock()-session.updated>=90 then
+          session.abort("tempo limite no carregamento: "..tostring(session.phase))
+          warn("[blade 23] Carregamento interrompido; execute o loader novamente. Etapa: "..tostring(session.phase))
+          break
+        end
+      end
+    end)
+  end
+  return session
 end
-local __bootSession=__bootPrevious
-if not __bootSession or __bootSession.jobId~=game.JobId or __bootSession.state~="loading" then
-  __bootSession={state="loading",jobId=game.JobId,started=os.clock()}
-  __bootEnv.__BLADE23_SESSION=__bootSession
-end
+local __bootSession=__bladeSession(true)
+if not __bootSession then return false end
 __bootSession.executing=true
 __bootSession.report=__bootSession.report or {version=1,jobId=game.JobId,placeId=game.PlaceId,samples={}}
 local function __bootMark(phase,sampleOnly)
+  if __bootSession.cancelled and phase~="unloaded" then
+    if sampleOnly then return end
+    error("carregamento cancelado",0)
+  end
   local report=__bootSession.report
-  if not sampleOnly then __bootSession.phase=phase end
+  if not sampleOnly then __bootSession.phase=phase;__bootSession.updated=os.clock() end
   local entry={phase=__bootSession.phase,event=phase,seconds=math.floor((os.clock()-__bootSession.started)*10)/10}
   pcall(function() entry.luaMB=math.floor(gcinfo()/1024*10)/10 end)
   pcall(function() entry.clientMB=math.floor(game:GetService("Stats"):GetTotalMemoryUsageMb()*10)/10 end)
@@ -7608,55 +7683,36 @@ function Library:OnUnload(callback)
 end
 
 function Library:Unload()
-	if Library.Unloaded then
-		return
-	end
-
-	Library.Unloaded = true -- Guard reentrant unload callbacks before cleaning anything.
-	if Library.BeforeUnload then pcall(Library.BeforeUnload) end
-	for _, callback in Library.UnloadSignals do
-		Library:SafeCallback(callback)
-	end
-	table.clear(Library.UnloadSignals)
-
-	for index = #Library.Signals, 1, -1 do
-		local connection = table.remove(Library.Signals, index)
-		if connection and connection.Connected then
-			connection:Disconnect()
-		end
-	end
-
-	pcall(function()
-		RunService:UnbindFromRenderStep(Library.ShowCursorBinding)
-	end)
-
-	UserInputService.MouseIconEnabled = OriginalMouseIconEnabled
-
-	-- Drawing objects aren't GUI, so ScreenGui:Destroy() won't clean them
-	pcall(function()
-		if Cursor then
-			Cursor:Remove()
-		end
-		if CursorOutline then
-			CursorOutline:Remove()
-		end
-	end)
-
-	if ScreenGui then
-		ScreenGui:Destroy()
-	end
-
-	Library.Unloaded = true
-	table.clear(Library.Toggles)
-	table.clear(Library.Options)
-	table.clear(Library.Registry)
-	table.clear(Library.Tabs)
-	table.clear(Library.KeybindRows)
-	table.clear(Library.SearchIndex)
-	table.clear(Library.SearchBoxes)
-	table.clear(DimState)
-	Library.Searching = false
-	getgenv().Library = nil
+    if Library.UnloadFinished or Library.Unloading then return end
+    Library.Unloading=true
+    Library.Unloaded=true
+    local function clean(fn)
+        local ok,err=pcall(fn)
+        if not ok then warn("[Sentinel] unload: "..tostring(err)) end
+    end
+    if Library.BeforeUnload then clean(Library.BeforeUnload) end
+    local callbacks=Library.UnloadSignals
+    Library.UnloadSignals={}
+    for _,callback in callbacks do clean(callback) end
+    table.clear(callbacks)
+    for index=#Library.Signals,1,-1 do
+        local connection=table.remove(Library.Signals,index)
+        clean(function() if connection then connection:Disconnect() end end)
+    end
+    clean(function() RunService:UnbindFromRenderStep(Library.ShowCursorBinding) end)
+    clean(function() UserInputService.MouseIconEnabled=OriginalMouseIconEnabled end)
+    clean(function() if Cursor then Cursor:Remove() end end)
+    clean(function() if CursorOutline then CursorOutline:Remove() end end)
+    clean(function() if ScreenGui then ScreenGui:Destroy() end end)
+    for _,items in {Library.Toggles,Library.Options,Library.Registry,Library.Tabs,
+        Library.KeybindRows,Library.SearchIndex,Library.SearchBoxes,DimState} do
+        clean(function() table.clear(items) end)
+    end
+    Library.Searching=false
+    if getgenv().Library==Library then getgenv().Library=nil end
+    Library.Unloading=false;Library.UnloadFinished=true
+    if Library.AfterUnload then clean(Library.AfterUnload) end
+    Library.BeforeUnload=nil;Library.AfterUnload=nil
 end
 
 Library:GiveSignal(UserInputService.WindowFocused:Connect(function()
@@ -8431,6 +8487,43 @@ local SaveManager = {} do
         self:BuildFolderTree()
     end
 
+    -- Keep a verified pending copy until the primary write has been read back.
+    function SaveManager:ReadConfig(file, version)
+        if not (isfile and readfile) then return nil, "executor sem leitura de arquivos" end
+        for _,path in {file, file .. ".pending", file .. ".bak"} do
+            local ok, data = pcall(function()
+                if not isfile(path) then return end
+                return HttpService:JSONDecode(readfile(path))
+            end)
+            if ok and type(data)=="table" and type(data.objects)=="table"
+                and (version==nil or data.version==version) then return data, path end
+        end
+        return nil, "configuracao ausente ou invalida"
+    end
+
+    function SaveManager:WriteConfig(file, encoded)
+        local ok, err = pcall(function()
+            if not (writefile and readfile) then error("executor sem writefile/readfile",0) end
+            local function verified(path, text)
+                local result=writefile(path,text)
+                if result==false or readfile(path)~=text then error("falha ao verificar "..path,0) end
+            end
+            verified(file .. ".pending",encoded)
+            if isfile and isfile(file) then
+                local valid, old = pcall(function()
+                    local text=readfile(file)
+                    local data=HttpService:JSONDecode(text)
+                    if type(data)=="table" and type(data.objects)=="table" then return text end
+                end)
+                if valid and old then verified(file .. ".bak",old) end
+            end
+            verified(file,encoded)
+            if delfile then pcall(delfile,file .. ".pending") end
+        end)
+        if not ok then return false,tostring(err) end
+        return true
+    end
+
     --// Save, Load, Delete, Refresh \\--
     function SaveManager:Save(name)
         if (not name) then
@@ -8468,8 +8561,7 @@ local SaveManager = {} do
             return false, "failed to encode data"
         end
 
-        writefile(fullPath, encoded)
-        return true
+        return self:WriteConfig(fullPath, encoded)
     end
 
     function SaveManager:Load(name)
@@ -8483,10 +8575,8 @@ local SaveManager = {} do
             file = self.Folder .. "/configs/" .. self.SubFolder .. "/" .. name .. ".json"
         end
 
-        if not isfile(file) then return false, "invalid file" end
-
-        local success, decoded = pcall(HttpService.JSONDecode, HttpService, readfile(file))
-        if not success then return false, "decode error" end
+        local decoded, why = self:ReadConfig(file)
+        if not decoded then return false, why end
 
         if self.UseLoadingOrder == true and typeof(self.LoadingOrder) == "table" then
             table.sort(decoded.objects, function(a, b)
@@ -8498,11 +8588,14 @@ local SaveManager = {} do
 
         local budgetStart = os.clock()
         for _, option in decoded.objects do
-            if not option.type then continue end
+            if self.Library.Unloaded then return false, "script encerrado durante o carregamento" end
+            if type(option)~="table" or not option.type then continue end
             if not self.Parser[option.type] then continue end
             if self.Ignore[option.idx] then continue end
 
-            task.spawn(self.Parser[option.type].Load, option.idx, option) -- task.spawn() so the config loading wont get stuck.
+            -- Complete each setter before reporting success or allowing autosave/resume.
+            local applied, err = pcall(self.Parser[option.type].Load, option.idx, option)
+            if not applied then return false, tostring(option.idx)..": "..tostring(err) end
             if os.clock() - budgetStart >= 0.008 then -- yield ~every 8ms so a big config applies over a few frames instead of one long freeze
                 task.wait()
                 budgetStart = os.clock()
@@ -8522,10 +8615,15 @@ local SaveManager = {} do
             file = self.Folder .. "/configs/" .. self.SubFolder .. "/" .. name .. ".json"
         end
 
-        if not isfile(file) then return false, "invalid file" end
-
-        local success = pcall(delfile, file)
-        if not success then return false, "delete file error" end
+        local found=false
+        for _,path in {file,file .. ".pending",file .. ".bak"} do
+            if isfile(path) then
+                found=true
+                local ok,result=pcall(delfile,path)
+                if not ok or result==false then return false,"delete file error" end
+            end
+        end
+        if not found then return false,"invalid file" end
 
         return true
     end
@@ -20682,9 +20780,7 @@ __modules.m356b75b2d82b = function()
         elseif typ2 == "thread" then
           if coroutine.running() ~= a1174 then
             pcall(task.cancel, a1174)
-          else
-            task.defer(task.cancel, a1174)
-          end
+          end -- A cleanup running on this thread must be allowed to finish itself.
         elseif typ2 == "table" and type(a1174.Destroy) == "function" then
           a1174:Destroy()
         end
@@ -20732,13 +20828,14 @@ __modules.m356b75b2d82b = function()
         for k30, v124 in _tasks2 do
           if typeof(v124) == "RBXScriptConnection" then
             _tasks2[k30] = nil
-            v124:Disconnect()
+            pcall(function() v124:Disconnect() end)
           end
         end
         local nextResult, v125 = next(_tasks2)
         while v125 ~= nil do
           _tasks2[nextResult] = nil
-          fn101(v125)
+          local cleaned,why=pcall(fn101,v125)
+          if not cleaned then warn("[sentinel] cleanup: "..tostring(why)) end
           local nextResult2, v126 = next(_tasks2)
           nextResult = nextResult2
           v125 = v126
@@ -30625,6 +30722,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
       end
       tbl208.queueResume = function(force)
+        if tbl208.beforeResume then
+          local ok,saved,why=pcall(tbl208.beforeResume)
+          if not ok or saved==false then return false,"configuracao nao salva: "..tostring(ok and why or saved) end
+        end
         if not force and tbl208.resumeQueuedJob==game.JobId then return true end
         local queue=tbl208.resumeQueueFunction()
         if not queue then return false,"executor sem queue_on_teleport" end
@@ -41725,14 +41826,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return isfile and isfile(fn540()) or tbl308[1] ~= nil
         end)())
         task.spawn(function()
-          local num389 = 0
-          while true do
-            if not (not (a1723.State and a1723.State.notificationsReady) and num389 < 10) then
-              break
-            end
+          while not a1723.State.notificationsReady do
+            if a1723.Library.Unloaded or a1723.State.unloading then return end
             task.wait(0.1)
-            num389 += 0.1
           end
+          if a1723.Library.Unloaded or a1723.State.unloading then return end
           __L3.fn650()
           if not a1723.State.bladeProfileLoaded and qResult3.get("blade_setup_fluid_v1")~="true" then
             Options8.ProgRoute:SetValue("Blade/Sigil (3 stages)")
@@ -44448,14 +44546,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           if not DResult3.claimResume({ "rotbot_active", "rotbot_target" }) then
             return
           end
-          local num428 = 0
-          while true do
-            if not (not (a1849.State and a1849.State.notificationsReady) and num428 < 15) then
-              break
-            end
+          while not a1849.State.notificationsReady do
+            if Library9.Unloaded or a1849.State.unloading then return end
             task.wait(0.25)
-            num428 += 0.25
           end
+          if Library9.Unloaded or a1849.State.unloading then return end
           local getResult27 = qResult4.get("rotbot_target")
           if getResult27 and getResult27 ~= "" and Options9.RotMaster then
             Options9.RotMaster:SetValue(getResult27)
@@ -44465,7 +44560,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             BlatantMode3:SetValue(true)
           end
           task.wait(2)
-          if not rotSupplier.stopped and Library9.Toggles.RotSupplierResume.Value then
+          if not Library9.Unloaded and not a1849.State.unloading and not rotSupplier.stopped
+            and Library9.Toggles.RotSupplierResume.Value then
             rotSupplier.routeStage=qResult4.get("rotbot_safety_stage")
             qResult4.remove("rotbot_safety_stage")
             rotSupplier.explicitSupplier=true
@@ -71490,7 +71586,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return {version=1,objects=objects}
         end
         bladePrefs.save=function()
-          if not bladePrefs.ready or bladePrefs.saving or a11542.State.loadingConfig then return end
+          if not bladePrefs.ready or a11542.State.loadingConfig then return false,"configuracao ainda carregando" end
+          if bladePrefs.saving then return false,"gravacao em andamento" end
           bladePrefs.saving=true
           local ok,err=pcall(function()
             local encoded=game:GetService("HttpService"):JSONEncode(bladePrefs.snapshot())
@@ -71500,31 +71597,41 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               if not isfolder("sentinel") then makefolder("sentinel") end
               if not isfolder("sentinel/.cache") then makefolder("sentinel/.cache") end
             end
-            writefile(bladePrefs.file,encoded)
+            local saved,why=SaveManager:WriteConfig(bladePrefs.file,encoded)
+            if not saved then error(why,0) end
             bladePrefs.last=encoded
           end)
           bladePrefs.saving=false
           if not ok and not bladePrefs.failed then warn("[blade 23] Nao foi possivel salvar configuracoes: "..tostring(err)) end
           bladePrefs.failed=not ok
-          return ok
+          if not ok then return false,tostring(err) end
+          return true
+        end
+        bladePrefs.flush=function()
+          local deadline=os.clock()+5
+          while bladePrefs.saving and os.clock()<deadline do task.wait(0.05) end
+          if bladePrefs.saving then return false,"gravacao anterior ainda pendente" end
+          return bladePrefs.save()
         end
         bladePrefs.restore=function()
-          if not (isfile and readfile and isfile(bladePrefs.file)) then return false end
-          local ok,data=pcall(function() return game:GetService("HttpService"):JSONDecode(readfile(bladePrefs.file)) end)
-          if not ok or type(data)~="table" or data.version~=1 or type(data.objects)~="table" then
-            warn("[blade 23] Configuracao automatica invalida; arquivo preservado")
+          local data,path=SaveManager:ReadConfig(bladePrefs.file,1)
+          if not data then
+            if isfile and isfile(bladePrefs.file) then warn("[blade 23] Configuracao automatica invalida; arquivo preservado") end
             return false
           end
+          if path~=bladePrefs.file then warn("[blade 23] Configuracao recuperada da copia de seguranca") end
           local controls=bladePrefs.controls()
+          local wasLoading=a11542.State.loadingConfig
           a11542.State.loadingConfig=true
           for _,saved in data.objects do
+            if Library23.Unloaded then a11542.State.loadingConfig=wasLoading;return false end
             local control=type(saved)=="table" and controls[saved.idx]
             if control and control.Type==saved.type then
               local loaded,err=pcall(SaveManager.Parser[saved.type].Load,saved.idx,saved)
               if not loaded then warn("[blade 23] Configuracao "..tostring(saved.idx)..": "..tostring(err)) end
             end
           end
-          a11542.State.loadingConfig=false
+          a11542.State.loadingConfig=wasLoading
           a11542.State.bladeProfileLoaded=true
           return true
         end
@@ -71542,12 +71649,24 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           SaveManager.Ignore.RotReceiverQueue=true
         end
         allowBladeProfileSettings()
+        local Save = SaveManager.Save
+        SaveManager.Save = function(self,name)
+          if a11542.State.loadingConfig then return false,"aguarde o carregamento da configuracao" end
+          local ok,saved,why=pcall(Save,self,name)
+          if not ok then return false,tostring(saved) end
+          if not saved then return false,why end
+          if bladePrefs.ready then return bladePrefs.flush() end
+          return true
+        end
         local Load = SaveManager.Load
         SaveManager.Load = function(a11595, a2482)
+          if a11542.State.loadingConfig then return false,"outra configuracao ainda esta carregando" end
           a11542.State.loadingConfig = true
-          local res651, v3324 = Load(a11595, a2482)
-          if res651 then a11542.State.bladeProfileLoaded=true end
+          local loaded,res651,v3324 = pcall(Load,a11595,a2482)
           a11542.State.loadingConfig = false
+          if not loaded then return false,tostring(res651) end
+          if Library23.Unloaded then return false,"script encerrado" end
+          if res651 then a11542.State.bladeProfileLoaded=true end
           if a11542.State.restoreMenuKeybind then
             a11542.State.restoreMenuKeybind()
           end
@@ -71565,6 +71684,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           if res651 and a2482 and Library23.Toggles.PersistentConfigs and Library23.Toggles.PersistentConfigs.Value then
             qResult11.set("loaded_config", a2482)
+          end
+          if res651 and bladePrefs.ready then
+            local saved,why=bladePrefs.flush()
+            if not saved then return false,why end
           end
           return res651, v3324
         end
@@ -71589,13 +71712,20 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         bladePrefs.restore()
         bladePrefs.ready=true
+        a11542.State.flushBladeSettings=bladePrefs.flush
+        DResult8.beforeResume=bladePrefs.flush
         a11542.Maid:Give(game:GetService("RunService").Heartbeat:Connect(function(dt)
+          if a11542.State.unloading or Library23.Unloaded then return end
           bladePrefs.elapsed+=dt
           if bladePrefs.elapsed<1 then return end
           bladePrefs.elapsed=0
           bladePrefs.save()
         end))
-        a11542.Maid:Give(function() bladePrefs.save();bladePrefs.ready=false end)
+        a11542.Maid:Give(function()
+          bladePrefs.ready=false
+          a11542.State.flushBladeSettings=nil
+          DResult8.beforeResume=nil
+        end)
         if a11542.State.tickNewDetections then
           pcall(a11542.State.tickNewDetections)
         end
@@ -71670,7 +71800,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         break
       end
     end
-    Players.LocalPlayer:WaitForChild("Backpack")
+    -- The interface must also load at the game's Play menu, before a Backpack exists.
     local res42 = (function(a11596, a2483)
       local v3325 = a2483 or 27
       if not (bit32 and bit32.bxor) then
@@ -71688,14 +71818,9 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         .. "_"
         .. tostring(Players.LocalPlayer and Players.LocalPlayer.UserId or 0):sub(-4)
     )
-    if getgenv()[res42] and type(getgenv()[res42]) == "table" then
-      return
-    end
-    getgenv()[res42] = setmetatable({}, {
-      __tostring = function()
-        return "nil"
-      end,
-    })
+    -- The session gate above owns deduplication. Old per-job flags can survive a failed rejoin.
+    __bootSession.guardKey=res42
+    getgenv()[res42]=__bootSession
     local flag11 = false
     local tbl45 = {}
     for k22, v106 in
@@ -71752,7 +71877,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       if flag11 then
         local res652 = fn99()
         if res652 and not tbl45[res652] then
-          getgenv()[res42] = nil
+          if getgenv()[res42]==__bootSession then getgenv()[res42]=nil end
           warn(
             string.format(
               "[sentinel] hash unrecognised - contact support and send this information | executor=%s placeid=%s placeversion=%s hash=%s",
@@ -71803,16 +71928,19 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       local res655 = loadstring(fn1432("save", "dependencies/SaveManager.lua"))()
       local newResult107 = dResult.new()
       local flag165 = false
-      res653:OnUnload(function()
-        flag165 = true
-        getgenv()[res42] = nil
+      __bootSession.cleanup=function()
+        flag165=true
         pcall(function() newResult107:DoCleaning() end)
         if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
-        __bootSession.state="unloaded"
-        __bootMark("unloaded")
+      end
+      res653:OnUnload(__bootSession.cleanup)
+      res653.AfterUnload=function()
+        __bootSession.cancelled=true;__bootSession.executing=false;__bootSession.state="unloaded"
+        if getgenv()[res42]==__bootSession then getgenv()[res42]=nil end
         __bootSession.library=nil
         if __bootEnv.__BLADE23_SESSION==__bootSession then __bootEnv.__BLADE23_SESSION=nil end
-      end)
+        __bootMark("unloaded")
+      end
       local CreateWindowResult = res653:CreateWindow({
         Title = "sentinel.bz",
         Center = true,
@@ -71872,7 +72000,14 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         table.insert(tbl743.State.bots, a11599)
       end
       res653.BeforeUnload=function()
+        __bootSession.state="unloading";__bootSession.cancelled=true;__bootSession.updated=os.clock()
+        __bootSession.unloadThread=coroutine.running()
         tbl743.State.unloading=true
+        -- Snapshot while controls still exist and before stop callbacks alter operational UI.
+        if tbl743.State.flushBladeSettings then
+          local ok,saved,why=pcall(tbl743.State.flushBladeSettings)
+          if not ok or saved==false then warn("[blade 23] Configuracao pendente no unload: "..tostring(ok and why or saved)) end
+        end
         for _,bot in tbl743.State.bots do
           if type(bot.stop)=="function" then pcall(bot.stop) end
         end
@@ -72023,16 +72158,19 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
       __bootMark("module:af")
       task.wait()
       tbl44.af()(tbl743)
-      __bootSession.state="running"
       __bootMark("ready")
+      __bootSession.state="running";__bootSession.executing=false
       res653:Notify({ Title = "sentinel.bz", Description = "rogue lineage loaded" })
     end, debug.traceback)
     if not ok46 then
       if __bootSession.library and __bootSession.library.Unload then pcall(function() __bootSession.library:Unload() end) end
       if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
-      __bootSession.state="failed"
-      __bootMark("failed: "..tostring(result50):sub(1,300))
-      getgenv()[res42] = nil
+      __bootSession.executing=false
+      if __bootSession.state~="unloaded" then
+        __bootSession.state="failed"
+        pcall(__bootMark,"failed: "..tostring(result50):sub(1,300))
+      end
+      if getgenv()[res42]==__bootSession then getgenv()[res42]=nil end
       warn("[sentinel] load failed: " .. tostring(result50))
     end
     return true
@@ -72076,10 +72214,12 @@ __bootSession.executing=false
 if not __ok then
   if __bootSession.library and __bootSession.library.Unload then pcall(function() __bootSession.library:Unload() end) end
   if __bootSession.coreCleanup then pcall(__bootSession.coreCleanup);__bootSession.coreCleanup=nil end
-  __bootSession.state="failed";__bootMark("entry-error: "..tostring(__err):sub(1,300))
+  if __bootSession.state~="unloaded" then
+    __bootSession.state="failed";pcall(__bootMark,"entry-error: "..tostring(__err):sub(1,300))
+  end
   warn("[blade 23] entry error: "..tostring(__err))
 elseif __bootSession.state=="loading" then
-  __bootSession.state="failed";__bootMark("entry-returned-before-ready")
+  __bootSession.abort("entry-returned-before-ready")
 end
 return __ok and __bootSession.state=="running"
 

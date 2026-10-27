@@ -233,3 +233,15 @@ O botão **Go To Khei / Parar tentativa** funciona independentemente da caixa au
 A espera alternativa de retorno ao menu agora cede execução e respeita Stop, em vez de repetir sem avançar o tempo. O cancelamento durante a conversa de um inn também libera o movimento sem pedir o reset que viria depois.
 
 Validação adicional simulada: lista de alts com bot parado, seleção atual em configuração antiga, exclusão de aliados/clientes locais, alcance independente, pausa com trabalhador ainda ativo, Play manual, retomada por checkpoint, checkbox Khei desligado com estado salvo e cancelamento de respostas atrasadas. Física, UI e teleporte reais ainda precisam de validação no jogo.
+
+### Salvamento verificado e recuperação de Unload/rejoin
+
+O Save Config aguarda a aplicação das opções ao carregar um perfil e também grava imediatamente as preferências de Blade 23 da conta. Erros de leitura ou aplicação liberam a trava de carregamento, permitindo tentar novamente. O autosave continua verificando alterações uma vez por segundo, com somente uma gravação em andamento. Unload salva as opções antes de parar os bots; a preparação de hop/rejoin também força essa gravação, inclusive se o loader já estiver enfileirado.
+
+As gravações exigem `writefile` e `readfile`: escrevem e conferem uma cópia `.pending`, preservam o último arquivo válido em `.bak` e conferem novamente o arquivo principal. Uma escrita recusada ou truncada não aparece como sucesso. Ao carregar, um principal inválido permite recuperar a cópia pendente válida ou o backup. Os arquivos atuais continuam compatíveis e cada conta mantém seu `blade23_settings_<UserId>.json`. Excluir um perfil também exclui suas cópias de recuperação.
+
+Unload agora continua limpando os demais recursos quando um callback ou conexão dá erro. A limpeza não cancela a própria coroutine antes de terminar, libera a sessão depois de limpar a interface e não apaga a referência de uma instância mais nova. As tarefas de retomada do Sigil e do fornecedor ROT aguardam a configuração efetivamente pronta e são canceladas pelo unload, em vez de acordarem após um prazo fixo com opções incompletas.
+
+O loader verifica uma interface ativa, além da identificação da sessão. Flags antigas de carregamento, interface já destruída e rejoin no mesmo JobId com novo DataModel permitem recuperação. Um carregamento sem avanço de etapa por 90 segundos é cancelado e libera uma nova execução do loader; a amostragem de diagnóstico não prolonga esse prazo. A interface não aguarda um Backpack antes de abrir no menu Play. O runtime também aceita a passagem de execução de loaders anteriores que tenham ficado em cache.
+
+Validação: compilação Luau do runtime, loader e bibliotecas embutidas; 130 testes simulados, incluindo arquivos truncados, backup, callbacks que cedem execução, falhas de limpeza, salvamento concorrente, carregamento interrompido, cancelamento de retomada e recuperação de sessão. O comportamento real do executor e do teleporte precisa ser conferido dentro do Roblox; esses testes não demonstram a eliminação de crashes nativos.
