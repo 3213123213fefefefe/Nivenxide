@@ -60,6 +60,24 @@ return function(ctx)
     local footHeight = -0.2
     local showProtectionTimer = true
     local overlays, slots = {}, {}
+    local equippedEnabled, equippedOpacity = true, 18
+    local function newEquippedHighlight()
+        local frame = Instance.new("Frame")
+        frame.Name = "NivenxideEquippedItem"
+        frame.Position = UDim2.fromOffset(1, 1)
+        frame.Size = UDim2.new(1, -2, 1, -2)
+        frame.BorderSizePixel = 0
+        frame.BackgroundColor3 = Color3.fromRGB(235, 65, 65)
+        frame.BackgroundTransparency = 1 - equippedOpacity / 100
+        frame.Active = false
+        frame.Visible = false
+        frame.Parent = screen
+        local corner = Instance.new("UICorner")
+        corner.CornerRadius = UDim.new(0, 4)
+        corner.Parent = frame
+        return frame
+    end
+    local equipped = newEquippedHighlight()
     local lastScan, observedCharacter, previousProtection, protectionSince, estimate = -10, nil, false, nil, nil
     local destroyed = false
     local function newOverlay(name)
@@ -126,7 +144,7 @@ return function(ctx)
         for _, button in ipairs(main:GetChildren()) do
             if button:IsA("GuiButton") then
                 local name = button.Name:gsub("^%d+", "")
-                if states[name] then slots[name] = button end
+                slots[name] = button
             end
         end
     end
@@ -168,7 +186,7 @@ return function(ctx)
                 end
                 overlay.container.ZIndex = button.ZIndex + 4
                 overlay.shade.ZIndex = overlay.container.ZIndex
-                overlay.text.ZIndex = overlay.container.ZIndex + 1
+                overlay.text.ZIndex = overlay.container.ZIndex + 3
                 -- Reference style stays fully shaded until ready; classic style drains downward.
                 overlay.shade.Size = UDim2.fromScale(1, hotbarStyle == "Video: escuro + timer" and 1
                     or math.clamp(remaining / state.duration, 0, 1))
@@ -177,6 +195,20 @@ return function(ctx)
             end
         end
         local character = player.Character
+        -- Equipped Tools live in Character; Backpack contents are not selected.
+        -- This works for every item, independently of cooldown tracking.
+        if not equipped.Parent then equipped = newEquippedHighlight() end
+        local tool = character and character:FindFirstChildOfClass("Tool")
+        local selected = tool and slots[tool.Name]
+        local health = character and character:FindFirstChildOfClass("Humanoid")
+        local selectedVisible = equippedEnabled and selected and selected.Parent
+            and visible(selected) and (not health or health.Health > 0)
+        equipped.Visible = selectedVisible and true or false
+        if selectedVisible then
+            equipped.Parent = selected
+            equipped.ZIndex = selected.ZIndex + 6
+            equipped.BackgroundTransparency = 1 - equippedOpacity / 100
+        end
         if character ~= observedCharacter then
             observedCharacter, previousProtection, protectionSince, estimate = character, false, nil, nil
             -- Existing protection on injection has an unknown start time.
@@ -241,6 +273,11 @@ return function(ctx)
     refreshStyle()
     group:AddToggle("NivenxideHotbarNumbers", {Text = "Segundos sobre a skill", Default = true,
         Callback = function(value) showNumbers = value end})
+    group:AddToggle("NivenxideEquippedHighlight", {Text = "Destaque vermelho do item equipado", Default = true,
+        Callback = function(value) equippedEnabled = value end})
+    group:AddSlider("NivenxideEquippedOpacity", {Text = "Opacidade do destaque vermelho (%)", Default = 18,
+        Min = 1, Max = 100, Rounding = 0,
+        Callback = function(value) equippedOpacity = math.clamp(value, 1, 100) end})
     group:AddToggle("NivenxideNoFallFeet", {Text = "Faixa branca de protecao nos pes", Default = true,
         Callback = function(value) noFallEnabled = value end})
     group:AddToggle("NivenxideNoFallTimer", {Text = "Segundos abaixo da faixa branca", Default = true,
@@ -256,6 +293,7 @@ return function(ctx)
         destroyed = true
         connection:Disconnect()
         for _, overlay in pairs(overlays) do overlay.container:Destroy() end
+        equipped:Destroy()
         screen:Destroy()
         foot:Destroy()
     end
