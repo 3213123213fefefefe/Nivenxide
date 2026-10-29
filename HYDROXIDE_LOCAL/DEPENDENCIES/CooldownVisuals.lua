@@ -61,13 +61,14 @@ return function(ctx)
     local showProtectionTimer = true
     local overlays, slots = {}, {}
     local equippedEnabled, equippedOpacity = true, 18
+    local equippedColor = Color3.fromRGB(235, 65, 65)
     local function newEquippedHighlight()
         local frame = Instance.new("Frame")
         frame.Name = "NivenxideEquippedItem"
         frame.Position = UDim2.fromOffset(1, 1)
         frame.Size = UDim2.new(1, -2, 1, -2)
         frame.BorderSizePixel = 0
-        frame.BackgroundColor3 = Color3.fromRGB(235, 65, 65)
+        frame.BackgroundColor3 = equippedColor
         frame.BackgroundTransparency = 1 - equippedOpacity / 100
         frame.Active = false
         frame.Visible = false
@@ -273,9 +274,17 @@ return function(ctx)
     refreshStyle()
     group:AddToggle("NivenxideHotbarNumbers", {Text = "Segundos sobre a skill", Default = true,
         Callback = function(value) showNumbers = value end})
-    group:AddToggle("NivenxideEquippedHighlight", {Text = "Destaque vermelho do item equipado", Default = true,
+    group:AddToggle("NivenxideEquippedHighlight", {Text = "Destaque do item equipado", Default = true,
         Callback = function(value) equippedEnabled = value end})
-    group:AddSlider("NivenxideEquippedOpacity", {Text = "Opacidade do destaque vermelho (%)", Default = 18,
+    group:AddLabel("Cor do destaque do item equipado"):AddColorPicker("NivenxideEquippedColor", {
+        Default = equippedColor,
+        Title = "Cor do item equipado",
+        Callback = function(value)
+            equippedColor = value
+            if equipped.Parent then equipped.BackgroundColor3 = value end
+        end,
+    })
+    group:AddSlider("NivenxideEquippedOpacity", {Text = "Opacidade do destaque (%)", Default = 18,
         Min = 1, Max = 100, Rounding = 0,
         Callback = function(value) equippedOpacity = math.clamp(value, 1, 100) end})
     group:AddToggle("NivenxideNoFallFeet", {Text = "Faixa branca de protecao nos pes", Default = true,
