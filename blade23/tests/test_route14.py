@@ -3226,25 +3226,56 @@ assert(table.concat(events,",")=="Santorini,Brom,reset,travel,Fir,Renova,rot")
         helper=self.part('        rotSupplier.refreshLife=function(', '        local fn690 = function()')
         self.run_luau(VEC+r'''
 local clock=0;local os={clock=function() return clock end};local lives=3;local danger=false;local held=false;local jailed=false
-local kills=0;local damage=0;local root={Position=Vector3.new(0,0,0)};local hum={Health=100}
+local kills=0;local root={Position=Vector3.new(0,0,0)};local hum={Health=100};local status
 local character={FindFirstChild=function(_,name) if name=="HumanoidRootPart" then return root end;if name=="Carried" then return held end end,
  FindFirstChildOfClass=function() return hum end}
 local LocalPlayer24={Character=character};local Library9={};local tbl365={true};local carrier=false
 local fn670=function() return carrier end
-local rotSupplier={settings={refreshLife=true,refreshSeconds=30},receiverPoint=Vector3.new(0,0,0),status={SetText=function() end}}
-local a1849={State={getServerValue=function() return lives end,fireFall=function() damage+=1 end}}
+local rotSupplier={settings={refreshLife=true,refreshSeconds=30},receiverPoint=Vector3.new(0,0,0),status={SetText=function(_,text) status=text end}}
+local a1849={State={getServerValue=function() return lives end,fireFall=function() error("life refresh must use force reset, not fall damage") end}}
 local v1345={HasTag=function(_,_,tag) return tag=="Danger" and danger or tag=="Jailed" and jailed end}
 local sResult10={clearVeil=function() end,kill=function() kills+=1 end}
 '''+helper+r'''
 assert(not rotSupplier.refreshLife(false));clock=31
-assert(rotSupplier.refreshLife(false) and damage==1 and kills==0,"ordinary reset must not be confused with losing a life")
-danger=true;held=true;assert(not rotSupplier.refreshLife(true) and kills==0)
-held=false;root.Position=Vector3.new(100,0,0);assert(not rotSupplier.refreshLife(true) and kills==0)
-root.Position=Vector3.new(0,0,0);assert(rotSupplier.refreshLife(true) and kills==1)
-for i=1,50 do clock+=1;assert(rotSupplier.refreshLife(true)) end
-assert(kills==1 and rotSupplier.refreshPending==3,"do not repeatedly kill while waiting for the server")
-lives=2;assert(rotSupplier.refreshLife(false) and kills==1)
-Library9.Unloaded=true;assert(not rotSupplier.refreshLife(true) and kills==1)
+assert(rotSupplier.refreshLife(false) and kills==1,"force reset must not wait for a Danger tag")
+assert(not status:find("confirmada",1,true),"request is not proof of life loss")
+for i=1,20 do clock+=0.1;assert(rotSupplier.refreshLife(true)) end
+assert(kills==1,"do not spam requests every frame or on repeated button clicks")
+clock=34.1;assert(rotSupplier.refreshLife(false) and kills==2,"retry a live, unchanged character after a lagged/ignored request")
+hum.Health=0;clock=50;assert(rotSupplier.refreshLife(false) and kills==2,"never retry after death")
+hum.Health=100;lives=2;assert(rotSupplier.refreshLife(false) and kills==2 and rotSupplier.refreshPending.confirmed)
+assert(status:find("confirmada",1,true))
+clock=100;assert(rotSupplier.refreshLife(true) and kills==2,"confirmed loss must not trigger a second reset")
+local newCharacter={FindFirstChild=character.FindFirstChild,FindFirstChildOfClass=character.FindFirstChildOfClass}
+LocalPlayer24.Character=newCharacter;assert(not rotSupplier.refreshLife(false) and not rotSupplier.refreshPending,"respawn restarts the wait timer")
+danger=true;held=true;assert(not rotSupplier.refreshLife(true) and kills==2)
+held=false;jailed=true;assert(not rotSupplier.refreshLife(true) and kills==2)
+jailed=false;root.Position=Vector3.new(100,0,0);assert(not rotSupplier.refreshLife(true) and kills==2)
+root.Position=Vector3.new(0,0,0);assert(rotSupplier.refreshLife(true) and kills==3,"manual action uses force reset in combat too")
+Library9.Unloaded=true;assert(not rotSupplier.refreshLife(true) and kills==3)
+''')
+
+    def test_supplier_force_reset_tolerates_missing_lives_and_retries_errors_but_obeys_stop(self):
+        helper=self.part('        rotSupplier.refreshLife=function(', '        local fn690 = function()')
+        self.run_luau(VEC+r'''
+local clock=0;local os={clock=function() return clock end};local lives;local kills=0;local carrier=false
+local root={Position=Vector3.zero or Vector3.new(0,0,0)};local hum={Health=100}
+local LocalPlayer24={Character={FindFirstChild=function(_,key) if key=="HumanoidRootPart" then return root end end,FindFirstChildOfClass=function() return hum end}}
+local Library9={};local tbl365={true};local fn670=function() return carrier end
+local rotSupplier={settings={refreshLife=false,refreshSeconds=30},receiverPoint=root.Position,status={SetText=function() end}}
+local a1849={State={getServerValue=function() return lives end}}
+local v1345={HasTag=function(_,_,tag) assert(tag~="Danger","Danger is not a prerequisite");return false end}
+local sResult10={clearVeil=function() end,kill=function() kills+=1;if kills==1 then error("temporary executor error") end end}
+'''+helper+r'''
+assert(not rotSupplier.refreshLife(false) and kills==0)
+assert(rotSupplier.refreshLife(true) and kills==1,"missing Lives must not silently disable the manual action")
+clock=2;assert(rotSupplier.refreshLife(false) and kills==1)
+clock=3;assert(rotSupplier.refreshLife(false) and kills==2,"a failed request remains retryable")
+clock=6;a1849.State.bladeManualMenu=true;assert(not rotSupplier.refreshLife(true) and kills==2)
+a1849.State.bladeManualMenu=false;rotSupplier.stopped=true;assert(not rotSupplier.refreshLife(true) and kills==2)
+rotSupplier.stopped=false;tbl365[1]=false;assert(not rotSupplier.refreshLife(true) and kills==2)
+tbl365[1]=true;carrier=true;assert(not rotSupplier.refreshLife(true) and kills==2)
+carrier=false;lives=0;assert(not rotSupplier.refreshLife(true) and kills==2,"a wiped account follows the existing wipe path")
 ''')
 
     def test_rot_selector_refreshes_before_start_without_requiring_mode23(self):

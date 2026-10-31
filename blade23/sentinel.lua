@@ -43085,40 +43085,43 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           return fn671() ~= nil
         end
         rotSupplier.refreshLife=function(manual)
-          if Library9.Unloaded or not tbl365[1] or fn670() or rotSupplier.stopped then return false end
+          if Library9.Unloaded or not tbl365[1] or fn670() or rotSupplier.stopped or a1849.State.bladeManualMenu then return false end
           local character=LocalPlayer24.Character
           local root=character and character:FindFirstChild("HumanoidRootPart")
           local hum=character and character:FindFirstChildOfClass("Humanoid")
-          if not root or not hum or hum.Health<=0 then return false end
+          if not root or not hum then return false end
           local now=os.clock()
           if rotSupplier.refreshCharacter~=character then
-            rotSupplier.refreshCharacter=character;rotSupplier.refreshSince=now;rotSupplier.refreshPending=nil
+            rotSupplier.refreshCharacter=character;rotSupplier.refreshSince=now;rotSupplier.refreshPending=nil;rotSupplier.refreshRequested=nil
           end
           local lives=tonumber(a1849.State.getServerValue and a1849.State.getServerValue("Lives"))
-          if rotSupplier.refreshPending then
-            if lives and lives<rotSupplier.refreshPending then
+          local pending=rotSupplier.refreshPending
+          if pending then
+            if not pending.confirmed and pending.lives and lives and lives<pending.lives then
+              pending.confirmed=true
               rotSupplier.status:SetText("Fornecedor: perda de vida confirmada")
             end
-            return true -- Never request another death on this same character.
+            if pending.confirmed or hum.Health<=0 then return true end
           end
+          if hum.Health<=0 then return false end
           if (root.Position-rotSupplier.receiverPoint).Magnitude>20 or character:FindFirstChild("Carried") or v1345:HasTag(character,"Jailed") then
-            rotSupplier.refreshSince=now;rotSupplier.refreshRequested=nil;return false
+            rotSupplier.refreshSince=now;rotSupplier.refreshRequested=nil;rotSupplier.refreshPending=nil;return false
           end
           if manual then rotSupplier.refreshRequested=true end
-          if not manual and not rotSupplier.refreshRequested and (not rotSupplier.settings.refreshLife or now-(rotSupplier.refreshSince or now)<(tonumber(rotSupplier.settings.refreshSeconds) or 120)) then return false end
-          if not lives or lives<=0 then return false end
-          if not v1345:HasTag(character,"Danger") then
-            rotSupplier.status:SetText("Fornecedor: aguardando Danger para perder vida, sem fazer reset comum")
-            if now>=(rotSupplier.refreshDamageAt or 0) then
-              rotSupplier.refreshDamageAt=now+3
-              if a1849.State.fireFall then a1849.State.fireFall(2.39,"rot life refresh") end
-            end
-            return true
-          end
+          if not pending and not manual and not rotSupplier.refreshRequested and (not rotSupplier.settings.refreshLife or now-(rotSupplier.refreshSince or now)<(tonumber(rotSupplier.settings.refreshSeconds) or 120)) then return false end
+          if lives and lives<=0 then return false end
           rotSupplier.refreshRequested=nil
-          rotSupplier.refreshPending=lives
-          rotSupplier.status:SetText("Fornecedor: perdendo uma vida para renovar o ciclo ROT")
-          sResult10.clearVeil();sResult10.kill()
+          -- Use the same force reset as jail/combat recovery. A missing or delayed Danger/Lives
+          -- replication must not prevent the request. Retry only while this character is alive;
+          -- a changed character or confirmed life loss ends this request.
+          pending=pending or {lives=lives,nextAttempt=0}
+          rotSupplier.refreshPending=pending
+          if now<pending.nextAttempt then return true end
+          pending.nextAttempt=now+3
+          rotSupplier.status:SetText("Fornecedor: force reset solicitado; aguardando resposta do servidor")
+          pcall(sResult10.clearVeil)
+          local ok=pcall(sResult10.kill)
+          if not ok then rotSupplier.status:SetText("Fornecedor: force reset falhou; nova tentativa em 3 segundos") end
           return true
         end
         local fn690 = function()
