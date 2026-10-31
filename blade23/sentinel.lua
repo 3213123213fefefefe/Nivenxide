@@ -35541,7 +35541,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           tbl304[1] = true
           tbl303[1] = false
-          __L2.fn506(5)
+          __L2.fn506(game.PlaceId==num274 and 0 or 5)
+          if __L3.progStatusLabel then __L3.progStatusLabel:SetText("Sigil ativo: trocando de servidor") end
           local v1031 = LocalPlayer21.Character and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart")
           local tbl337 = {}
           for k247, v1032 in roster and #roster > 0 and roster or __L2.fn513(a1723, fn549, a2229 or v1031 and v1031.Position, a374 or 700) do
@@ -39040,32 +39041,17 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end
         __L3.fn641 = function()
           local fn662 = function()
-            return LocalPlayer21.Character ~= nil and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart") ~= nil
+            return not __L3.startMenu() and LocalPlayer21.Character ~= nil and LocalPlayer21.Character:FindFirstChild("HumanoidRootPart") ~= nil
           end
           if fn662() then
             return
           end
-          task.wait(2)
-          local PlayerGui11 = LocalPlayer21:FindFirstChildOfClass("PlayerGui")
-          if PlayerGui11 and tbl303[1] and not fn662() then
-            PlayerGui11:WaitForChild("StartMenu", 45)
-          end
-          local num382 = 0
-          while true do
-            if not (tbl303[1] and not fn662() and __L3.startMenu() and num382 < 30) then
-              break
-            end
-            __L3.clickPlay()
-            task.wait(0.5)
-            num382 += 0.5
-          end
-          local num383 = 0
-          while true do
-            if not (tbl303[1] and not fn662() and num383 < 30) then
-              break
-            end
-            task.wait(0.3)
-            num383 += 0.3
+          local deadline=os.clock()+60
+          while tbl303[1] and not fn662() and os.clock()<deadline do
+            if a1723.State.bladeManualMenu then return end
+            if __L3.progStatusLabel then __L3.progStatusLabel:SetText("Sigil ativo: aguardando Play / personagem em Khei") end
+            if __L3.startMenu() then __L3.clickPlay() end
+            task.wait(0.2)
           end
           if tbl303[1] and not fn662() then
             task.spawn(function()
@@ -39077,7 +39063,6 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           sResult7.awaitPlaced(function()
             return tbl303[1]
           end, 20)
-          task.wait(5)
         end
         -- Blade/Sigil 3-stage route. All per-account progress lives in the existing save.
         __L3.bladeValue=function(name,default)
@@ -39132,6 +39117,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           ["6 - Skills de Warrior e Sigil (base/super)"]="B3_TRAIN",
           ["7 - Draug e Ultra (Jagen)"]="P7",
           ["Khei - retomar sequencia"]="KHEI",
+          ["Khei - marcar spawn"]="KHEI",
+          ["Khei - Spire"]="KHEI",
+          ["Khei - perder 1 vida (Purity)"]="KHEI",
+          ["Khei - Valter"]="KHEI",
         }
         __L3.bladeSelectStart=function(value)
           if not value or value=="Resume" then return false end
@@ -39147,6 +39136,8 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end
           local save=fn541() or {}
           save.phase=phase;save.bladePhase=phase;save.step=0
+          local kheiSteps={["Khei - marcar spawn"]="inn",["Khei - Spire"]="spire",["Khei - perder 1 vida (Purity)"]="sacrifice",["Khei - Valter"]="valter"}
+          if kheiSteps[value] then save.kheiStep=kheiSteps[value] end
           -- A manual continuation starts here, without an unrelated trip back to Alana.
           save.bladeStartSpawnDone=phase~="B1_PREP" or nil
           save.bladeSpawnTransitionAllowed=(phase=="B2_ORDERLY" or phase=="B3_TRAIN" or phase=="P7") or nil
@@ -40982,12 +40973,12 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             __L3.fn646("spire")
             v1286 = "spire"
           end
-          if v1286 == "spire" and tbl308[1].spireGiven then
+          if (v1286 == "spire" or v1286 == "sacrifice") and tbl308[1].spireGiven then
             fn534("khei: the sacrifice was already given, moving on rather than spending a second life")
             __L3.fn646("valter")
             v1286 = "valter"
           end
-          if v1286 == "spire" then
+          if v1286 == "spire" or v1286 == "sacrifice" then
             local flag74 = false
             for i74 = 1, num278 do
               if not tbl303[1] then
@@ -41072,6 +41063,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
               return
             end
             fn547()
+            __L3.fn646("sacrifice")
             local Character68 = LocalPlayer21.Character
             tbl308[1].spireGiven = true
             fn542()
@@ -41404,6 +41396,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           end)
         end
         v1009 = function(a1824)
+          if __L3.resumePending and a1824==true then
+            __L3.resumePending=nil;qResult3.remove("progression_active");qResult3.remove("khei_run")
+            fn531(false);fn532(true)
+          end
           if __L3.bladeMenuPause and not __L3.bladePausing and a1824~=true then return end
           __L3.kheiHandoffActive=false;__L3.kheiAttempt=nil
           if not __L3.bladePausing then __L3.kheiManualRequested=nil;qResult3.remove("khei_manual") end
@@ -41661,7 +41657,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
           Text = "Etapa ao iniciar (manual)",
           Values = {"Resume","1 - Alana: Silver e itens","2 - Comprar espada","3 - XP: espada e socos",
             "4 - Sair do XP / aguardar Danger","5 - Orderly: Rots ou Quests",
-            "6 - Skills de Warrior e Sigil (base/super)","7 - Draug e Ultra (Jagen)","Khei - retomar sequencia"},
+            "6 - Skills de Warrior e Sigil (base/super)","7 - Draug e Ultra (Jagen)","Khei - retomar sequencia","Khei - marcar spawn","Khei - Spire","Khei - perder 1 vida (Purity)","Khei - Valter"},
           Multi = false, Default = "Resume",
           Tooltip = "Pare o Sigil, escolha a etapa e clique Iniciar. Preserva XP, Rots e skills confirmados; etapas concluidas podem avancar automaticamente. Resume usa o progresso salvo.",
         })
@@ -41762,6 +41758,10 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         end)))
         __L3.num326 = -math.huge
         __L3.progStartClick=function()
+          if __L3.resumePending then
+            __L3.progStatusLabel:SetText("Sigil ativo: retomada apos hop em andamento")
+            return
+          end
           if not __L3.bladeSetupReady then
             __L3.progStatusLabel:SetText("Sigil: aguarde carregar a configuracao salva antes de iniciar")
             return
@@ -41825,6 +41825,11 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
         fn548((function()
           return isfile and isfile(fn540()) or tbl308[1] ~= nil
         end)())
+        __L3.resumePending=qResult3.get("progression_active")=="true" or (qResult3.get("khei_run")=="true" and game.PlaceId~=num274)
+        if __L3.resumePending then
+          fn531(true);fn532(false)
+          __L3.progStatusLabel:SetText("Sigil ativo: carregando configuracoes para retomar apos hop")
+        end
         task.spawn(function()
           while not a1723.State.notificationsReady do
             if a1723.Library.Unloaded or a1723.State.unloading then return end
@@ -41844,6 +41849,15 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             Options8.ProgStartPhase:SetValue("Resume")
           end
           __L3.bladeSetupReady=true
+          __L3.resumePending=nil
+          -- Handoff is transport only, including Auto Go To Khei after Gaia.
+          if game.PlaceId==num274 and qResult3.get("khei_run")=="true" then
+            qResult3.remove("khei_run");qResult3.remove("khei_manual");qResult3.remove("khei_handoff_servers");qResult3.remove("progression_active")
+            __L3.kheiManualRequested=nil
+            fn531(false);fn532(true)
+            __L3.progStatusLabel:SetText("Chegou em Khei: bot parado. Escolha a etapa e clique Iniciar quando quiser.")
+            return
+          end
           if qResult3.get("progression_active") == "true" then
             if DResult2.claimResume({ "progression_active" }) then
               __L3.fn648(true)
@@ -41857,7 +41871,7 @@ if not ran then getgenv().SENTINEL_RESUMED_FROM_HOP = nil; warn("[blade 23] Reto
             if game.PlaceId == num274 then
               qResult3.remove("khei_run")
               qResult3.remove("khei_handoff_servers")
-              task.spawn(__L3.fn647)
+              fn531(false);fn532(true) -- Arrival does not authorize the Khei progression bot.
             else
               task.spawn(a1723.State.progKheiHandoff)
             end
